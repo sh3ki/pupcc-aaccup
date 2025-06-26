@@ -729,15 +729,14 @@ export default function AdminUserManagement() {
                                     <th className="px-4 py-4 text-center text-sm font-black text-white uppercase tracking-wider">Name</th>
                                     <th className="px-4 py-4 text-center text-sm font-black text-white uppercase tracking-wider">Email</th>
                                     <th className="px-4 py-4 text-center textsm font-black text-white uppercase tracking-wider">Role</th>
-                                    <th className="px-4 py-4 text-center text-sm font-black text-white uppercase tracking-wider">Programs</th>
-                                    <th className="px-4 py-4 text-center textsm font-black text-white uppercase tracking-wider">Areas</th>
+                                    <th className="px-4 py-4 text-center text-sm font-black text-white uppercase tracking-wider" colSpan={2}>Programs & Areas</th>
                                     <th className="px-4 py-4 text-center text-sm font-black text-white uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredUsers.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="text-center py-8 text-gray-500">No users found.</td>
+                                        <td colSpan={5} className="text-center py-8 text-gray-500">No users found.</td>
                                     </tr>
                                 )}
                                 {filteredUsers.map((user: any) => (
@@ -745,20 +744,7 @@ export default function AdminUserManagement() {
                                         <td className="px-4 py-4 font-semibold text-gray-900 text-center border-t border-gray-100">{user.name}</td>
                                         <td className="px-4 py-4 text-gray-700 text-center border-t border-gray-100">{user.email}</td>
                                         <td className="px-4 py-4 text-gray-700 text-center border-t border-gray-100 capitalize">{user.role}</td>
-                                        <td className="px-4 py-4 text-gray-700 text-center border-t border-gray-100">
-                                            {user.assignments.length > 0 ? (
-                                                <div className="flex flex-wrap justify-center gap-1">
-                                                    {[...new Set(user.assignments.map((a: any) => a.program_code).filter(Boolean))].map((programCode: string, idx: number) => (
-                                                        <span key={idx} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                            • {programCode}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-400 text-sm">No programs</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4 text-gray-700 text-center border-t border-gray-100">
+                                        <td className="px-4 py-4 text-gray-700 border-t border-gray-100" colSpan={2}>
                                             {user.assignments.length > 0 ? (
                                                 (() => {
                                                     // Helper function to convert roman numerals to numbers for sorting
@@ -769,44 +755,68 @@ export default function AdminUserManagement() {
                                                         return romanMap[roman] || 999;
                                                     };
 
-                                                    // Get unique area codes and sort them properly
-                                                    const uniqueAreaCodes = [...new Set(user.assignments.map((a: any) => a.area_code).filter(Boolean))];
-                                                    uniqueAreaCodes.sort((a, b) => romanToNumber(a) - romanToNumber(b));
-
-                                                    // Split into two columns for downward filling
-                                                    const midPoint = Math.ceil(uniqueAreaCodes.length / 2);
-                                                    const firstColumn = uniqueAreaCodes.slice(0, midPoint);
-                                                    const secondColumn = uniqueAreaCodes.slice(midPoint);
+                                                    // Group assignments by program
+                                                    const programGroups = user.assignments.reduce((acc: any, assignment: any) => {
+                                                        const programCode = assignment.program_code;
+                                                        if (!programCode) return acc;
+                                                        
+                                                        if (!acc[programCode]) {
+                                                            acc[programCode] = [];
+                                                        }
+                                                        acc[programCode].push(assignment);
+                                                        return acc;
+                                                    }, {});
 
                                                     return (
-                                                        <div className="grid grid-cols-2 gap-0.5 justify-items-center max-w-xs mx-auto">
-                                                            {/* First column */}
-                                                            <div className="space-y-0.5 flex flex-col items-center">
-                                                                {firstColumn.map((areaCode: string, idx: number) => (
-                                                                    <span key={`col1-${idx}`} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                                        • Area {areaCode}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                            {/* Second column */}
-                                                            <div className="space-y-0.5 flex flex-col items-center">
-                                                                {secondColumn.map((areaCode: string, idx: number) => (
-                                                                    <span key={`col2-${idx}`} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                                        • Area {areaCode}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                            {/* No specific area spans both columns */}
-                                                            {user.assignments.some((a: any) => !a.area_code) && (
-                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 col-span-2">
-                                                                    • No specific area
-                                                                </span>
-                                                            )}
+                                                        <div className="space-y-4">
+                                                            {Object.keys(programGroups).map((programCode: string, idx: number) => {
+                                                                const programAssignments = programGroups[programCode];
+                                                                const areaCodes = programAssignments
+                                                                    .map((a: any) => a.area_code)
+                                                                    .filter(Boolean)
+                                                                    .sort((a: string, b: string) => romanToNumber(a) - romanToNumber(b));
+                                                                
+                                                                const hasNoSpecificArea = programAssignments.some((a: any) => !a.area_code);
+
+                                                                return (
+                                                                    <div key={idx}>
+                                                                        {idx > 0 && <div className="border-t border-gray-200 my-3"></div>}
+                                                                        <div className="flex">
+                                                                            {/* Program badge - vertically centered */}
+                                                                            <div className="flex-shrink-0 flex items-center justify-center pr-4 min-w-[100px]">
+                                                                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800 shadow-sm">
+                                                                                    • {programCode}
+                                                                                </span>
+                                                                            </div>
+                                                                            
+                                                                            {/* Areas grid */}
+                                                                            <div className="flex-grow">
+                                                                                {areaCodes.length > 0 ? (
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                                                                        {areaCodes.map((areaCode: string, areaIdx: number) => (
+                                                                                            <span 
+                                                                                                key={`${programCode}-area-${areaIdx}`} 
+                                                                                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                                                                            >
+                                                                                                • Area {areaCode}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                ) : hasNoSpecificArea ? (
+                                                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                                                                        • No specific area
+                                                                                    </span>
+                                                                                ) : null}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     );
                                                 })()
                                             ) : (
-                                                <span className="text-gray-400 text-sm">No areas</span>
+                                                <span className="text-gray-400 text-sm">No assignments</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-4 border-t border-gray-100">

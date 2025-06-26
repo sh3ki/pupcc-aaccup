@@ -125,6 +125,9 @@ export default function DashboardHeader() {
     const navItems = NAVS[role] || NAVS.faculty;
     const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
 
+    // Check if current path is in admin/layout section
+    const isLayoutSection = currentPath.startsWith('/admin/layout');
+
     // Get appropriate document items based on role
     const getDocumentItems = () => {
         switch (role) {
@@ -218,13 +221,13 @@ export default function DashboardHeader() {
                                     <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-300 ${layoutDropdownOpen ? 'rotate-180' : ''}`} />
                                     <div
                                         className={`absolute bottom-0 left-0 w-full h-0.5 transition-all duration-300 ${
-                                            layoutDropdownOpen
+                                            layoutDropdownOpen || isLayoutSection
                                                 ? 'scale-x-100 opacity-100 shadow-sm'
                                                 : 'scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100'
                                         }`}
                                         style={{
                                             backgroundColor: COLORS.primaryMaroon,
-                                            boxShadow: layoutDropdownOpen ? `0 0 8px ${COLORS.primaryMaroon}40` : 'none'
+                                            boxShadow: (layoutDropdownOpen || isLayoutSection) ? `0 0 8px ${COLORS.primaryMaroon}40` : 'none'
                                         }}
                                     ></div>
                                 </button>
@@ -260,14 +263,41 @@ export default function DashboardHeader() {
                                             >
                                                 {item.hasDropdown ? (
                                                     <div className="relative">
-                                                        <button
-                                                            type="button"
-                                                            className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 flex items-center"
-                                                            tabIndex={0}
-                                                        >
-                                                            {item.name}
-                                                            <ChevronDown className="w-3 h-3 ml-1 inline-block" />
-                                                        </button>
+                                                        {/* Make the main item clickable */}
+                                                        {item.name === 'About' ? (
+                                                            <Link
+                                                                href="/admin/layout/about"
+                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                            >
+                                                                {item.name}
+                                                                <ChevronDown className="w-3 h-3 ml-1 inline-block" />
+                                                            </Link>
+                                                        ) : item.name === 'Programs Under Survey' ? (
+                                                            <Link
+                                                                href="/admin/layout/programs"
+                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                            >
+                                                                {item.name}
+                                                                <ChevronDown className="w-3 h-3 ml-1 inline-block" />
+                                                            </Link>
+                                                        ) : item.name === 'Exhibit' ? (
+                                                            <Link
+                                                                href="/admin/layout/exhibit"
+                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                            >
+                                                                {item.name}
+                                                                <ChevronDown className="w-3 h-3 ml-1 inline-block" />
+                                                            </Link>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 flex items-center"
+                                                                tabIndex={0}
+                                                            >
+                                                                {item.name}
+                                                                <ChevronDown className="w-3 h-3 ml-1 inline-block" />
+                                                            </button>
+                                                        )}
                                                         {/* Side Modal/Submenu */}
                                                         <div
                                                             className={`absolute top-0 left-full ml-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 z-[999] ${
@@ -533,7 +563,7 @@ export default function DashboardHeader() {
                                     <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${mobileLayoutOpen ? 'rotate-180' : ''}`} />
                                     <div
                                         className={`absolute bottom-1 left-3 right-3 h-0.5 transition-all duration-300 ${
-                                            mobileLayoutOpen
+                                            mobileLayoutOpen || isLayoutSection
                                                 ? 'scale-x-100 opacity-100'
                                                 : 'scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100'
                                         }`}
@@ -569,11 +599,38 @@ export default function DashboardHeader() {
                                                         (item.name === 'Exhibit' && mobileExhibitOpen)
                                                             ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
                                                     }`}>
-                                                        <div
-                                                            className="block px-10 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300 cursor-default"
-                                                        >
-                                                            {item.name === 'About' ? 'About Overview' : item.name === 'Programs Under Survey' ? 'Programs Overview' : 'Exhibit Overview'}
-                                                        </div>
+                                                        {/* Add main page link */}
+                                                        {item.name === 'About' ? (
+                                                            <Link
+                                                                href="/admin/layout/about"
+                                                                className="block px-10 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
+                                                                onClick={() => setMenuOpen(false)}
+                                                            >
+                                                                About Overview
+                                                            </Link>
+                                                        ) : item.name === 'Programs Under Survey' ? (
+                                                            <Link
+                                                                href="/admin/layout/programs"
+                                                                className="block px-10 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
+                                                                onClick={() => setMenuOpen(false)}
+                                                            >
+                                                                Programs Overview
+                                                            </Link>
+                                                        ) : item.name === 'Exhibit' ? (
+                                                            <Link
+                                                                href="/admin/layout/exhibit"
+                                                                className="block px-10 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
+                                                                onClick={() => setMenuOpen(false)}
+                                                            >
+                                                                Exhibit Overview
+                                                            </Link>
+                                                        ) : (
+                                                            <div
+                                                                className="block px-10 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300 cursor-default"
+                                                            >
+                                                                {item.name === 'About' ? 'About Overview' : item.name === 'Programs Under Survey' ? 'Programs Overview' : 'Exhibit Overview'}
+                                                            </div>
+                                                        )}
                                                         {item.dropdownItems.map((dropdownItem) => (
                                                             <Link
                                                                 key={dropdownItem.name}
