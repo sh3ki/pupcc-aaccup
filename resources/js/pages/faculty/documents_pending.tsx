@@ -6,16 +6,17 @@ import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 
-type Parameter = { id: number; name: string; code?: string; approved_count?: number; category_approved_counts?: Record<string, number> };
-type Area = { id: number; name: string; code?: string; parameters?: Parameter[] };
-type Program = { id: number; name: string; code?: string; areas: Area[] };
+// Types adapted for pending
+type Parameter = { id: number; name: string; code?: string; pending_count?: number; category_pending_counts?: Record<string, number> };
+type Area = { id: number; name: string; code?: string; parameters?: Parameter[]; pending_count?: number };
+type Program = { id: number; name: string; code?: string; areas: Area[]; pending_count?: number };
 
 interface PageProps {
     sidebar: Program[];
     csrfToken: string;
 }
 
-export default function ReviewerDocuments(props: PageProps) {
+export default function FacultyDocumentsPending(props: PageProps) {
     const sidebar = props.sidebar ?? [];
     const csrfToken = props.csrfToken;
     const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
@@ -34,52 +35,102 @@ export default function ReviewerDocuments(props: PageProps) {
         setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
     };
 
-    // --- Reviewer: Pending Modal State ---
+    // --- Pending Modal State ---
     const [pendingModalOpen, setPendingModalOpen] = useState(false);
-    const [pendingDocs, setPendingDocs] = useState<any[]>([]);
-    const [loadingPending, setLoadingPending] = useState(false);
-    const [pendingError, setPendingError] = useState('');
-    const [pendingDocView, setPendingDocView] = useState<any | null>(null);
-    const [loadingPendingDoc, setLoadingPendingDoc] = useState(false);
+    const [pendingDocsTable, setPendingDocsTable] = useState<any[]>([]);
+    const [loadingPendingTable, setLoadingPendingTable] = useState(false);
+    const [pendingTableError, setPendingTableError] = useState('');
 
-    // Fetch pending documents when modal opens
-    useEffect(() => {
-        if (pendingModalOpen) {
-            setLoadingPending(true);
-            setPendingError('');
-            fetch('/reviewer/documents/pending', {
-                headers: { 'Accept': 'application/json' },
-                credentials: 'same-origin',
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) setPendingDocs(data.documents);
-                    else setPendingError('Failed to load pending documents.');
-                })
-                .catch(() => setPendingError('Failed to load pending documents.'))
-                .finally(() => setLoadingPending(false));
-        }
-    }, [pendingModalOpen]);
+    // Helper: flatten docs for modal (split file/video, add program/area/parameter/category info)
+    const flattenPendingDocs = (docs: any[], sidebar: Program[]) => {
+        const result: any[] = [];
+        docs.forEach(doc => {
+            // Find program, area, parameter
+            let program_code = '', area_code = '', parameter_code = '', category = '';
+            let paramName = '';
+            for (const prog of sidebar) {
+                if (prog.id === doc.program_id) {
+                    program_code = prog.code || '';
+                    for (const area of prog.areas) {
+                        if (area.id === doc.area_id) {
+                            area_code = area.code || '';
+                            if (area.parameters) {
+                                for (const param of area.parameters) {
+                                    if (param.id === doc.parameter_id) {
+                                        parameter_code = param.code || '';
+                                        paramName = param.name || '';
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            category = doc.category || '';
+            // Document file row
+            if (doc.filename) {
+                result.push({
+                    ...doc,
+                    type: 'file',
+                    program_code,
+                    area_code,
+                    parameter_code,
+                    paramName,
+                    category,
+                    file_url: doc.url,
+                    file_name: doc.filename,
+                    video_url: null,
+                    video_name: null,
+                });
+            }
+            // Video file row
+            if (doc.video_filename && doc.video_url) {
+                result.push({
+                    ...doc,
+                    type: 'video',
+                    program_code,
+                    area_code,
+                    parameter_code,
+                    paramName,
+                    category,
+                    file_url: null,
+                    file_name: null,
+                    video_url: doc.video_url,
+                    video_name: doc.video_filename,
+                });
+            }
+        });
+        return result;
+    };
 
-    // View a pending document
-    const handleViewPendingDoc = (docId: number) => {
-        setLoadingPendingDoc(true);
-        setPendingDocView(null);
-        fetch(`/reviewer/documents/pending/${docId}`, {
+    // Fetch all pending documents for modal table
+    const fetchPendingTable = () => {
+        setLoadingPendingTable(true);
+        setPendingTableError('');
+        fetch('/faculty/documents/pending/data', {
             headers: { 'Accept': 'application/json' },
             credentials: 'same-origin',
         })
             .then(res => res.json())
             .then(data => {
-                if (data.success) setPendingDocView(data.document);
-                else setPendingDocView({ error: data.message || 'Failed to load document.' });
+                if (data.success) setPendingDocsTable(flattenPendingDocs(data.documents, sidebar));
+                else setPendingTableError('Failed to load pending documents.');
             })
-            .catch(() => setPendingDocView({ error: 'Failed to load document.' }))
-            .finally(() => setLoadingPendingDoc(false));
+            .catch(() => setPendingTableError('Failed to load pending documents.'))
+            .finally(() => setLoadingPendingTable(false));
     };
 
-    // --- Approved Documents State ---
-    const [approvedDocs, setApprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
+    // Open modal and fetch data
+    const openPendingModal = () => {
+        setPendingModalOpen(true);
+        fetchPendingTable();
+    };
+
+    // --- Pending Documents State (same as approved, but for pending) ---
+    const [pendingDocs, setPendingDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string, parameter_id?: number, category?: string }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -94,41 +145,41 @@ export default function ReviewerDocuments(props: PageProps) {
         // Only fetch when all three are selected
         if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
             setLoadingDocs(true);
-            fetch(`/reviewer/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            fetch(`/faculty/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
                 .then((data) => {
                     if (data.success) {
-                        setApprovedDocs(data.documents);
+                        setPendingDocs(data.documents);
                         setViewerIndex(0);
                     } else {
-                        setApprovedDocs([]);
+                        setPendingDocs([]);
                     }
                 })
-                .catch(() => setApprovedDocs([]))
+                .catch(() => setPendingDocs([]))
                 .finally(() => setLoadingDocs(false));
         } else if (selected.programId && selected.areaId) {
             // If only program and area are selected, fetch all docs for that area (for grid counts)
             setLoadingDocs(true);
-            fetch(`/reviewer/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}`, {
+            fetch(`/faculty/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
                 .then((data) => {
                     if (data.success) {
-                        setApprovedDocs(data.documents);
+                        setPendingDocs(data.documents);
                         setViewerIndex(0);
                     } else {
-                        setApprovedDocs([]);
+                        setPendingDocs([]);
                     }
                 })
-                .catch(() => setApprovedDocs([]))
+                .catch(() => setPendingDocs([]))
                 .finally(() => setLoadingDocs(false));
         } else {
-            setApprovedDocs([]);
+            setPendingDocs([]);
             setViewerIndex(0);
         }
     }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
@@ -143,7 +194,7 @@ export default function ReviewerDocuments(props: PageProps) {
 
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
-        let docs = approvedDocs;
+        let docs = pendingDocs;
         if (selected.parameterId && selected.category) {
             docs = docs.filter(doc =>
                 doc.parameter_id === selected.parameterId &&
@@ -154,24 +205,17 @@ export default function ReviewerDocuments(props: PageProps) {
             docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
         }
         return docs;
-    }, [approvedDocs, selected.parameterId, selected.category, search]);
+    }, [pendingDocs, selected.parameterId, selected.category, search]);
 
-    const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
-    const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
+    const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === pendingDocs[viewerIndex]?.id);
+    
 
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
         const doc = filteredDocs[idx];
-        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
-        if (realIdx !== -1) {
-            setViewerIndex(realIdx);
-            setViewingDocIndex(realIdx);
-        }
+        const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
+        if (realIdx !== -1) setViewerIndex(realIdx);
     };
-    const goFirst = () => goTo(0);
-    const goLast = () => goTo(filteredDocs.length - 1);
-    const goPrev = () => goTo(Math.max(0, filteredViewerIndex - 1));
-    const goNext = () => goTo(Math.min(filteredDocs.length - 1, filteredViewerIndex + 1));
 
     const handleDownload = () => {
         if (!currentDoc) return;
@@ -228,185 +272,6 @@ export default function ReviewerDocuments(props: PageProps) {
         if (filteredDocs.length > 0) goTo(0);
     };
 
-    // --- Add Document Modal State (copied/adapted from faculty) ---
-    const [addModalOpen, setAddModalOpen] = useState(false);
-    const [uploadForm, setUploadForm] = useState({
-        programId: '',
-        areaId: '',
-        parameterId: '',
-        category: '', // <-- add category field
-        file: null as File | null,
-        video: null as File | null, // <-- add video field
-    });
-    const [uploadErrors, setUploadErrors] = useState<any>({});
-    const [uploading, setUploading] = useState(false);
-    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
-    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null); // <-- for video preview
-
-    const programOptions = useMemo(() =>
-        sidebar.map(p => ({ value: p.id, label: p.code ? `${p.code} - ${p.name}` : p.name })),
-        [sidebar]
-    );
-    const areaOptions = useMemo(() => {
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        return prog?.areas?.map(a => ({
-            value: a.id,
-            label: a.code ? `Area ${a.code} - ${a.name}` : `Area - ${a.name}`,
-            parameters: a.parameters || [],
-        })) || [];
-    }, [sidebar, uploadForm.programId]);
-
-    // Compute parameter options based on selected area
-    const parameterOptions = useMemo(() => {
-        if (!uploadForm.programId || !uploadForm.areaId) return [];
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
-        return area?.parameters?.map(param => ({
-            value: param.id,
-            label: param.code ? `${param.code} - ${param.name}` : param.name,
-        })) || [];
-    }, [sidebar, uploadForm.programId, uploadForm.areaId]);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null); // <-- for video input ref
-
-    useEffect(() => {
-        if (!uploadForm.file) {
-            setFilePreviewUrl(null);
-            return;
-        }
-        const file = uploadForm.file;
-        if (file.type === "application/pdf" || file.type.startsWith("image/")) {
-            const url = URL.createObjectURL(file);
-            setFilePreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else {
-            setFilePreviewUrl(null);
-        }
-    }, [uploadForm.file]);
-
-    // Video preview effect
-    useEffect(() => {
-        if (!uploadForm.video) {
-            setVideoPreviewUrl(null);
-            return;
-        }
-        const file = uploadForm.video;
-        if (file.type.startsWith("video/")) {
-            const url = URL.createObjectURL(file);
-            setVideoPreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else {
-            setVideoPreviewUrl(null);
-        }
-    }, [uploadForm.video]);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
-    };
-    // Video file change handler
-    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const video = e.target.files?.[0] || null;
-        setUploadForm(f => ({ ...f, video }));
-    };
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
-    };
-    const handleUploadFormChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setUploadForm(f => {
-            // Reset areaId, parameterId, and category if program changes
-            if (name === "programId") {
-                return { ...f, programId: value, areaId: '', parameterId: '', category: '', file: f.file, video: f.video };
-            }
-            // Reset parameterId and category if area changes
-            if (name === "areaId") {
-                return { ...f, areaId: value, parameterId: '', category: '', file: f.file, video: f.video };
-            }
-            // Reset category if parameter changes
-            if (name === "parameterId") {
-                return { ...f, parameterId: value, category: '', file: f.file, video: f.video };
-            }
-            return { ...f, [name]: value };
-        });
-    };
-    const handleUploadSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setUploadErrors({});
-        if (!uploadForm.programId) return setUploadErrors({ programId: "Select a program." });
-        if (!uploadForm.areaId) return setUploadErrors({ areaId: "Select an area." });
-        if (!uploadForm.parameterId) return setUploadErrors({ parameterId: "Select a parameter." });
-        if (!uploadForm.category) return setUploadErrors({ category: "Select a category." }); // <-- require category
-        if (!uploadForm.file) return setUploadErrors({ file: "Select a document file." });
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('program_id', uploadForm.programId);
-        formData.append('area_id', uploadForm.areaId);
-        formData.append('parameter_id', uploadForm.parameterId);
-        formData.append('category', uploadForm.category); // <-- append category
-        formData.append('file', uploadForm.file);
-        // Append video if present
-        if (uploadForm.video) {
-            formData.append('video', uploadForm.video);
-        }
-
-        try {
-            const token = csrfToken;
-            const response = await fetch('/reviewer/documents/upload', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': token || '',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (response.status === 419) {
-                setUploadErrors({ general: "CSRF token mismatch. Please refresh the page and try again." });
-                setUploading(false);
-                return;
-            }
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setAddModalOpen(false);
-                setUploadForm({ programId: '', areaId: '', parameterId: '', category: '', file: null, video: null });
-                setFilePreviewUrl(null);
-                setVideoPreviewUrl(null);
-                alert(data.message || 'Document uploaded successfully!');
-                window.location.reload();
-            } else {
-                if (data.errors) {
-                    setUploadErrors(data.errors);
-                } else {
-                    setUploadErrors({ general: data.message || "Upload failed." });
-                }
-            }
-        } catch (err: any) {
-            setUploadErrors({ general: "Upload failed. Please try again." });
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    // Helper: is selected area 8 or 9?
-    const isArea8or9 = (() => {
-        if (!uploadForm.programId || !uploadForm.areaId) return false;
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
-        // Accept both numeric and Roman numeral codes
-        const code = (area?.code || '').toString().toUpperCase();
-        return area && (
-            code === 'VIII' || code === 'IX'
-        );
-    })();
-
     // Helper: category list
     const categoryList = [
         { value: 'system', label: 'System' },
@@ -427,12 +292,69 @@ export default function ReviewerDocuments(props: PageProps) {
         selected.category
     ]);
 
+    // Only set currentDoc when viewingDocIndex is not null (i.e., DocumentNavigation is active)
+    const currentDoc = (viewingDocIndex !== null && filteredDocs[viewingDocIndex]) ? filteredDocs[viewingDocIndex] : undefined;
+
+    // --- Approve/Disapprove handlers ---
+    const [confirmModal, setConfirmModal] = useState<{ open: boolean, action: 'approve' | 'disapprove' | null }>({ open: false, action: null });
+    const [actionLoading, setActionLoading] = useState(false);
+    const [actionError, setActionError] = useState('');
+
+    const handleApprove = () => {
+        setConfirmModal({ open: true, action: 'approve' });
+    };
+    const handleDisapprove = () => {
+        setConfirmModal({ open: true, action: 'disapprove' });
+    };
+
+    const confirmAction = async () => {
+        if (!currentDoc || !confirmModal.action) return;
+        setActionLoading(true);
+        setActionError('');
+        try {
+            const res = await fetch(`/faculty/documents/pending/${currentDoc.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ status: confirmModal.action === 'approve' ? 'approved' : 'disapproved' })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || 'Failed to update status');
+            // Remove doc from filteredDocs/pendingDocs
+            const idx = viewingDocIndex;
+            const newPendingDocs = pendingDocs.filter(doc => doc.id !== currentDoc.id);
+            setPendingDocs(newPendingDocs);
+            // Move to next doc or close navigation if none left
+            if (newPendingDocs.length === 0) {
+                setViewingDocIndex(null);
+            } else {
+                const newFiltered = newPendingDocs.filter(doc =>
+                    (!selected.parameterId || doc.parameter_id === selected.parameterId) &&
+                    (!selected.category || doc.category === selected.category)
+                );
+                if (newFiltered.length === 0) {
+                    setViewingDocIndex(null);
+                } else {
+                    setViewingDocIndex(Math.max(0, Math.min(idx, newFiltered.length - 1)));
+                }
+            }
+            setConfirmModal({ open: false, action: null });
+        } catch (e: any) {
+            setActionError(e.message || 'Failed to update status');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     return (
         <>
-            <Head title="Reviewer Documents" />
+            <Head title="Reviewer Pending Documents" />
             <DashboardLayout>
                 <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
-                    {/* Sidebar - Reduced width */}
+                    {/* Sidebar - Same as approved, but for pending */}
                     <aside
                         className="min-w-[265px] bg-gray-50 p-4 h-[calc(100vh-64px-40px)] sticky top-16 self-start overflow-y-auto"
                         style={{
@@ -448,10 +370,10 @@ export default function ReviewerDocuments(props: PageProps) {
                                 ${!selected.programId ? 'text-[#7F0404] underline underline-offset-4 decoration-2' : 'text-[#7F0404] hover:bg-gray-100'}`}
                             onClick={() => {
                                 setSelected({});
-                                setViewingDocIndex(null); // <-- reset viewer
+                                setViewingDocIndex(null);
                             }}
                         >
-                            My Program Documents
+                            My Program Pending Documents
                         </button>
                         <nav>
                             {sidebar.length === 0 && (
@@ -467,7 +389,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                         onClick={() => {
                                             toggleExpand(program.id);
                                             setSelected({ programId: program.id, areaId: undefined, parameterId: undefined, category: undefined });
-                                            setViewingDocIndex(null); // <-- reset viewer
+                                            setViewingDocIndex(null);
                                         }}
                                     >
                                         <span className="flex-1 text-left">
@@ -498,7 +420,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         onClick={() => {
                                                             toggleAreaExpand(area.id);
                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: undefined, category: undefined });
-                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                            setViewingDocIndex(null);
                                                         }}
                                                     >
                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -536,7 +458,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         onClick={() => {
                                                                             setParamExpanded(prev => ({ ...prev, [param.id]: !prev[param.id] }));
                                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: undefined });
-                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                            setViewingDocIndex(null);
                                                                         }}
                                                                     >
                                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -579,7 +501,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                                         }}
                                                                                         onClick={() => {
                                                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: cat.value });
-                                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                                            setViewingDocIndex(null);
                                                                                         }}
                                                                                     >
                                                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -614,7 +536,7 @@ export default function ReviewerDocuments(props: PageProps) {
                         <div className="flex items-center justify-between flex-shrink-0">
                             <div>
                                 {!selected.programId ? (
-                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Documents</h1>
+                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Pending Documents</h1>
                                 ) : selectedProgram ? (
                                     <h1 className="text-lg font-bold text-[#7F0404]">
                                         {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
@@ -625,21 +547,45 @@ export default function ReviewerDocuments(props: PageProps) {
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
-                                    onClick={() => setAddModalOpen(true)}
+                                    className="flex items-center bg-[#C46B02] hover:bg-[#a86a00] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
+                                    onClick={openPendingModal}
                                 >
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Add
+                                    {/* Pending Icon */}
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" fill="none"/><path d="M12 6v6l4 2" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+                                    Pending
                                 </button>
+                                {/* Show Approve/Disapprove only when a document is being viewed (DocumentNavigation is active) */}
+                                {currentDoc && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
+                                            style={{ minWidth: 110 }}
+                                            onClick={handleApprove}
+                                        >
+                                            {/* Approve Icon */}
+                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                            Approve
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="flex items-center bg-[#7F0404] hover:bg-[#a80000] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
+                                            style={{ minWidth: 130 }}
+                                            onClick={handleDisapprove}
+                                        >
+                                            {/* Disapprove Icon */}
+                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+                                            Disapprove
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         
                         {/* Program Cards Grid when no program is selected */}
                         {!selected.programId ? (
                             <div className="mt-4 mb-8">
-                                <p className="text-base text-gray-700 mb-6">Select a program to view and manage its documents.</p>
+                                <p className="text-base text-gray-700 mb-6">Select a program to view and manage its pending documents.</p>
                                 <DocumentCardGrid
                                     items={sidebar}
                                     getKey={program => program.id}
@@ -648,7 +594,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                         setExpanded(prev => ({ ...prev, [program.id]: true }));
                                     }}
                                     renderCardContent={(program, index) => {
-                                        // Use program.approved_count for approved documents
+                                        // Use program.pending_count for pending documents
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -669,26 +615,20 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         {program.name}
                                                     </h2>
                                                 </div>
-                                                
-                                                {/* Using flex-grow to push the following content to the bottom */}
                                                 <div className="flex-grow"></div>
-                                                
-                                                {/* Bottom aligned content */}
                                                 <div className="mt-auto">
                                                     <div className="text-gray-600 mb-4">
                                                         <div className="flex justify-between items-center mb-3">
                                                             <span className="text-sm">Areas:</span>
                                                             <span className="font-semibold">{program.areas.length}</span>
                                                         </div>
-                                                        
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-sm">Approved Documents:</span>
-                                                            <span className={`font-semibold ${program.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                {program.approved_count}
+                                                            <span className="text-sm">Pending Documents:</span>
+                                                            <span className={`font-semibold ${program.pending_count && program.pending_count > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                {program.pending_count ?? 0}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    
                                                     <div className="pt-3 border-t border-gray-100 flex justify-end">
                                                         <div className="flex items-center text-xs font-medium text-[#7F0404] group">
                                                             <span>View Documents</span>
@@ -712,7 +652,7 @@ export default function ReviewerDocuments(props: PageProps) {
                             /* Area Cards Grid when program is selected but no area is selected */
                             <div className="mt-4 mb-8">
                                 <p className="text-base text-gray-700 mb-6">
-                                    Select an area to view and manage its documents.
+                                    Select an area to view and manage its pending documents.
                                 </p>
                                 <DocumentCardGrid
                                     items={selectedProgram?.areas || []}
@@ -723,8 +663,8 @@ export default function ReviewerDocuments(props: PageProps) {
                                     }}
                                     renderCardContent={(area, index) => {
                                         const parametersCount = area.parameters?.length || 0;
-                                        // Use area.approved_count for approved documents
-                                        const approvedCount = area.approved_count || 0;
+                                        // Use area.pending_count for pending documents
+                                        const pendingCount = area.pending_count || 0;
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -745,26 +685,20 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         {area.name}
                                                     </h2>
                                                 </div>
-                                                
-                                                {/* Using flex-grow to push the following content to the bottom */}
                                                 <div className="flex-grow"></div>
-                                                
-                                                {/* Bottom aligned content */}
                                                 <div className="mt-auto">
                                                     <div className="text-gray-600 mb-4">
                                                         <div className="flex justify-between items-center mb-3">
                                                             <span className="text-sm">Parameters:</span>
                                                             <span className="font-semibold">{parametersCount}</span>
                                                         </div>
-                                                        
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-sm">Approved Documents:</span>
-                                                            <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                {approvedCount}
+                                                            <span className="text-sm">Pending Documents:</span>
+                                                            <span className={`font-semibold ${pendingCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                {pendingCount}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    
                                                     <div className="pt-3 border-t border-gray-100 flex justify-end">
                                                         <div className="flex items-center text-xs font-medium text-[#7F0404] group">
                                                             <span>View Documents</span>
@@ -787,7 +721,6 @@ export default function ReviewerDocuments(props: PageProps) {
                         ) : selected.programId && selected.areaId && !selected.parameterId ? (
                             // --- Parameter Cards Grid when area is selected but no parameter is selected ---
                             <div>
-                                {/* Area title below program title */}
                                 <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
                                     {selectedProgram && selectedArea ? (
                                         <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
@@ -798,14 +731,14 @@ export default function ReviewerDocuments(props: PageProps) {
                                     ) : null}
                                 </div>
                                 <p className="text-base text-gray-700 mb-6">
-                                    Select a parameter to view and manage its documents.
+                                    Select a parameter to view and manage its pending documents.
                                 </p>
                                 <DocumentCardGrid
                                     items={selectedArea?.parameters || []}
                                     getKey={param => param.id}
                                     onCardClick={param => {
                                         setSelected({ programId: selected.programId, areaId: selected.areaId, parameterId: param.id });
-                                        setParamExpanded(prev => ({ ...prev, [param.id]: true })); // <-- expand selected parameter
+                                        setParamExpanded(prev => ({ ...prev, [param.id]: true }));
                                     }}
                                     renderCardContent={(param, index) => (
                                         <div className="p-5 flex flex-col h-full">
@@ -834,9 +767,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         <span className="font-semibold">3</span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-sm">Approved Documents:</span>
-                                                        <span className={`font-semibold ${param.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                            {param.approved_count || 0}
+                                                        <span className="text-sm">Pending Documents:</span>
+                                                        <span className={`font-semibold ${param.pending_count && param.pending_count > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                            {param.pending_count ?? 0}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -898,7 +831,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                     // --- Category Cards Grid when parameter is selected but no category is selected ---
                                     <div>
                                         <p className="text-base text-gray-700 mb-6">
-                                            Select a category to view and manage its documents.
+                                            Select a category to view and manage its pending documents.
                                         </p>
                                         <DocumentCardGrid
                                             items={categoryList}
@@ -913,9 +846,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                             }}
                                             renderCardContent={(cat, index) => {
                                                 // Show correct count for this parameter/category
-                                                let approvedCount = 0;
-                                                if (selectedParameter && selectedParameter.category_approved_counts) {
-                                                    approvedCount = selectedParameter.category_approved_counts[cat.value] || 0;
+                                                let pendingCount = 0;
+                                                if (selectedParameter && selectedParameter.category_pending_counts) {
+                                                    pendingCount = selectedParameter.category_pending_counts[cat.value] || 0;
                                                 }
                                                 return (
                                                     <div className="p-5 flex flex-col h-full">
@@ -938,10 +871,10 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         <div className="flex-grow"></div>
                                                         <div className="mt-auto">
                                                             <div className="text-gray-600 mb-4">
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-sm">Approved Documents:</span>
-                                                                    <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                        {approvedCount}
+                                                                <div className="flex justify-between items-center mb-3">
+                                                                    <span className="text-sm">Pending Documents:</span>
+                                                                    <span className={`font-semibold ${pendingCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                        {pendingCount}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -969,7 +902,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                     <>
                                     <div>
                                         <p className="text-base text-gray-700 mb-2">
-                                            {/* Removed the Back to list button */}
                                             {viewingDocIndex === null
                                                 ? "Select a document to view."
                                                 : null
@@ -1020,7 +952,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                     {(() => {
                                                         const doc = filteredDocs[filteredViewerIndex];
                                                         if (!doc) return null;
-                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
+                                                        const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
                                                         if (['pdf'].includes(ext)) {
                                                             return (
                                                                 <iframe
@@ -1059,13 +991,13 @@ export default function ReviewerDocuments(props: PageProps) {
                                                 </div>
                                             </div>
                                         ) : (
-                                            // --- Card grid for approved documents in this category ---
+                                            // --- Card grid for pending documents in this category ---
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                                 {filteredDocs.length === 0 ? (
-                                                    <div className="col-span-full text-gray-400 text-center">No approved documents for this category.</div>
+                                                    <div className="col-span-full text-gray-400 text-center">No pending documents for this category.</div>
                                                 ) : (
                                                     filteredDocs.flatMap((doc, idx) => {
-                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
+                                                        const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
                                                         const cards = [];
                                                         // Always show the document preview card
                                                         cards.push(
@@ -1079,7 +1011,8 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                     minHeight: 380,
                                                                 }}
                                                                 onClick={() => {
-                                                                    const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                    // Set the viewer to this document
+                                                                    const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
                                                                     setViewerIndex(realIdx);
                                                                     setViewingDocIndex(realIdx);
                                                                 }}
@@ -1109,11 +1042,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                     <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename}</div>
                                                                     <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
                                                                     <div className="text-xs text-gray-400 text-center">
-                                                                        {doc.updated_at
-                                                                            ? `Approved: ${doc.updated_at}`
-                                                                            : doc.uploaded_at
-                                                                                ? `Approved: ${doc.uploaded_at}`
-                                                                                : ''}
+                                                                        {doc.uploaded_at
+                                                                            ? `Uploaded: ${doc.uploaded_at}`
+                                                                            : ''}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1134,7 +1065,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         minHeight: 380,
                                                                     }}
                                                                     onClick={() => {
-                                                                        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                        const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
                                                                         setViewerIndex(realIdx);
                                                                         setViewingDocIndex(realIdx);
                                                                     }}
@@ -1151,11 +1082,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename} (Video)</div>
                                                                         <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
                                                                         <div className="text-xs text-gray-400 text-center">
-                                                                            {doc.updated_at
-                                                                                ? `Approved: ${doc.updated_at}`
-                                                                                : doc.uploaded_at
-                                                                                    ? `Approved: ${doc.uploaded_at}`
-                                                                                    : ''}
+                                                                            {doc.uploaded_at
+                                                                                ? `Uploaded: ${doc.uploaded_at}`
+                                                                                : ''}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1176,9 +1105,9 @@ export default function ReviewerDocuments(props: PageProps) {
                 </div>
             </DashboardLayout>
 
-            {/* Add Document Modal (copied/adapted from faculty) */}
-            <Transition show={addModalOpen} as={Fragment}>
-                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setAddModalOpen(false)}>
+            {/* Pending Documents Modal */}
+            <Transition show={pendingModalOpen} as={Fragment}>
+                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setPendingModalOpen(false)}>
                     <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
                     <Transition.Child
                         as={Fragment}
@@ -1189,258 +1118,101 @@ export default function ReviewerDocuments(props: PageProps) {
                         leaveFrom="opacity-100 scale-100"
                         leaveTo="opacity-0 scale-95"
                     >
-                        <div
-                            className="relative w-full max-w-2xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col"
-                            style={{
-                                maxHeight: '90vh', // Prevent modal from exceeding viewport
-                            }}
-                        >
-                            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80 flex-shrink-0">
-                                <Dialog.Title className="text-xl font-bold text-white tracking-tight">
-                                    Add Document
+                        <div className="relative w-full max-w-5xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
+                            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-[#C46B02]/90 to-[#FFD600]/80 flex-shrink-0">
+                                <Dialog.Title className="text-2xl font-bold text-white tracking-tight">
+                                    Pending Documents
                                 </Dialog.Title>
                                 <button
-                                    onClick={() => setAddModalOpen(false)}
-                                    className="text-white hover:text-[#FDDE54] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
+                                    onClick={() => setPendingModalOpen(false)}
+                                    className="text-white hover:text-[#7F0404] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
                                     aria-label="Close"
                                 >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
                             </div>
-                            <div
-                                className="px-8 py-8 flex-1 overflow-y-auto"
-                                style={{
-                                    minHeight: 0,
-                                    maxHeight: 'calc(90vh - 120px)', // Adjust for header/footer
-                                }}
-                            >
-                                <form onSubmit={handleUploadSubmit}>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
-                                        <div className="flex flex-col">
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Program <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="programId"
-                                                    value={uploadForm.programId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                >
-                                                    <option value="">Select program</option>
-                                                    {programOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.programId && <div className="text-red-600 text-xs mt-1">{uploadErrors.programId}</div>}
-                                            </div>
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Area <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="areaId"
-                                                    value={uploadForm.areaId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.programId}
-                                                >
-                                                    <option value="">Select area</option>
-                                                    {areaOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.areaId && <div className="text-red-600 text-xs mt-1">{uploadErrors.areaId}</div>}
-                                            </div>
-                                            {/* Parameter Dropdown */}
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Parameter <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="parameterId"
-                                                    value={uploadForm.parameterId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.areaId}
-                                                >
-                                                    <option value="">Select parameter</option>
-                                                    {parameterOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.parameterId && <div className="text-red-600 text-xs mt-1">{uploadErrors.parameterId}</div>}
-                                            </div>
-                                            {/* Category Dropdown */}
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Category <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="category"
-                                                    value={uploadForm.category}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.parameterId}
-                                                >
-                                                    <option value="">Select category</option>
-                                                    <option value="system">System</option>
-                                                    <option value="implementation">Implementation</option>
-                                                    <option value="outcomes">Outcomes</option>
-                                                </select>
-                                                {uploadErrors.category && <div className="text-red-600 text-xs mt-1">{uploadErrors.category}</div>}
-                                            </div>
-                                            <div className="flex-1 flex flex-col">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Document File <span className="text-red-600">*</span></label>
-                                                <div
-                                                    className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
-                                                    style={{ minHeight: '5rem', maxHeight: '7rem' }}
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                    onDrop={handleDrop}
-                                                    onDragOver={e => e.preventDefault()}
-                                                >
-                                                    {uploadForm.file ? (
-                                                        <div>
-                                                            <div className="font-semibold">{uploadForm.file.name}</div>
-                                                            <div className="text-xs text-gray-500">{uploadForm.file.type} ({(uploadForm.file.size / 1024).toFixed(1)} KB)</div>
+                            <div className="px-8 py-8 flex-1 overflow-y-auto bg-white text-black">
+                                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
+                                    <table className="min-w-full text-black text-xs"> {/* Smaller font */}
+                                        <thead>
+                                            <tr className="bg-[#F4BB00]/30 text-[#7F0404]">
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Uploader</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Program</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Area</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Parameter</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Category</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Document</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Uploaded</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-black">
+                                            {loadingPendingTable ? (
+                                                <tr>
+                                                    <td colSpan={8} className="text-center text-gray-500 py-8">Loading...</td>
+                                                </tr>
+                                            ) : pendingTableError ? (
+                                                <tr>
+                                                    <td colSpan={8} className="text-center text-red-600 py-8">{pendingTableError}</td>
+                                                </tr>
+                                            ) : pendingDocsTable.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={8} className="text-center text-gray-400 py-8">No pending documents found.</td>
+                                                </tr>
+                                            ) : (
+                                                pendingDocsTable.map((doc, idx) => (
+                                                    <tr key={doc.id + '-' + doc.type} className="border-b last:border-b-0 hover:bg-gray-50 transition">
+                                                        <td className="px-2 py-2 text-center truncate max-w-[120px] whitespace-nowrap">{doc.user_name}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[80px] whitespace-nowrap">{doc.program_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[80px] whitespace-nowrap">Area {doc.area_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[100px] whitespace-nowrap">{doc.parameter_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[90px] whitespace-nowrap">{doc.category}</td>
+                                                        <td className="px-2 py-2 inline-flex text-center justify-center items-center truncate max-w-[70px] whitespace-nowrap">
+                                                            {/* Only show thumbnail image for document or video */}
+                                                            {doc.type === 'file' && doc.file_url ? (
+                                                                doc.file_name?.toLowerCase().match(/\.(jpg|jpeg|png)$/i) ? (
+                                                                    <img src={doc.file_url} alt="preview" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                ) : doc.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                                                    <img src={`/thumbnails/pdf.png`} alt="PDF thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                ) : (
+                                                                    <img src={`/thumbnails/file.png`} alt="File thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                )
+                                                            ) : doc.type === 'video' && doc.video_url ? (
+                                                                <img src={`/thumbnails/video.png`} alt="Video thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                            ) : null}
+                                                        </td>
+                                                        <td className="px-2 py-2 truncate max-w-[110px] whitespace-nowrap">{doc.uploaded_at}</td>
+                                                        <td className="px-2 py-2 text-center">
                                                             <button
                                                                 type="button"
-                                                                className="mt-2 text-xs text-red-600 underline"
-                                                                onClick={e => { e.stopPropagation(); setUploadForm(f => ({ ...f, file: null })); }}
+                                                                className="inline-flex items-center justify-center text-[#C46B02] hover:text-[#7F0404] transition"
+                                                                title="View"
+                                                                onClick={() => {
+                                                                    setPendingModalOpen(false);
+                                                                }}
                                                             >
-                                                                Remove
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                                                                    <circle cx="12" cy="12" r="3" />
+                                                                </svg>
                                                             </button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400">Drag & drop or click to upload (PDF, DOCX, PPT, etc.)</span>
-                                                    )}
-                                                    <input
-                                                        ref={fileInputRef}
-                                                        type="file"
-                                                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
-                                                        className="hidden"
-                                                        onChange={handleFileChange}
-                                                    />
-                                                </div>
-                                                {uploadErrors.file && <div className="text-red-600 text-xs mt-1">{uploadErrors.file}</div>}
-                                            </div>
-                                            {/* --- Video File Upload (only for Area 8 or 9) --- */}
-                                            {isArea8or9 && (
-                                                <div className="flex-1 flex flex-col mt-4">
-                                                    <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Video File (optional)</label>
-                                                    <div
-                                                        className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
-                                                        style={{ minHeight: '5rem', maxHeight: '7rem' }}
-                                                        onClick={() => videoInputRef.current?.click()}
-                                                    >
-                                                        {uploadForm.video ? (
-                                                            <div>
-                                                                <div className="font-semibold">{uploadForm.video.name}</div>
-                                                                <div className="text-xs text-gray-500">{uploadForm.video.type} ({(uploadForm.video.size / 1024).toFixed(1)} KB)</div>
-                                                                <button
-                                                                    type="button"
-                                                                    className="mt-2 text-xs text-red-600 underline"
-                                                                    onClick={e => { e.stopPropagation(); setUploadForm(f => ({ ...f, video: null })); }}
-                                                                >
-                                                                    Remove
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-gray-400">Click to upload a video file (MP4, MOV, AVI, etc.)</span>
-                                                        )}
-                                                        <input
-                                                            ref={videoInputRef}
-                                                            type="file"
-                                                            accept="video/*"
-                                                            className="hidden"
-                                                            onChange={handleVideoChange}
-                                                        />
-                                                    </div>
-                                                    {/* No error display, since not required */}
-                                                </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
                                             )}
-                                            {/* --- End Video File Upload --- */}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Preview</label>
-                                            <div
-                                                className="border rounded-lg bg-white flex items-center justify-center overflow-hidden"
-                                                style={{
-                                                    minHeight: '180px',
-                                                    maxHeight: '400px',
-                                                    width: '100%',
-                                                    maxWidth: '100%',
-                                                    aspectRatio: '8.5/11', // Portrait document aspect ratio
-                                                }}
-                                            >
-                                                {uploadForm.file ? (
-                                                    uploadForm.file.type === "application/pdf" ? (
-                                                        <div 
-                                                            className="w-full h-full overflow-y-auto"
-                                                            style={{
-                                                                scrollbarWidth: 'thin',
-                                                                scrollbarColor: '#C46B02 #f1f5f9'
-                                                            }}
-                                                        >
-                                                            <iframe 
-                                                                src={`${filePreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                                                                className="w-full h-full border-none rounded bg-white" 
-                                                                title="PDF Preview"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                            ></iframe>
-                                                        </div>
-                                                    ) : uploadForm.file.type.startsWith("image/") ? (
-                                                        <div 
-                                                            className="w-full h-full overflow-auto flex items-center justify-center p-4"
-                                                            style={{
-                                                                scrollbarWidth: 'thin',
-                                                                scrollbarColor: '#C46B02 #f1f5f9'
-                                                            }}
-                                                        >
-                                                            <img
-                                                                src={filePreviewUrl}
-                                                                alt="Preview"
-                                                                className="max-h-full max-w-full rounded object-contain"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-500 text-sm">Preview not available for this file type.</div>
-                                                    )
-                                                ) : (
-                                                    <div className="text-gray-400 text-center">No file selected.</div>
-                                                )}
-                                            </div>
-                                            {/* Video preview (if video selected) */}
-                                            {isArea8or9 && uploadForm.video && videoPreviewUrl && (
-                                                <div className="mt-4">
-                                                    <label className="block text-xs font-semibold mb-1 text-[#7F0404]">Video Preview</label>
-                                                    <video
-                                                        src={videoPreviewUrl}
-                                                        controls
-                                                        className="w-full max-h-48 rounded"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {uploadErrors.general && <div className="text-red-600 text-xs mt-4">{uploadErrors.general}</div>}
-                                </form>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                             <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-8 pb-6 flex-shrink-0 bg-white">
                                 <button
                                     type="button"
                                     className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
-                                    onClick={() => setAddModalOpen(false)}
-                                    disabled={uploading}
+                                    onClick={() => setPendingModalOpen(false)}
                                 >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 rounded-lg font-bold shadow bg-[#7F0404] text-white hover:bg-[#C46L02] hover:shadow-lg transition-all duration-200"
-                                    disabled={uploading}
-                                    onClick={handleUploadSubmit}
-                                >
-                                    {uploading ? 'Uploading...' : 'Upload'}
+                                    Close
                                 </button>
                             </div>
                         </div>
@@ -1448,22 +1220,65 @@ export default function ReviewerDocuments(props: PageProps) {
                 </Dialog>
             </Transition>
 
-            <style jsx>{`
+            {/* Confirmation Modal */}
+            <Transition show={confirmModal.open} as={Fragment}>
+                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setConfirmModal({ open: false, action: null })}>
+                    <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-200"
+                        enterFrom="opacity-0 scale-95"
+                        enterTo="opacity-100 scale-100"
+                        leave="ease-in duration-150"
+                        leaveFrom="opacity-100 scale-100"
+                        leaveTo="opacity-0 scale-95"
+                    >
+                        <div className="relative w-full max-w-md mx-auto rounded-2xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
+                            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-[#C46B02]/90 to-[#FFD600]/80 flex-shrink-0">
+                                <Dialog.Title className="text-lg font-bold text-white tracking-tight">
+                                    {confirmModal.action === 'approve' ? 'Approve Document' : 'Disapprove Document'}
+                                </Dialog.Title>
+                            </div>
+                            <div className="px-6 py-6 flex-1 overflow-y-auto bg-white text-black">
+                                <p>Are you sure you want to <span className={confirmModal.action === 'approve' ? 'text-green-700 font-bold' : 'text-[#7F0404] font-bold'}>{confirmModal.action}</span> this document?</p>
+                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs">
+                                    <div><span className="font-semibold">Filename:</span> {currentDoc?.filename}</div>
+                                    <div><span className="font-semibold">Uploaded:</span> {currentDoc?.uploaded_at}</div>
+                                </div>
+                                {actionError && <div className="mt-2 text-red-600 text-sm">{actionError}</div>}
+                            </div>
+                            <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-6 pb-5 flex-shrink-0 bg-white">
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                                    onClick={() => setConfirmModal({ open: false, action: null })}
+                                    disabled={actionLoading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`px-5 py-2 rounded-lg font-semibold text-white transition ${confirmModal.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-[#7F0404] hover:bg-[#a80000]'}`}
+                                    onClick={confirmAction}
+                                    disabled={actionLoading}
+                                >
+                                    {actionLoading ? 'Processing...' : (confirmModal.action === 'approve' ? 'Approve' : 'Disapprove')}
+                                </button>
+                            </div>
+                        </div>
+                    </Transition.Child>
+                </Dialog>
+            </Transition>
+
+            <style>{`
                 table { font-size: 1rem; }
                 th, td { vertical-align: middle; }
                 .group:hover svg {
                     filter: drop-shadow(0 2px 4px rgba(196,107,2,0.15));
                     transition: color 0.2s, transform 0.2s;
                     transform: scale(1.35);
-                }
-                .group svg { transition: color 0.2s, transform 0.2s; }
-                .group:active { transform: scale(0.95); }
-                
-                @keyframes fade-in-up {
-                    from { opacity: 0; transform: translateY(20px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
-                
                 .bg-white {
                     animation: fade-in-up 0.5s ease-out forwards;
                 }

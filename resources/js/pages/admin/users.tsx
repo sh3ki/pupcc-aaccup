@@ -72,7 +72,7 @@ function MultiSelectDropdown({
                             {options
                                 .filter((opt: any) => selected.includes(opt.value))
                                 .map((opt: any, index: number) => (
-                                    <div key={opt.value} className="text-sm">
+                                    <div key={opt.value} className="text-sm text-black">
                                         {opt.label}
                                     </div>
                                 ))}
@@ -83,7 +83,7 @@ function MultiSelectDropdown({
             {show && (
                 <div className={`absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg ${dropdownClass}`}>
                     {options.map((opt: any) => (
-                        <label key={opt.value} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
+                        <label key={opt.value} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer text-black">
                             <input
                                 type="checkbox"
                                 checked={selected.includes(opt.value)}
@@ -91,7 +91,7 @@ function MultiSelectDropdown({
                                 disabled={disabledLogic && disabledLogic(opt.value)}
                                 className="mr-2"
                             />
-                            <span>{opt.label}</span>
+                            <span className="text-black">{opt.label}</span>
                         </label>
                     ))}
                 </div>
@@ -320,13 +320,58 @@ export default function AdminUserManagement() {
 
     const openAssignModal = (user: any) => {
         setAssignUser(user);
+
+        // Get all program IDs in the system
+        const allProgramIds = programs.map((p: any) => p.id);
+
+        // Get all program IDs assigned to the user
         const userPrograms = [...new Set(user.assignments.map((a: any) => a.program_code && programs.find((p: any) => p.code === a.program_code)?.id).filter(Boolean))];
-        const userAreas = [...new Set(user.assignments.map((a: any) => {
-            if (!a.area_code) return null;
-            const area = areas.find((ar: any) => ar.code === a.area_code && userPrograms.includes(ar.program_id));
-            return area?.id;
-        }).filter(Boolean))];
-        setAssignForm({ programs: userPrograms, areas: userAreas });
+
+        // Check if user is assigned to all programs
+        const allProgramsAssigned = userPrograms.length === allProgramIds.length && allProgramIds.every(pid => userPrograms.includes(pid));
+
+        // For each program, check if user is assigned to all areas in that program
+        let allProgramsComplete = true;
+        let assignedAreaIds: any[] = [];
+
+        userPrograms.forEach((pid: any) => {
+            const programAreas = areas.filter((ar: any) => ar.program_id === pid);
+            const assignedAreaCodes = user.assignments
+                .filter((a: any) => a.program_code === programs.find((p: any) => p.id === pid)?.code)
+                .map((a: any) => a.area_code)
+                .filter(Boolean);
+
+            // Collect all assigned area ids for this program
+            programAreas.forEach((ar: any) => {
+                if (assignedAreaCodes.includes(ar.code)) {
+                    assignedAreaIds.push(ar.id);
+                }
+            });
+
+            // If not all areas in this program are assigned, set flag to false
+            if (!(assignedAreaCodes.length === programAreas.length && programAreas.length > 0)) {
+                allProgramsComplete = false;
+            }
+        });
+
+        // Remove duplicates
+        assignedAreaIds = [...new Set(assignedAreaIds)];
+
+        let userProgramsSelected: any[] = [];
+        if (allProgramsAssigned && userPrograms.length > 0) {
+            userProgramsSelected = ['all'];
+        } else {
+            userProgramsSelected = userPrograms;
+        }
+
+        let userAreas: any[] = [];
+        if (allProgramsComplete && userPrograms.length > 0) {
+            userAreas = ['all'];
+        } else {
+            userAreas = assignedAreaIds;
+        }
+
+        setAssignForm({ programs: userProgramsSelected, areas: userAreas });
         setErrors({});
         setAssignModalOpen(true);
     };

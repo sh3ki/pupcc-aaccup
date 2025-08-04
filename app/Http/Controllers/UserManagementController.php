@@ -38,8 +38,8 @@ class UserManagementController extends Controller
         });
 
         // Fetch program and area lists
-        $programs = Program::select('id', 'code', 'name')->orderBy('code')->get();
-        $areas = Area::select('id', 'code', 'name', 'program_id')->orderBy('code')->get();
+        $programs = Program::select('id', 'code', 'name')->orderBy('code')->get()->values();
+        $areas = Area::select('id', 'code', 'name', 'program_id')->orderBy('code')->get()->values();
 
         return Inertia::render('admin/users', [
             'users' => $data,

@@ -22,7 +22,43 @@ class FacultyDocumentsController extends Controller
             ->where('user_id', $user->id)
             ->get();
 
-        // Group by program, then list unique areas under each program, and parameters under each area
+        // --- Compute approved document counts for programs, areas, parameters, and categories ---
+        $programIds = [];
+        $areaIds = [];
+        foreach ($assignments as $assign) {
+            if ($assign->program_id) $programIds[] = $assign->program_id;
+            if ($assign->area_id) $areaIds[] = $assign->area_id;
+        }
+        $programIds = array_unique($programIds);
+        $areaIds = array_unique($areaIds);
+
+        $approvedDocs = Document::where('status', 'approved')
+            ->whereIn('program_id', $programIds)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        $programApprovedCounts = [];
+        $areaApprovedCounts = [];
+        $parameterApprovedCounts = [];
+        $parameterCategoryApprovedCounts = [];
+
+        foreach ($approvedDocs as $doc) {
+            if (!isset($programApprovedCounts[$doc->program_id])) $programApprovedCounts[$doc->program_id] = 0;
+            $programApprovedCounts[$doc->program_id]++;
+
+            if ($doc->area_id) {
+                if (!isset($areaApprovedCounts[$doc->area_id])) $areaApprovedCounts[$doc->area_id] = 0;
+                $areaApprovedCounts[$doc->area_id]++;
+            }
+
+            if ($doc->parameter_id) {
+                if (!isset($parameterApprovedCounts[$doc->parameter_id])) $parameterApprovedCounts[$doc->parameter_id] = 0;
+                $parameterApprovedCounts[$doc->parameter_id]++;
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id])) $parameterCategoryApprovedCounts[$doc->parameter_id] = [];
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category])) $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category] = 0;
+                $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
         $sidebar = [];
         foreach ($assignments as $assign) {
             $program = $assign->program;
@@ -36,18 +72,27 @@ class FacultyDocumentsController extends Controller
                     'name' => $program->name,
                     'code' => $program->code ?? null,
                     'areas' => [],
+                    'approved_count' => $programApprovedCounts[$program->id] ?? 0,
                 ];
             }
             if ($area && !collect($sidebar[$programId]['areas'])->contains('id', $area->id)) {
-                // Fetch parameters for this area/program
                 $parameters = Parameter::where('program_id', $program->id)
                     ->where('area_id', $area->id)
                     ->get(['id', 'name', 'code'])
-                    ->map(function ($param) {
+                    ->map(function ($param) use ($parameterApprovedCounts, $parameterCategoryApprovedCounts) {
+                        $paramId = $param->id;
+                        $categories = ['system', 'implementation', 'outcomes'];
+                        $categoryCounts = [];
+                        foreach ($categories as $cat) {
+                            $categoryCounts[$cat] = $parameterCategoryApprovedCounts[$paramId][$cat] ?? 0;
+                        }
+                        $approved_count = $parameterApprovedCounts[$paramId] ?? 0;
                         return [
                             'id' => $param->id,
                             'name' => $param->name,
                             'code' => $param->code,
+                            'approved_count' => $approved_count,
+                            'category_approved_counts' => $categoryCounts,
                         ];
                     })
                     ->toArray();
@@ -57,6 +102,7 @@ class FacultyDocumentsController extends Controller
                     'name' => $area->name,
                     'code' => $area->code ?? null,
                     'parameters' => $parameters,
+                    'approved_count' => $areaApprovedCounts[$area->id] ?? 0,
                 ];
             }
         }
@@ -68,7 +114,6 @@ class FacultyDocumentsController extends Controller
         ]);
     }
 
-    // New: Fetch approved documents for a program+area (AJAX)
     public function approvedDocuments(Request $request)
     {
         $request->validate([
@@ -78,19 +123,39 @@ class FacultyDocumentsController extends Controller
 
         $user = $request->user();
 
-        // Only show approved documents for this user, program, and area
-        $documents = Document::where('user_id', $user->id)
+        $hasAccess = UserAssign::where('user_id', $user->id)
             ->where('program_id', $request->program_id)
             ->where('area_id', $request->area_id)
-            ->where('status', 'approved')
-            ->orderBy('created_at', 'desc')
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['success' => false, 'message' => 'Access denied'], 403);
+        }
+
+        $query = Document::where('program_id', $request->program_id)
+            ->where('area_id', $request->area_id)
+            ->where('status', 'approved');
+
+        if ($request->has('parameter_id')) {
+            $query->where('parameter_id', $request->parameter_id);
+        }
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $documents = $query->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($doc) use ($user) {
+            ->map(function ($doc) {
                 return [
                     'id' => $doc->id,
                     'filename' => $doc->doc_filename,
-                    'url' => \Storage::url("documents/{$user->id}/{$doc->doc_filename}"),
+                    'url' => \Storage::url("documents/{$doc->doc_filename}"),
+                    'video_filename' => $doc->video_filename,
+                    'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
                     'uploaded_at' => $doc->created_at->toDateTimeString(),
+                    'user_name' => $doc->user->name ?? '',
+                    'parameter_id' => $doc->parameter_id,
+                    'category' => $doc->category,
                 ];
             });
 
@@ -105,21 +170,33 @@ class FacultyDocumentsController extends Controller
         $request->validate([
             'program_id' => 'required|exists:programs,id',
             'area_id' => 'required|exists:areas,id',
+            'parameter_id' => 'required|exists:parameters,id',
+            'category' => 'required|in:system,implementation,outcomes',
             'file' => 'required|file|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png|max:20480',
+            'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm|max:51200',
         ]);
 
         $user = $request->user();
         $file = $request->file('file');
         $filename = Str::random(16) . '_' . time() . '.' . $file->getClientOriginalExtension();
 
-        // Store in storage/app/public/documents/{user_id}/
-        $file->storeAs("documents/{$user->id}", $filename, 'public');
+        $file->storeAs("documents/", $filename, 'public');
+
+        $videoFilename = null;
+        if ($request->hasFile('video')) {
+            $video = $request->file('video');
+            $videoFilename = Str::random(16) . '_' . time() . '.' . $video->getClientOriginalExtension();
+            $video->storeAs("documents/", $videoFilename, 'public');
+        }
 
         $document = Document::create([
             'user_id' => $user->id,
             'program_id' => $request->program_id,
             'area_id' => $request->area_id,
-            'doc_filename' => $filename, // only filename saved
+            'parameter_id' => $request->parameter_id,
+            'doc_filename' => $filename,
+            'category' => $request->category,
+            'video_filename' => $videoFilename,
             'status' => 'pending',
         ]);
 
@@ -127,6 +204,443 @@ class FacultyDocumentsController extends Controller
             'success' => true,
             'message' => 'Document uploaded successfully!',
             'document' => $document
+        ]);
+    }
+
+    // Add this new method specifically for rendering the pending page
+    public function pendingPage(Request $request)
+    {
+        $user = $request->user();
+
+        // Get all assignments for the faculty
+        $assignments = UserAssign::with(['program', 'area'])
+            ->where('user_id', $user->id)
+            ->get();
+
+        // --- Compute pending document counts for programs, areas, parameters, and categories ---
+        $programIds = [];
+        $areaIds = [];
+        foreach ($assignments as $assign) {
+            if ($assign->program_id) $programIds[] = $assign->program_id;
+            if ($assign->area_id) $areaIds[] = $assign->area_id;
+        }
+        $programIds = array_unique($programIds);
+        $areaIds = array_unique($areaIds);
+
+        // Get all pending documents for these programs (for sidebar counts)
+        $pendingDocs = Document::where('status', 'pending')
+            ->whereIn('program_id', $programIds)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        // Precompute counts
+        $programPendingCounts = [];
+        $areaPendingCounts = [];
+        $parameterPendingCounts = [];
+        $parameterCategoryPendingCounts = [];
+
+        foreach ($pendingDocs as $doc) {
+            // Program count
+            if (!isset($programPendingCounts[$doc->program_id])) $programPendingCounts[$doc->program_id] = 0;
+            $programPendingCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaPendingCounts[$doc->area_id])) $areaPendingCounts[$doc->area_id] = 0;
+                $areaPendingCounts[$doc->area_id]++;
+            }
+
+            // Parameter count
+            if ($doc->parameter_id) {
+                if (!isset($parameterPendingCounts[$doc->parameter_id])) $parameterPendingCounts[$doc->parameter_id] = 0;
+                $parameterPendingCounts[$doc->parameter_id]++;
+                // Category count
+                if (!isset($parameterCategoryPendingCounts[$doc->parameter_id])) $parameterCategoryPendingCounts[$doc->parameter_id] = [];
+                if (!isset($parameterCategoryPendingCounts[$doc->parameter_id][$doc->category])) $parameterCategoryPendingCounts[$doc->parameter_id][$doc->category] = 0;
+                $parameterCategoryPendingCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Build sidebar data
+        $sidebar = [];
+        foreach ($assignments as $assign) {
+            $program = $assign->program;
+            $area = $assign->area;
+            if (!$program) continue;
+
+            $programId = $program->id;
+            if (!isset($sidebar[$programId])) {
+                $sidebar[$programId] = [
+                    'id' => $program->id,
+                    'name' => $program->name,
+                    'code' => $program->code ?? null,
+                    'areas' => [],
+                    'pending_count' => $programPendingCounts[$program->id] ?? 0, // program-level pending count
+                ];
+            }
+            if ($area && !collect($sidebar[$programId]['areas'])->contains('id', $area->id)) {
+                // Fetch parameters for this area/program
+                $parameters = Parameter::where('program_id', $program->id)
+                    ->where('area_id', $area->id)
+                    ->get(['id', 'name', 'code'])
+                    ->map(function ($param) use ($parameterPendingCounts, $parameterCategoryPendingCounts) {
+                        $paramId = $param->id;
+                        $categories = ['system', 'implementation', 'outcomes'];
+                        $categoryCounts = [];
+                        foreach ($categories as $cat) {
+                            $categoryCounts[$cat] = $parameterCategoryPendingCounts[$paramId][$cat] ?? 0;
+                        }
+                        $pending_count = $parameterPendingCounts[$paramId] ?? 0;
+                        return [
+                            'id' => $param->id,
+                            'name' => $param->name,
+                            'code' => $param->code,
+                            'pending_count' => $pending_count,
+                            'category_pending_counts' => $categoryCounts,
+                        ];
+                    })
+                    ->toArray();
+
+                $sidebar[$programId]['areas'][] = [
+                    'id' => $area->id,
+                    'name' => $area->name,
+                    'code' => $area->code ?? null,
+                    'parameters' => $parameters,
+                    'pending_count' => $areaPendingCounts[$area->id] ?? 0, // area-level pending count
+                ];
+            }
+        }
+        $sidebar = array_values($sidebar);
+
+        // Always render the Inertia page
+        return Inertia::render('faculty/documents_pending', [
+            'sidebar' => $sidebar,
+            'csrfToken' => csrf_token(),
+        ]);
+    }
+
+    // Handle data requests for pending documents
+    public function pendingDocuments(Request $request)
+    {
+        $user = $request->user();
+        
+        // Fetch area-specific documents if program_id and area_id are provided
+        if ($request->has('program_id') && $request->has('area_id')) {
+            $program_id = $request->input('program_id');
+            $area_id = $request->input('area_id');
+
+            // Check if faculty is assigned to this program/area
+            $hasAccess = UserAssign::where('user_id', $user->id)
+                ->where('program_id', $program_id)
+                ->where('area_id', $area_id)
+                ->exists();
+
+            if (!$hasAccess) {
+                return response()->json(['success' => false, 'message' => 'Access denied'], 403);
+            }
+
+            $documents = Document::where('status', 'pending')
+                ->where('program_id', $program_id)
+                ->where('area_id', $area_id)
+                ->with(['user:id,name', 'program:id,code', 'area:id,code'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($doc) {
+                    return [
+                        'id' => $doc->id,
+                        'filename' => $doc->doc_filename,
+                        'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
+                        'video_filename' => $doc->video_filename,
+                        'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                        'uploaded_at' => $doc->created_at->toDateTimeString(),
+                        'user_name' => $doc->user->name ?? '',
+                        'parameter_id' => $doc->parameter_id,
+                        'category' => $doc->category,
+                        'program_id' => $doc->program_id,
+                        'area_id' => $doc->area_id,
+                        'program_code' => $doc->program->code ?? '',
+                        'area_code' => $doc->area->code ?? '',
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'documents' => $documents,
+            ]);
+        }
+
+        // Fetch all pending documents for modal table
+        $assignments = UserAssign::with(['program', 'area'])
+            ->where('user_id', $user->id)
+            ->get();
+            
+        $programAreaPairs = $assignments->map(function ($assign) {
+            return [
+                'program_id' => $assign->program_id,
+                'area_id' => $assign->area_id,
+            ];
+        });
+
+        $query = Document::query()
+            ->where('status', 'pending')
+            ->with(['user:id,name', 'program:id,code', 'area:id,code']);
+
+        $query->where(function ($q) use ($programAreaPairs) {
+            foreach ($programAreaPairs as $pair) {
+                $q->orWhere(function ($sub) use ($pair) {
+                    $sub->where('program_id', $pair['program_id'])
+                        ->where('area_id', $pair['area_id']);
+                });
+            }
+        });
+
+        $documents = $query->orderBy('created_at', 'desc')->get()->map(function ($doc) {
+            return [
+                'id' => $doc->id,
+                'filename' => $doc->doc_filename,
+                'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
+                'video_filename' => $doc->video_filename,
+                'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                'uploaded_at' => $doc->created_at->toDateTimeString(),
+                'user_name' => $doc->user->name ?? '',
+                'parameter_id' => $doc->parameter_id,
+                'category' => $doc->category,
+                'program_id' => $doc->program_id,
+                'area_id' => $doc->area_id,
+                'program_code' => $doc->program->code ?? '',
+                'area_code' => $doc->area->code ?? '',
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'documents' => $documents,
+        ]);
+    }
+
+    // View a single pending document (for faculty)
+    public function viewPendingDocument(Request $request, Document $document)
+    {
+        $user = $request->user();
+
+        // Check if faculty is assigned to this program/area
+        $hasAccess = UserAssign::where('user_id', $user->id)
+            ->where('program_id', $document->program_id)
+            ->where('area_id', $document->area_id)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['success' => false, 'message' => 'Access denied'], 403);
+        }
+
+        $documentData = [
+            'id' => $document->id,
+            'filename' => $document->doc_filename,
+            'url' => Storage::url("documents/{$document->doc_filename}"),
+            'video_filename' => $document->video_filename,
+            'video_url' => $document->video_filename ? Storage::url("documents/{$document->video_filename}") : null,
+            'uploaded_at' => $document->created_at->toDateTimeString(),
+            'user_name' => $document->user->name ?? '',
+            'program_id' => $document->program_id,
+            'area_id' => $document->area_id,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'document' => $documentData,
+        ]);
+    }
+
+    // Update status (approve/disapprove) for pending document (faculty)
+    public function updateStatus(Request $request, Document $document)
+    {
+        $user = $request->user();
+        $request->validate([
+            'status' => 'required|in:approved,disapproved',
+        ]);
+
+        // Check if faculty is assigned to this program/area
+        $hasAccess = UserAssign::where('user_id', $user->id)
+            ->where('program_id', $document->program_id)
+            ->where('area_id', $document->area_id)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['success' => false, 'message' => 'Access denied'], 403);
+        }
+
+        if ($document->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Document is not pending.'], 400);
+        }
+
+        $document->status = $request->status;
+        $document->save();
+
+        return response()->json(['success' => true, 'message' => 'Document status updated.']);
+    }
+
+    // Add this new method for rendering the disapproved page (copied/adapted from reviewer)
+    public function disapprovedPage(Request $request)
+    {
+        $user = Auth::user();
+
+        // Get all assignments for the user, eager load program and area
+        $assignments = UserAssign::with(['program', 'area'])
+            ->where('user_id', $user->id)
+            ->get();
+
+        // Gather all program/area IDs assigned to the user
+        $programIds = [];
+        $areaIds = [];
+        foreach ($assignments as $assign) {
+            if ($assign->program_id) $programIds[] = $assign->program_id;
+            if ($assign->area_id) $areaIds[] = $assign->area_id;
+        }
+        $programIds = array_unique($programIds);
+        $areaIds = array_unique($areaIds);
+
+        // Get all disapproved documents for these programs (for sidebar counts)
+        // --- CHANGE: Only documents uploaded by this user ---
+        $disapprovedDocs = Document::where('status', 'disapproved')
+            ->whereIn('program_id', $programIds)
+            ->where('user_id', $user->id)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        // Precompute counts
+        $programDisapprovedCounts = [];
+        $areaDisapprovedCounts = [];
+        $parameterDisapprovedCounts = [];
+        $parameterCategoryDisapprovedCounts = [];
+
+        foreach ($disapprovedDocs as $doc) {
+            // Program count
+            if (!isset($programDisapprovedCounts[$doc->program_id])) $programDisapprovedCounts[$doc->program_id] = 0;
+            $programDisapprovedCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaDisapprovedCounts[$doc->area_id])) $areaDisapprovedCounts[$doc->area_id] = 0;
+                $areaDisapprovedCounts[$doc->area_id]++;
+            }
+
+            // Parameter count
+            if ($doc->parameter_id) {
+                if (!isset($parameterDisapprovedCounts[$doc->parameter_id])) $parameterDisapprovedCounts[$doc->parameter_id] = 0;
+                $parameterDisapprovedCounts[$doc->parameter_id]++;
+                // Category count
+                if (!isset($parameterCategoryDisapprovedCounts[$doc->parameter_id])) $parameterCategoryDisapprovedCounts[$doc->parameter_id] = [];
+                if (!isset($parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category])) $parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category] = 0;
+                $parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Build sidebar structure
+        $sidebar = [];
+        foreach ($assignments as $assign) {
+            $program = $assign->program;
+            $area = $assign->area;
+            if (!$program) continue;
+
+            $programId = $program->id;
+            if (!isset($sidebar[$programId])) {
+                $sidebar[$programId] = [
+                    'id' => $program->id,
+                    'name' => $program->name,
+                    'code' => $program->code ?? null,
+                    'areas' => [],
+                    'disapproved_count' => $programDisapprovedCounts[$program->id] ?? 0,
+                ];
+            }
+            if ($area && !collect($sidebar[$programId]['areas'])->contains('id', $area->id)) {
+                $parameters = Parameter::where('program_id', $program->id)
+                    ->where('area_id', $area->id)
+                    ->get(['id', 'name', 'code'])
+                    ->map(function ($param) use ($parameterDisapprovedCounts, $parameterCategoryDisapprovedCounts) {
+                        $paramId = $param->id;
+                        $categories = ['system', 'implementation', 'outcomes'];
+                        $categoryCounts = [];
+                        foreach ($categories as $cat) {
+                            $categoryCounts[$cat] = $parameterCategoryDisapprovedCounts[$paramId][$cat] ?? 0;
+                        }
+                        $disapproved_count = $parameterDisapprovedCounts[$paramId] ?? 0;
+                        return [
+                            'id' => $param->id,
+                            'name' => $param->name,
+                            'code' => $param->code,
+                            'disapproved_count' => $disapproved_count,
+                            'category_disapproved_counts' => $categoryCounts,
+                        ];
+                    })
+                    ->toArray();
+
+                $sidebar[$programId]['areas'][] = [
+                    'id' => $area->id,
+                    'name' => $area->name,
+                    'code' => $area->code ?? null,
+                    'parameters' => $parameters,
+                    'disapproved_count' => $areaDisapprovedCounts[$area->id] ?? 0,
+                ];
+            }
+        }
+        $sidebar = array_values($sidebar);
+
+        return Inertia::render('faculty/documents_disapproved', [
+            'sidebar' => $sidebar,
+            'csrfToken' => csrf_token(),
+        ]);
+    }
+
+    // Data endpoint for disapproved documents (copied/adapted from reviewer)
+    public function disapprovedDocuments(Request $request)
+    {
+        $request->validate([
+            'program_id' => 'required|exists:programs,id',
+            'area_id' => 'required|exists:areas,id',
+        ]);
+
+        $user = $request->user();
+
+        // Check if faculty is assigned to this program/area
+        $hasAccess = UserAssign::where('user_id', $user->id)
+            ->where('program_id', $request->program_id)
+            ->where('area_id', $request->area_id)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['success' => false, 'message' => 'Access denied'], 403);
+        }
+
+        // --- CHANGE: Only documents uploaded by this user ---
+        $query = Document::where('program_id', $request->program_id)
+            ->where('area_id', $request->area_id)
+            ->where('status', 'disapproved')
+            ->where('user_id', $user->id);
+
+        if ($request->has('parameter_id')) {
+            $query->where('parameter_id', $request->parameter_id);
+        }
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $documents = $query->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($doc) {
+                return [
+                    'id' => $doc->id,
+                    'filename' => $doc->doc_filename,
+                    'url' => \Storage::url("documents/{$doc->doc_filename}"),
+                    'video_filename' => $doc->video_filename,
+                    'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
+                    'uploaded_at' => $doc->created_at->toDateTimeString(),
+                    'user_name' => $doc->user->name ?? '',
+                    'parameter_id' => $doc->parameter_id,
+                    'category' => $doc->category,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'documents' => $documents,
         ]);
     }
 }

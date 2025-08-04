@@ -7,6 +7,9 @@ use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FacultyDocumentsController;
 use App\Http\Controllers\ReviewerDocumentsController;
 
+//Welcome page
+use App\Http\Controllers\HomeController;
+
 // Public routes
 Route::get('/', fn() => Inertia::render('landing/welcome'))->name('home');
 Route::get('/about', fn() => Inertia::render('landing/about'))->name('about');
@@ -69,10 +72,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('reviewer/documents', [ReviewerDocumentsController::class, 'index'])->name('reviewer.documents');
     Route::post('reviewer/documents/upload', [ReviewerDocumentsController::class, 'upload'])->name('reviewer.documents.upload');
     Route::get('reviewer/documents/approved', [ReviewerDocumentsController::class, 'approvedDocuments'])->name('reviewer.documents.approved');
+    Route::get('reviewer/documents/disapproved', [ReviewerDocumentsController::class, 'disapprovedPage'])->name('reviewer.documents.disapproved'); // <-- page route
+    Route::get('reviewer/documents/disapproved/data', [ReviewerDocumentsController::class, 'disapprovedDocuments'])->name('reviewer.documents.disapproved.data'); // <-- data endpoint
     Route::get('reviewer/documents/pending', [ReviewerDocumentsController::class, 'pendingPage'])->name('reviewer.documents.pending');
     Route::get('reviewer/documents/pending/data', [ReviewerDocumentsController::class, 'pendingDocuments'])->name('reviewer.documents.pending.data');
     
     Route::get('reviewer/documents/pending/{document}', [ReviewerDocumentsController::class, 'viewPendingDocument'])->name('reviewer.documents.pending.view');
+    Route::patch('reviewer/documents/pending/{document}/status', [ReviewerDocumentsController::class, 'updateStatus'])->name('reviewer.documents.pending.status');
     Route::get('reviewer/messages', fn() => Inertia::render('reviewer/messages'))->name('reviewer.messages');
     Route::get('reviewer/settings', fn() => Inertia::render('reviewer/settings'))->name('reviewer.settings');
    
@@ -81,10 +87,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('faculty/documents', [FacultyDocumentsController::class, 'index'])->name('faculty.documents');
     Route::post('faculty/documents/upload', [FacultyDocumentsController::class, 'upload'])->name('faculty.documents.upload');
     Route::get('faculty/documents/approved', [FacultyDocumentsController::class, 'approvedDocuments'])->name('faculty.documents.approved');
+    Route::get('faculty/documents/pending', [FacultyDocumentsController::class, 'pendingPage'])->name('faculty.documents.pending'); // <-- added
+    Route::get('faculty/documents/pending/data', [FacultyDocumentsController::class, 'pendingDocuments'])->name('faculty.documents.pending.data'); // <-- added
+    Route::get('faculty/documents/pending/{document}', [FacultyDocumentsController::class, 'viewPendingDocument'])->name('faculty.documents.pending.view'); // <-- added
+    Route::patch('faculty/documents/pending/{document}/status', [FacultyDocumentsController::class, 'updateStatus'])->name('faculty.documents.pending.status'); // <-- added
+    Route::get('faculty/documents/disapproved', [FacultyDocumentsController::class, 'disapprovedPage'])->name('faculty.documents.disapproved'); // <-- NEW
+    Route::get('faculty/documents/disapproved/data', [FacultyDocumentsController::class, 'disapprovedDocuments'])->name('faculty.documents.disapproved.data'); // <-- NEW
     Route::get('faculty/messages', fn() => Inertia::render('faculty/messages'))->name('faculty.messages');
     Route::get('faculty/settings', fn() => Inertia::render('faculty/settings'))->name('faculty.settings');
-   
+  
+
+
 });
+
+    // Home
+    Route::get('/api/home', [HomeController::class, 'show']);
+    Route::post('/admin/home', [HomeController::class, 'update']);
+
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

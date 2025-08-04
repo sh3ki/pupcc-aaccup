@@ -6,16 +6,16 @@ import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 
-type Parameter = { id: number; name: string; code?: string; approved_count?: number; category_approved_counts?: Record<string, number> };
-type Area = { id: number; name: string; code?: string; parameters?: Parameter[] };
-type Program = { id: number; name: string; code?: string; areas: Area[] };
+type Parameter = { id: number; name: string; code?: string; disapproved_count?: number; category_disapproved_counts?: Record<string, number> };
+type Area = { id: number; name: string; code?: string; parameters?: Parameter[]; disapproved_count?: number };
+type Program = { id: number; name: string; code?: string; areas: Area[]; disapproved_count?: number };
 
 interface PageProps {
     sidebar: Program[];
     csrfToken: string;
 }
 
-export default function ReviewerDocuments(props: PageProps) {
+export default function ReviewerDocumentsDisapproved(props: PageProps) {
     const sidebar = props.sidebar ?? [];
     const csrfToken = props.csrfToken;
     const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
@@ -78,8 +78,8 @@ export default function ReviewerDocuments(props: PageProps) {
             .finally(() => setLoadingPendingDoc(false));
     };
 
-    // --- Approved Documents State ---
-    const [approvedDocs, setApprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
+    // --- Disapproved Documents State ---
+    const [disapprovedDocs, setDisapprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -94,41 +94,41 @@ export default function ReviewerDocuments(props: PageProps) {
         // Only fetch when all three are selected
         if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
             setLoadingDocs(true);
-            fetch(`/reviewer/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            fetch(`/reviewer/documents/disapproved/data?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
                 .then((data) => {
                     if (data.success) {
-                        setApprovedDocs(data.documents);
+                        setDisapprovedDocs(data.documents);
                         setViewerIndex(0);
                     } else {
-                        setApprovedDocs([]);
+                        setDisapprovedDocs([]);
                     }
                 })
-                .catch(() => setApprovedDocs([]))
+                .catch(() => setDisapprovedDocs([]))
                 .finally(() => setLoadingDocs(false));
         } else if (selected.programId && selected.areaId) {
             // If only program and area are selected, fetch all docs for that area (for grid counts)
             setLoadingDocs(true);
-            fetch(`/reviewer/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}`, {
+            fetch(`/reviewer/documents/disapproved/data?program_id=${selected.programId}&area_id=${selected.areaId}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
                 .then((data) => {
                     if (data.success) {
-                        setApprovedDocs(data.documents);
+                        setDisapprovedDocs(data.documents);
                         setViewerIndex(0);
                     } else {
-                        setApprovedDocs([]);
+                        setDisapprovedDocs([]);
                     }
                 })
-                .catch(() => setApprovedDocs([]))
+                .catch(() => setDisapprovedDocs([]))
                 .finally(() => setLoadingDocs(false));
         } else {
-            setApprovedDocs([]);
+            setDisapprovedDocs([]);
             setViewerIndex(0);
         }
     }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
@@ -143,7 +143,7 @@ export default function ReviewerDocuments(props: PageProps) {
 
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
-        let docs = approvedDocs;
+        let docs = disapprovedDocs;
         if (selected.parameterId && selected.category) {
             docs = docs.filter(doc =>
                 doc.parameter_id === selected.parameterId &&
@@ -154,15 +154,15 @@ export default function ReviewerDocuments(props: PageProps) {
             docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
         }
         return docs;
-    }, [approvedDocs, selected.parameterId, selected.category, search]);
+    }, [disapprovedDocs, selected.parameterId, selected.category, search]);
 
-    const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
+    const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === disapprovedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
 
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
         const doc = filteredDocs[idx];
-        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+        const realIdx = disapprovedDocs.findIndex(d => d.id === doc.id);
         if (realIdx !== -1) {
             setViewerIndex(realIdx);
             setViewingDocIndex(realIdx);
@@ -429,7 +429,7 @@ export default function ReviewerDocuments(props: PageProps) {
 
     return (
         <>
-            <Head title="Reviewer Documents" />
+            <Head title="Reviewer Disapproved Documents" />
             <DashboardLayout>
                 <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
                     {/* Sidebar - Reduced width */}
@@ -448,10 +448,10 @@ export default function ReviewerDocuments(props: PageProps) {
                                 ${!selected.programId ? 'text-[#7F0404] underline underline-offset-4 decoration-2' : 'text-[#7F0404] hover:bg-gray-100'}`}
                             onClick={() => {
                                 setSelected({});
-                                setViewingDocIndex(null); // <-- reset viewer
+                                setViewingDocIndex(null);
                             }}
                         >
-                            My Program Documents
+                            My Program Disapproved Documents
                         </button>
                         <nav>
                             {sidebar.length === 0 && (
@@ -467,7 +467,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                         onClick={() => {
                                             toggleExpand(program.id);
                                             setSelected({ programId: program.id, areaId: undefined, parameterId: undefined, category: undefined });
-                                            setViewingDocIndex(null); // <-- reset viewer
+                                            setViewingDocIndex(null);
                                         }}
                                     >
                                         <span className="flex-1 text-left">
@@ -498,7 +498,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         onClick={() => {
                                                             toggleAreaExpand(area.id);
                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: undefined, category: undefined });
-                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                            setViewingDocIndex(null);
                                                         }}
                                                     >
                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -536,7 +536,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         onClick={() => {
                                                                             setParamExpanded(prev => ({ ...prev, [param.id]: !prev[param.id] }));
                                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: undefined });
-                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                            setViewingDocIndex(null);
                                                                         }}
                                                                     >
                                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -579,7 +579,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                                         }}
                                                                                         onClick={() => {
                                                                                             setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: cat.value });
-                                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                                            setViewingDocIndex(null);
                                                                                         }}
                                                                                     >
                                                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
@@ -614,7 +614,7 @@ export default function ReviewerDocuments(props: PageProps) {
                         <div className="flex items-center justify-between flex-shrink-0">
                             <div>
                                 {!selected.programId ? (
-                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Documents</h1>
+                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Disapproved Documents</h1>
                                 ) : selectedProgram ? (
                                     <h1 className="text-lg font-bold text-[#7F0404]">
                                         {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
@@ -622,24 +622,13 @@ export default function ReviewerDocuments(props: PageProps) {
                                     </h1>
                                 ) : null}
                             </div>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
-                                    onClick={() => setAddModalOpen(true)}
-                                >
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Add
-                                </button>
-                            </div>
+                            {/* No Add button for disapproved page */}
                         </div>
                         
                         {/* Program Cards Grid when no program is selected */}
                         {!selected.programId ? (
                             <div className="mt-4 mb-8">
-                                <p className="text-base text-gray-700 mb-6">Select a program to view and manage its documents.</p>
+                                <p className="text-base text-gray-700 mb-6">Select a program to view its disapproved documents.</p>
                                 <DocumentCardGrid
                                     items={sidebar}
                                     getKey={program => program.id}
@@ -648,7 +637,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                         setExpanded(prev => ({ ...prev, [program.id]: true }));
                                     }}
                                     renderCardContent={(program, index) => {
-                                        // Use program.approved_count for approved documents
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -656,7 +644,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
-                                                        {/* Icon */}
                                                         <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
                                                             <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
@@ -669,26 +656,20 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         {program.name}
                                                     </h2>
                                                 </div>
-                                                
-                                                {/* Using flex-grow to push the following content to the bottom */}
                                                 <div className="flex-grow"></div>
-                                                
-                                                {/* Bottom aligned content */}
                                                 <div className="mt-auto">
                                                     <div className="text-gray-600 mb-4">
                                                         <div className="flex justify-between items-center mb-3">
                                                             <span className="text-sm">Areas:</span>
                                                             <span className="font-semibold">{program.areas.length}</span>
                                                         </div>
-                                                        
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-sm">Approved Documents:</span>
-                                                            <span className={`font-semibold ${program.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                {program.approved_count}
+                                                            <span className="text-sm">Disapproved Documents:</span>
+                                                            <span className={`font-semibold ${program.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                                {program.disapproved_count}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    
                                                     <div className="pt-3 border-t border-gray-100 flex justify-end">
                                                         <div className="flex items-center text-xs font-medium text-[#7F0404] group">
                                                             <span>View Documents</span>
@@ -709,10 +690,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                 />
                             </div>
                         ) : selected.programId && !selected.areaId ? (
-                            /* Area Cards Grid when program is selected but no area is selected */
                             <div className="mt-4 mb-8">
                                 <p className="text-base text-gray-700 mb-6">
-                                    Select an area to view and manage its documents.
+                                    Select an area to view its disapproved documents.
                                 </p>
                                 <DocumentCardGrid
                                     items={selectedProgram?.areas || []}
@@ -723,8 +703,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                     }}
                                     renderCardContent={(area, index) => {
                                         const parametersCount = area.parameters?.length || 0;
-                                        // Use area.approved_count for approved documents
-                                        const approvedCount = area.approved_count || 0;
+                                        const disapprovedCount = area.disapproved_count || 0;
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -732,7 +711,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
-                                                        {/* Icon */}
                                                         <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
                                                             <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
@@ -745,26 +723,20 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         {area.name}
                                                     </h2>
                                                 </div>
-                                                
-                                                {/* Using flex-grow to push the following content to the bottom */}
                                                 <div className="flex-grow"></div>
-                                                
-                                                {/* Bottom aligned content */}
                                                 <div className="mt-auto">
                                                     <div className="text-gray-600 mb-4">
                                                         <div className="flex justify-between items-center mb-3">
                                                             <span className="text-sm">Parameters:</span>
                                                             <span className="font-semibold">{parametersCount}</span>
                                                         </div>
-                                                        
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-sm">Approved Documents:</span>
-                                                            <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                {approvedCount}
+                                                            <span className="text-sm">Disapproved Documents:</span>
+                                                            <span className={`font-semibold ${area.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                                {area.disapproved_count}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    
                                                     <div className="pt-3 border-t border-gray-100 flex justify-end">
                                                         <div className="flex items-center text-xs font-medium text-[#7F0404] group">
                                                             <span>View Documents</span>
@@ -785,9 +757,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                 />
                             </div>
                         ) : selected.programId && selected.areaId && !selected.parameterId ? (
-                            // --- Parameter Cards Grid when area is selected but no parameter is selected ---
                             <div>
-                                {/* Area title below program title */}
                                 <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
                                     {selectedProgram && selectedArea ? (
                                         <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
@@ -798,14 +768,14 @@ export default function ReviewerDocuments(props: PageProps) {
                                     ) : null}
                                 </div>
                                 <p className="text-base text-gray-700 mb-6">
-                                    Select a parameter to view and manage its documents.
+                                    Select a parameter to view its disapproved documents.
                                 </p>
                                 <DocumentCardGrid
                                     items={selectedArea?.parameters || []}
                                     getKey={param => param.id}
                                     onCardClick={param => {
                                         setSelected({ programId: selected.programId, areaId: selected.areaId, parameterId: param.id });
-                                        setParamExpanded(prev => ({ ...prev, [param.id]: true })); // <-- expand selected parameter
+                                        setParamExpanded(prev => ({ ...prev, [param.id]: true }));
                                     }}
                                     renderCardContent={(param, index) => (
                                         <div className="p-5 flex flex-col h-full">
@@ -814,7 +784,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                                     className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                     style={{ backgroundColor: '#f1f5f9' }}
                                                 >
-                                                    {/* Icon */}
                                                     <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                         <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
                                                         <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
@@ -834,9 +803,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         <span className="font-semibold">3</span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-sm">Approved Documents:</span>
-                                                        <span className={`font-semibold ${param.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                            {param.approved_count || 0}
+                                                        <span className="text-sm">Disapproved Documents:</span>
+                                                        <span className={`font-semibold ${param.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                            {param.disapproved_count || 0}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -859,7 +828,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                 />
                             </div>
                         ) : null}
-                        {/* Display area and parameter headers only when documents are being viewed */}
                         {selected.areaId && selected.parameterId && (
                             <>
                                 <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
@@ -891,14 +859,13 @@ export default function ReviewerDocuments(props: PageProps) {
                                 </div>
                             </>
                         )}
-                        {/* --- Document Viewer Section --- */}
                         {selected.programId && selected.areaId && selected.parameterId && (
                             <div className="mt-2 flex flex-col flex-1 min-h-0">
                                 {selected.parameterId && !selected.category && (
                                     // --- Category Cards Grid when parameter is selected but no category is selected ---
                                     <div>
                                         <p className="text-base text-gray-700 mb-6">
-                                            Select a category to view and manage its documents.
+                                            Select a category to view its disapproved documents.
                                         </p>
                                         <DocumentCardGrid
                                             items={categoryList}
@@ -912,10 +879,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                 });
                                             }}
                                             renderCardContent={(cat, index) => {
-                                                // Show correct count for this parameter/category
-                                                let approvedCount = 0;
-                                                if (selectedParameter && selectedParameter.category_approved_counts) {
-                                                    approvedCount = selectedParameter.category_approved_counts[cat.value] || 0;
+                                                let disapprovedCount = 0;
+                                                if (selectedParameter && selectedParameter.category_disapproved_counts) {
+                                                    disapprovedCount = selectedParameter.category_disapproved_counts[cat.value] || 0;
                                                 }
                                                 return (
                                                     <div className="p-5 flex flex-col h-full">
@@ -924,7 +890,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                 className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                                 style={{ backgroundColor: '#f1f5f9' }}
                                                             >
-                                                                {/* Icon */}
                                                                 <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                                     <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
                                                                     <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
@@ -939,9 +904,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                         <div className="mt-auto">
                                                             <div className="text-gray-600 mb-4">
                                                                 <div className="flex justify-between items-center">
-                                                                    <span className="text-sm">Approved Documents:</span>
-                                                                    <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                        {approvedCount}
+                                                                    <span className="text-sm">Disapproved Documents:</span>
+                                                                    <span className={`font-semibold ${disapprovedCount > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                                        {disapprovedCount}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -1059,10 +1024,10 @@ export default function ReviewerDocuments(props: PageProps) {
                                                 </div>
                                             </div>
                                         ) : (
-                                            // --- Card grid for approved documents in this category ---
+                                            // --- Card grid for disapproved documents in this category ---
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                                 {filteredDocs.length === 0 ? (
-                                                    <div className="col-span-full text-gray-400 text-center">No approved documents for this category.</div>
+                                                    <div className="col-span-full text-gray-400 text-center">No disapproved documents for this category.</div>
                                                 ) : (
                                                     filteredDocs.flatMap((doc, idx) => {
                                                         const ext = doc.filename.split('.').pop()?.toLowerCase();
@@ -1079,7 +1044,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                     minHeight: 380,
                                                                 }}
                                                                 onClick={() => {
-                                                                    const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                    const realIdx = disapprovedDocs.findIndex(d => d.id === doc.id);
                                                                     setViewerIndex(realIdx);
                                                                     setViewingDocIndex(realIdx);
                                                                 }}
@@ -1110,9 +1075,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                     <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
                                                                     <div className="text-xs text-gray-400 text-center">
                                                                         {doc.updated_at
-                                                                            ? `Approved: ${doc.updated_at}`
+                                                                            ? `Disapproved: ${doc.updated_at}`
                                                                             : doc.uploaded_at
-                                                                                ? `Approved: ${doc.uploaded_at}`
+                                                                                ? `Disapproved: ${doc.uploaded_at}`
                                                                                 : ''}
                                                                     </div>
                                                                 </div>
@@ -1134,7 +1099,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         minHeight: 380,
                                                                     }}
                                                                     onClick={() => {
-                                                                        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                        const realIdx = disapprovedDocs.findIndex(d => d.id === doc.id);
                                                                         setViewerIndex(realIdx);
                                                                         setViewingDocIndex(realIdx);
                                                                     }}
@@ -1152,9 +1117,9 @@ export default function ReviewerDocuments(props: PageProps) {
                                                                         <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
                                                                         <div className="text-xs text-gray-400 text-center">
                                                                             {doc.updated_at
-                                                                                ? `Approved: ${doc.updated_at}`
+                                                                                ? `Disapproved: ${doc.updated_at}`
                                                                                 : doc.uploaded_at
-                                                                                    ? `Approved: ${doc.uploaded_at}`
+                                                                                    ? `Disapproved: ${doc.uploaded_at}`
                                                                                     : ''}
                                                                         </div>
                                                                     </div>
@@ -1171,7 +1136,6 @@ export default function ReviewerDocuments(props: PageProps) {
                                 )}
                             </div>
                         )}
-                        {/* --- End Document Viewer Section --- */}
                     </section>
                 </div>
             </DashboardLayout>

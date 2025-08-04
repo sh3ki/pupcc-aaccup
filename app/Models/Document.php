@@ -13,7 +13,10 @@ class Document extends Model
         'user_id',
         'program_id',
         'area_id',
-        'doc_filename', // changed from doc_path
+        'parameter_id', // added
+        'doc_filename', 
+        'category',        
+        'video_filename',  
         'status',
     ];
 
@@ -30,5 +33,10 @@ class Document extends Model
     public function area()
     {
         return $this->belongsTo(Area::class);
+    }
+
+    public function parameter()
+    {
+        return $this->belongsTo(Parameter::class);
     }
 }

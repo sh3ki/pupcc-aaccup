@@ -69,13 +69,13 @@ const adminDocumentDropdownItems = [
 const reviewerDocumentDropdownItems = [
     { name: 'Approved', href: '/reviewer/documents' },
     { name: 'Pending', href: '/reviewer/documents/pending' },
-    { name: 'Disapproved', href: '/reviewer/documents/disapproved' },
+    { name: 'Disapproved', href: '/reviewer/documents/disapproved' }, // <-- updated
 ];
 
 const facultyDocumentDropdownItems = [
     { name: 'Approved', href: '/faculty/documents' },
     { name: 'Pending', href: '/faculty/documents/pending' },
-    { name: 'Disapproved', href: '/faculty/documents/disapproved' },
+    { name: 'Disapproved', href: '/faculty/documents/disapproved' }, // <-- updated
 ];
 
 // Layout nav items

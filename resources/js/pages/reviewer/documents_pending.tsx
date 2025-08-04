@@ -4,10 +4,12 @@ import { useState, useRef, useMemo, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
+import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 
-type Parameter = { id: number; name: string; code?: string };
+// Types adapted for pending
+type Parameter = { id: number; name: string; code?: string; pending_count?: number; category_pending_counts?: Record<string, number> };
 type Area = { id: number; name: string; code?: string; parameters?: Parameter[]; pending_count?: number };
-type Program = { id: number; name: string; code?: string; areas: Area[] };
+type Program = { id: number; name: string; code?: string; areas: Area[]; pending_count?: number };
 
 interface PageProps {
     sidebar: Program[];
@@ -16,9 +18,11 @@ interface PageProps {
 
 export default function ReviewerDocumentsPending(props: PageProps) {
     const sidebar = props.sidebar ?? [];
-    const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number }>({});
+    const csrfToken = props.csrfToken;
+    const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
     const [expanded, setExpanded] = useState<{ [programId: number]: boolean }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
+    const [paramExpanded, setParamExpanded] = useState<{ [paramId: number]: boolean }>({});
 
     const selectedProgram = sidebar.find(p => p.id === selected.programId);
     const selectedArea = selectedProgram?.areas?.find(a => a.id === selected.areaId);
@@ -31,8 +35,102 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
     };
 
-    // --- Pending Documents State ---
-    const [pendingDocs, setPendingDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
+    // --- Pending Modal State ---
+    const [pendingModalOpen, setPendingModalOpen] = useState(false);
+    const [pendingDocsTable, setPendingDocsTable] = useState<any[]>([]);
+    const [loadingPendingTable, setLoadingPendingTable] = useState(false);
+    const [pendingTableError, setPendingTableError] = useState('');
+
+    // Helper: flatten docs for modal (split file/video, add program/area/parameter/category info)
+    const flattenPendingDocs = (docs: any[], sidebar: Program[]) => {
+        const result: any[] = [];
+        docs.forEach(doc => {
+            // Find program, area, parameter
+            let program_code = '', area_code = '', parameter_code = '', category = '';
+            let paramName = '';
+            for (const prog of sidebar) {
+                if (prog.id === doc.program_id) {
+                    program_code = prog.code || '';
+                    for (const area of prog.areas) {
+                        if (area.id === doc.area_id) {
+                            area_code = area.code || '';
+                            if (area.parameters) {
+                                for (const param of area.parameters) {
+                                    if (param.id === doc.parameter_id) {
+                                        parameter_code = param.code || '';
+                                        paramName = param.name || '';
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            category = doc.category || '';
+            // Document file row
+            if (doc.filename) {
+                result.push({
+                    ...doc,
+                    type: 'file',
+                    program_code,
+                    area_code,
+                    parameter_code,
+                    paramName,
+                    category,
+                    file_url: doc.url,
+                    file_name: doc.filename,
+                    video_url: null,
+                    video_name: null,
+                });
+            }
+            // Video file row
+            if (doc.video_filename && doc.video_url) {
+                result.push({
+                    ...doc,
+                    type: 'video',
+                    program_code,
+                    area_code,
+                    parameter_code,
+                    paramName,
+                    category,
+                    file_url: null,
+                    file_name: null,
+                    video_url: doc.video_url,
+                    video_name: doc.video_filename,
+                });
+            }
+        });
+        return result;
+    };
+
+    // Fetch all pending documents for modal table
+    const fetchPendingTable = () => {
+        setLoadingPendingTable(true);
+        setPendingTableError('');
+        fetch('/reviewer/documents/pending/data', {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) setPendingDocsTable(flattenPendingDocs(data.documents, sidebar));
+                else setPendingTableError('Failed to load pending documents.');
+            })
+            .catch(() => setPendingTableError('Failed to load pending documents.'))
+            .finally(() => setLoadingPendingTable(false));
+    };
+
+    // Open modal and fetch data
+    const openPendingModal = () => {
+        setPendingModalOpen(true);
+        fetchPendingTable();
+    };
+
+    // --- Pending Documents State (same as approved, but for pending) ---
+    const [pendingDocs, setPendingDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string, parameter_id?: number, category?: string }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -43,16 +141,34 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         setPageInput(viewerIndex + 1);
     }, [viewerIndex]);
 
-    // Fetch pending documents for selected program/area
     useEffect(() => {
-        if (selected.programId && selected.areaId) {
+        // Only fetch when all three are selected
+        if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+            setLoadingDocs(true);
+            fetch(`/reviewer/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then(res => res.json())
+                .then((data) => {
+                    if (data.success) {
+                        setPendingDocs(data.documents);
+                        setViewerIndex(0);
+                    } else {
+                        setPendingDocs([]);
+                    }
+                })
+                .catch(() => setPendingDocs([]))
+                .finally(() => setLoadingDocs(false));
+        } else if (selected.programId && selected.areaId) {
+            // If only program and area are selected, fetch all docs for that area (for grid counts)
             setLoadingDocs(true);
             fetch(`/reviewer/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
-                .then(data => {
+                .then((data) => {
                     if (data.success) {
                         setPendingDocs(data.documents);
                         setViewerIndex(0);
@@ -66,7 +182,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
             setPendingDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.programId, selected.areaId]);
+    }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
 
     // --- Navigation state ---
     const [fitMode, setFitMode] = useState<'width' | 'page'>('width');
@@ -76,11 +192,23 @@ export default function ReviewerDocumentsPending(props: PageProps) {
     const [gridOpen, setGridOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    const filteredDocs = search
-        ? pendingDocs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()))
-        : pendingDocs;
+    // Filtered docs for preview card grid: filter by parameterId and category if both are selected
+    const filteredDocs = useMemo(() => {
+        let docs = pendingDocs;
+        if (selected.parameterId && selected.category) {
+            docs = docs.filter(doc =>
+                doc.parameter_id === selected.parameterId &&
+                doc.category === selected.category
+            );
+        }
+        if (search) {
+            docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
+        }
+        return docs;
+    }, [pendingDocs, selected.parameterId, selected.category, search]);
+
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === pendingDocs[viewerIndex]?.id);
-    const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
+    
 
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
@@ -88,10 +216,6 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
         if (realIdx !== -1) setViewerIndex(realIdx);
     };
-    const goFirst = () => goTo(0);
-    const goLast = () => goTo(filteredDocs.length - 1);
-    const goPrev = () => goTo(Math.max(0, filteredViewerIndex - 1));
-    const goNext = () => goTo(Math.min(filteredDocs.length - 1, filteredViewerIndex + 1));
 
     const handleDownload = () => {
         if (!currentDoc) return;
@@ -148,80 +272,106 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         if (filteredDocs.length > 0) goTo(0);
     };
 
-    // Pending Modal State
-    const [pendingModalOpen, setPendingModalOpen] = useState(false);
-    const [pendingDocsTable, setPendingDocsTable] = useState<any[]>([]);
-    const [loadingPendingTable, setLoadingPendingTable] = useState(false);
-    const [pendingTableError, setPendingTableError] = useState('');
-    const [viewDocId, setViewDocId] = useState<number | null>(null);
+    // Helper: category list
+    const categoryList = [
+        { value: 'system', label: 'System' },
+        { value: 'implementation', label: 'Implementation' },
+        { value: 'outcomes', label: 'Outcomes' },
+    ];
 
-    // Fetch all pending documents for modal table
-    const fetchPendingTable = () => {
-        setLoadingPendingTable(true);
-        setPendingTableError('');
-        fetch('/reviewer/documents/pending/data', {
-            headers: { 'Accept': 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) setPendingDocsTable(data.documents);
-                else setPendingTableError('Failed to load pending documents.');
-            })
-            .catch(() => setPendingTableError('Failed to load pending documents.'))
-            .finally(() => setLoadingPendingTable(false));
+    // --- Add state to track if a document is being viewed ---
+    const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
+
+    // --- Reset viewingDocIndex when navigating via sidebar/category ---
+    useEffect(() => {
+        setViewingDocIndex(null);
+    }, [
+        selected.programId,
+        selected.areaId,
+        selected.parameterId,
+        selected.category
+    ]);
+
+    // Only set currentDoc when viewingDocIndex is not null (i.e., DocumentNavigation is active)
+    const currentDoc = (viewingDocIndex !== null && filteredDocs[viewingDocIndex]) ? filteredDocs[viewingDocIndex] : undefined;
+
+    // --- Approve/Disapprove handlers ---
+    const [confirmModal, setConfirmModal] = useState<{ open: boolean, action: 'approve' | 'disapprove' | null }>({ open: false, action: null });
+    const [actionLoading, setActionLoading] = useState(false);
+    const [actionError, setActionError] = useState('');
+
+    const handleApprove = () => {
+        setConfirmModal({ open: true, action: 'approve' });
+    };
+    const handleDisapprove = () => {
+        setConfirmModal({ open: true, action: 'disapprove' });
     };
 
-    // Open modal and fetch data
-    const openPendingModal = () => {
-        setPendingModalOpen(true);
-        fetchPendingTable();
-    };
-
-    // Find program/area for a document (by program_code/area_code)
-    function findProgramAreaByCodes(program_code: string, area_code: string) {
-        for (const program of sidebar) {
-            if (program.code === program_code) {
-                for (const area of program.areas) {
-                    if (area.code === area_code) {
-                        return { programId: program.id, areaId: area.id };
-                    }
+    const confirmAction = async () => {
+        if (!currentDoc || !confirmModal.action) return;
+        setActionLoading(true);
+        setActionError('');
+        try {
+            const res = await fetch(`/reviewer/documents/pending/${currentDoc.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ status: confirmModal.action === 'approve' ? 'approved' : 'disapproved' })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || 'Failed to update status');
+            // Remove doc from filteredDocs/pendingDocs
+            const idx = viewingDocIndex;
+            const newPendingDocs = pendingDocs.filter(doc => doc.id !== currentDoc.id);
+            setPendingDocs(newPendingDocs);
+            // Move to next doc or close navigation if none left
+            if (newPendingDocs.length === 0) {
+                setViewingDocIndex(null);
+            } else {
+                const newFiltered = newPendingDocs.filter(doc =>
+                    (!selected.parameterId || doc.parameter_id === selected.parameterId) &&
+                    (!selected.category || doc.category === selected.category)
+                );
+                if (newFiltered.length === 0) {
+                    setViewingDocIndex(null);
+                } else {
+                    setViewingDocIndex(Math.max(0, Math.min(idx, newFiltered.length - 1)));
                 }
             }
+            setConfirmModal({ open: false, action: null });
+        } catch (e: any) {
+            setActionError(e.message || 'Failed to update status');
+        } finally {
+            setActionLoading(false);
         }
-        return null;
-    }
-
-    // Helper to select a document by id after area selection
-    function selectDocumentById(docId: number, programId: number, areaId: number) {
-        setSelected({ programId, areaId });
-        // Wait for docs to load, then set viewerIndex to the correct doc
-        setTimeout(() => {
-            setViewerIndex(prev => {
-                const idx = pendingDocs.findIndex(d => d.id === docId);
-                return idx !== -1 ? idx : 0;
-            });
-        }, 0);
-    }
+    };
 
     return (
         <>
             <Head title="Reviewer Pending Documents" />
             <DashboardLayout>
-                <div className="flex w-full min-h-[calc(100vh-64px-40px)]">
-                    {/* Sidebar */}
+                <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
+                    {/* Sidebar - Same as approved, but for pending */}
                     <aside
-                        className="w-1/5 bg-gray-50 p-4 h-[calc(100vh-64px-40px)] sticky top-16 self-start overflow-y-auto"
+                        className="min-w-[265px] bg-gray-50 p-4 h-[calc(100vh-64px-40px)] sticky top-16 self-start overflow-y-auto"
                         style={{
                             minHeight: 'calc(100vh - 64px - 40px)',
                             maxHeight: 'calc(100vh - 64px - 40px)',
+                            flexBasis: '240px',
+                            flexShrink: 0
                         }}
                     >
                         <button
                             type="button"
-                            className={`text-lg font-bold mb-2 w-full text-left px-2 py-2 rounded transition
+                            className={`text-base font-bold mb-2 w-full text-left px-2 py-1.5 rounded transition
                                 ${!selected.programId ? 'text-[#7F0404] underline underline-offset-4 decoration-2' : 'text-[#7F0404] hover:bg-gray-100'}`}
-                            onClick={() => setSelected({})}
+                            onClick={() => {
+                                setSelected({});
+                                setViewingDocIndex(null);
+                            }}
                         >
                             My Program Pending Documents
                         </button>
@@ -238,7 +388,8 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                         `}
                                         onClick={() => {
                                             toggleExpand(program.id);
-                                            setSelected({ programId: program.id, areaId: undefined, parameterId: undefined });
+                                            setSelected({ programId: program.id, areaId: undefined, parameterId: undefined, category: undefined });
+                                            setViewingDocIndex(null);
                                         }}
                                     >
                                         <span className="flex-1 text-left">
@@ -257,101 +408,137 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                     </button>
                                     {expanded[program.id] && program.areas && program.areas.length > 0 && (
                                         <ul className="ml-4 mt-1 list-none text-sm text-gray-700">
-                                            {program.areas.map(area => {
-                                                // Only show (PENDING) if pending_count > 0
-                                                let pendingLabel = '';
-                                                if (area.pending_count && area.pending_count > 0) {
-                                                    pendingLabel = area.pending_count > 1
-                                                        ? ` (PENDING - ${area.pending_count})`
-                                                        : ' (PENDING)';
-                                                } else {
-                                                    pendingLabel = ''; // Ensure no () if no pending
-                                                }
-                                                return (
-                                                    <li key={area.id}>
-                                                        <button
-                                                            type="button"
-                                                            className={`flex items-center w-full text-left px-2 py-1 rounded transition
-                                                                ${selected.programId === program.id && selected.areaId === area.id && !selected.parameterId
-                                                                    ? 'text-[#7F0404] underline underline-offset-4 decoration-2'
-                                                                    : 'hover:bg-gray-100'}
-                                                            `}
-                                                            onClick={() => {
-                                                                toggleAreaExpand(area.id);
-                                                                setSelected({ programId: program.id, areaId: area.id, parameterId: undefined });
-                                                            }}
+                                            {program.areas.map(area => (
+                                                <li key={area.id}>
+                                                    <button
+                                                        type="button"
+                                                        className={`flex items-center w-full text-left px-2 py-1 rounded transition
+                                                            ${selected.programId === program.id && selected.areaId === area.id && !selected.parameterId
+                                                                ? 'text-[#7F0404] underline underline-offset-4 decoration-2'
+                                                                : 'hover:bg-gray-100'}
+                                                        `}
+                                                        onClick={() => {
+                                                            toggleAreaExpand(area.id);
+                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: undefined, category: undefined });
+                                                            setViewingDocIndex(null);
+                                                        }}
+                                                    >
+                                                        <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
+                                                            <span className="w-2 h-2 bg-[#7F0404] rounded-full inline-block"></span>
+                                                        </span>
+                                                        <span className="flex-1">
+                                                            {area.code ? (
+                                                                <>
+                                                                    <span className="font-bold">Area {area.code}</span>
+                                                                    {' - '}
+                                                                </>
+                                                            ) : 'Area ' }
+                                                            {area.name}
+                                                        </span>
+                                                        <svg
+                                                            className={`w-4 h-4 ml-2 transition-transform ${areaExpanded[area.id] ? 'rotate-90' : ''}`}
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
                                                         >
-                                                            <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
-                                                                <span className="w-2 h-2 bg-[#7F0404] rounded-full inline-block"></span>
-                                                            </span>
-                                                            <span className="flex-1">
-                                                                {area.code ? (
-                                                                    <>
-                                                                        <span className="font-bold">Area {area.code}</span>
-                                                                        {' - '}
-                                                                    </>
-                                                                ) : 'Area ' }
-                                                                {area.name}
-                                                                {pendingLabel && (
-                                                                    <span className="text-xs font-bold text-[#C46B02]"> {pendingLabel}</span>
-                                                                )}
-                                                            </span>
-                                                            <svg
-                                                                className={`w-4 h-4 ml-2 transition-transform ${areaExpanded[area.id] ? 'rotate-90' : ''}`}
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                viewBox="0 0 24 24"
-                                                            >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                            </svg>
-                                                        </button>
-                                                        {areaExpanded[area.id] && area.parameters && area.parameters.length > 0 && (
-                                                            <ul className="ml-4 mt-1 list-none text-xs text-gray-700">
-                                                                {area.parameters.map(param => (
-                                                                    <li key={param.id}>
-                                                                        <button
-                                                                            type="button"
-                                                                            className={`flex items-center w-full text-left px-2 py-1 rounded transition
-                                                                                ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id
-                                                                                    ? 'text-[#7F0404] underline underline-offset-4 decoration-2'
-                                                                                    : 'hover:bg-gray-100'}
-                                                                            `}
-                                                                            onClick={() => setSelected({ programId: program.id, areaId: area.id, parameterId: param.id })}
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </button>
+                                                    {areaExpanded[area.id] && area.parameters && area.parameters.length > 0 && (
+                                                        <ul className="ml-4 mt-1 list-none text-xs text-gray-700">
+                                                            {area.parameters.map(param => (
+                                                                <li key={param.id}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`flex items-center w-full text-left px-2 py-1 rounded transition
+                                                                            ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && !selected.category
+                                                                                ? 'text-[#7F0404] underline underline-offset-4 decoration-2'
+                                                                                : 'hover:bg-gray-100'}
+                                                                        `}
+                                                                        onClick={() => {
+                                                                            setParamExpanded(prev => ({ ...prev, [param.id]: !prev[param.id] }));
+                                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: undefined });
+                                                                            setViewingDocIndex(null);
+                                                                        }}
+                                                                    >
+                                                                        <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
+                                                                            <span className="w-1.5 h-1.5 bg-[#7F0404] rounded-full inline-block"></span>
+                                                                        </span>
+                                                                        <span className="flex-1">
+                                                                            {param.code ? (
+                                                                                <>
+                                                                                    <span className="font-bold">{param.code}</span>
+                                                                                    {' - '}
+                                                                                </>
+                                                                            ) : ''}
+                                                                            {param.name}
+                                                                        </span>
+                                                                        <svg
+                                                                            className={`w-3 h-3 ml-2 transition-transform ${paramExpanded[param.id] ? 'rotate-90' : ''}`}
+                                                                            fill="none"
+                                                                            stroke="currentColor"
+                                                                            viewBox="0 0 24 24"
                                                                         >
-                                                                            <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
-                                                                                <span className="w-1.5 h-1.5 bg-[#7F0404] rounded-full inline-block"></span>
-                                                                            </span>
-                                                                            <span className="flex-1">
-                                                                                {param.code ? (
-                                                                                    <>
-                                                                                        <span className="font-bold">{param.code}</span>
-                                                                                        {' - '}
-                                                                                    </>
-                                                                                ) : ''}
-                                                                                {param.name}
-                                                                            </span>
-                                                                        </button>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        )}
-                                                    </li>
-                                                );
-                                            })}
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                        </svg>
+                                                                    </button>
+                                                                    {/* Category sub-links */}
+                                                                    {paramExpanded[param.id] && (
+                                                                        <ul className="ml-4 mt-1 list-none text-[11px] text-gray-700">
+                                                                            {categoryList.map(cat => (
+                                                                                <li key={cat.value}>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className={`flex items-center w-full text-left px-2 py-1 rounded transition
+                                                                                            ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && selected.category === cat.value
+                                                                                                ? 'text-[#7F0404] underline underline-offset-4 decoration-2 font-bold'
+                                                                                                : 'hover:bg-gray-100'}
+                                                                                        `}
+                                                                                        style={{
+                                                                                            fontSize: '11px',
+                                                                                            paddingLeft: 18,
+                                                                                            textDecorationColor: selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && selected.category === cat.value ? '#7F0404' : undefined
+                                                                                        }}
+                                                                                        onClick={() => {
+                                                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: cat.value });
+                                                                                            setViewingDocIndex(null);
+                                                                                        }}
+                                                                                    >
+                                                                                        <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
+                                                                                            <span
+                                                                                                className="w-1 h-1 rounded-full inline-block"
+                                                                                                style={{
+                                                                                                    backgroundColor: '#7F0404'
+                                                                                                }}
+                                                                                            ></span>
+                                                                                        </span>
+                                                                                        <span className="flex-1">{cat.label}</span>
+                                                                                    </button>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </li>
+                                            ))}
                                         </ul>
                                     )}
                                 </div>
                             ))}
                         </nav>
                     </aside>
+                    
                     {/* Main Content */}
-                    <section className="flex-1 w-full px-8 py-4 text-left flex flex-col min-h-[calc(100vh-64px-40px)] max-h-[calc(100vh-64px-40px)]">
+                    <section className="flex-1 w-full px-6 py-4 text-left flex flex-col min-h-[calc(100vh-64px-40px)] max-h-[calc(100vh-64px-40px)] overflow-auto">
                         <div className="flex items-center justify-between flex-shrink-0">
                             <div>
                                 {!selected.programId ? (
-                                    <h1 className="text-4xl font-bold text-[#7F0404]">Reviewer Pending Documents</h1>
+                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Pending Documents</h1>
                                 ) : selectedProgram ? (
-                                    <h1 className="text-3xl font-bold text-[#7F0404]">
+                                    <h1 className="text-lg font-bold text-[#7F0404]">
                                         {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
                                         {selectedProgram.name}
                                     </h1>
@@ -360,250 +547,564 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    className="flex items-center bg-[#C46B02] hover:bg-[#a86a00] text-white font-semibold px-3 py-2 rounded shadow transition"
+                                    className="flex items-center bg-[#C46B02] hover:bg-[#a86a00] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
                                     onClick={openPendingModal}
                                 >
-                                    {/* Clock Icon */}
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
-                                    </svg>
+                                    {/* Pending Icon */}
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" fill="none"/><path d="M12 6v6l4 2" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
                                     Pending
                                 </button>
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-semibold px-3 py-2 rounded shadow transition"
-                                    // Add your disapprove logic here
-                                >
-                                    {/* X Icon */}
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                    Disapprove
-                                </button>
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#388e3c] hover:bg-[#256029] text-white font-semibold px-3 py-2 rounded shadow transition"
-                                    // Add your approve logic here
-                                >
-                                    {/* Check Icon */}
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    Approve
-                                </button>
+                                {/* Show Approve/Disapprove only when a document is being viewed (DocumentNavigation is active) */}
+                                {currentDoc && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
+                                            style={{ minWidth: 110 }}
+                                            onClick={handleApprove}
+                                        >
+                                            {/* Approve Icon */}
+                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                            Approve
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="flex items-center bg-[#7F0404] hover:bg-[#a80000] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
+                                            style={{ minWidth: 130 }}
+                                            onClick={handleDisapprove}
+                                        >
+                                            {/* Disapprove Icon */}
+                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+                                            Disapprove
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
+                        
+                        {/* Program Cards Grid when no program is selected */}
                         {!selected.programId ? (
-                            <p className="text-lg text-gray-700 mb-8">This is the pending documents page for reviewers.</p>
-                        ) : null}
-                        <div className="ml-6 min-h-[1rem] flex items-center flex-shrink-0">
-                            {selectedProgram && selectedArea ? (
-                                <h2 className="text-xl font-semibold text-[#7F0404] flex items-center">
-                                    <span className="font-bold mr-2">Area</span>
-                                    {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
-                                    - {selectedArea.name} 
-                                    {selectedArea.pending_count && selectedArea.pending_count > 0 ? (
-                                        <span className="text-xs font-bold text-[#C46B02]">
-                                            {' '}
-                                            {selectedArea.pending_count > 1
-                                                ? `(PENDING - ${selectedArea.pending_count})`
-                                                : `(PENDING)`}
-                                        </span>
-                                    ) : null}
-                                </h2>
-                            ) : null}
-                        </div>
-                        <div className="ml-12 min-h-[1rem] flex items-center flex-shrink-0">
-                            {selectedProgram && selectedArea && selectedParameter ? (
-                                <h3 className="text-lg font-medium text-[#7F0404] flex items-center">
-                                    {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
-                                    - {selectedParameter.name}
-                                </h3>
-                            ) : null}
-                        </div>
-                        {/* --- Document Viewer Section --- */}
-                        {selected.programId && selected.areaId && (
-                            <div className="mt-2 flex flex-col flex-1 min-h-0">
-                                <DocumentNavigation
-                                    documents={filteredDocs.slice(0, 1)}
-                                    currentIndex={0}
-                                    onChangeIndex={() => {}} // No-op
-                                    onDownload={handleDownload}
-                                    onPrint={handlePrint}
-                                    onRotate={handleRotate}
-                                    onFitMode={toggleFitMode}
-                                    onZoom={handleZoom}
-                                    onInfo={() => setInfoOpen(true)}
-                                    onGrid={openGrid}
-                                    onFullscreen={handleFullscreen}
-                                    fitMode={fitMode}
-                                    rotate={rotate}
-                                    zoom={zoom}
-                                    isFullscreen={isFullscreen}
-                                    infoOpen={infoOpen}
-                                    setInfoOpen={setInfoOpen}
-                                    gridOpen={gridOpen}
-                                    setGridOpen={setGridOpen}
-                                    search={search}
-                                    setSearch={setSearch}
-                                    onSearch={handleSearch}
-                                />
-                                <div
-                                    ref={previewRef}
-                                    className="border border-t-0 rounded-b-lg bg-white flex-1 min-h-0 flex items-center justify-center p-0"
-                                    style={isFullscreen
-                                        ? { height: '100vh', minHeight: 0 }
-                                        : { maxHeight: '100%' }
-                                    }
-                                >
-                                    <div className="w-full h-full flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
-                                        {loadingDocs ? (
-                                            <div className="text-gray-500">Loading documents...</div>
-                                        ) : filteredDocs.length === 0 ? (
-                                            <div className="text-gray-400 text-center">No pending documents for this area.</div>
-                                        ) : (
-                                            (() => {
-                                                const doc = currentDoc;
-                                                if (!doc) return null;
-                                                const ext = doc.filename.split('.').pop()?.toLowerCase();
-                                                const transform = `rotate(${rotate}deg) scale(${zoom})`;
-                                                if (['pdf'].includes(ext)) {
-                                                    return (
-                                                        <iframe
-                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                            className="w-full h-full border-none rounded bg-white"
-                                                            title="PDF Document"
-                                                            style={{ transform, transition: 'transform 0.2s', height: '100%' }}
-                                                        ></iframe>
-                                                    );
-                                                } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                    return (
-                                                        <img
-                                                            src={doc.url}
-                                                            alt={doc.filename}
-                                                            className="max-h-full max-w-full rounded object-contain mx-auto w-auto h-auto"
-                                                            style={{ transform, transition: 'transform 0.2s', maxHeight: '100%', maxWidth: '100%' }}
-                                                        />
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <div className="text-gray-500 text-center">
-                                                            Preview not available for this file type.<br />
-                                                            <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[#7F0404] underline">
-                                                                Download / Open
-                                                            </a>
+                            <div className="mt-4 mb-8">
+                                <p className="text-base text-gray-700 mb-6">Select a program to view and manage its pending documents.</p>
+                                <DocumentCardGrid
+                                    items={sidebar}
+                                    getKey={program => program.id}
+                                    onCardClick={program => {
+                                        setSelected({ programId: program.id });
+                                        setExpanded(prev => ({ ...prev, [program.id]: true }));
+                                    }}
+                                    renderCardContent={(program, index) => {
+                                        // Use program.pending_count for pending documents
+                                        return (
+                                            <div className="p-5 flex flex-col h-full">
+                                                <div className="flex items-start mb-3">
+                                                    <div 
+                                                        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                        style={{ backgroundColor: '#f1f5f9' }}
+                                                    >
+                                                        {/* Icon */}
+                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                        </svg>
+                                                    </div>
+                                                    <h2 className="text-base font-bold text-[#7F0404]">
+                                                        {program.code ? program.code : ''} 
+                                                        {program.code ? ' - ' : ''}
+                                                        {program.name}
+                                                    </h2>
+                                                </div>
+                                                <div className="flex-grow"></div>
+                                                <div className="mt-auto">
+                                                    <div className="text-gray-600 mb-4">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="text-sm">Areas:</span>
+                                                            <span className="font-semibold">{program.areas.length}</span>
                                                         </div>
-                                                    );
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm">Pending Documents:</span>
+                                                            <span className={`font-semibold ${program.pending_count && program.pending_count > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                {program.pending_count ?? 0}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                        <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                            <span>View Documents</span>
+                                                            <svg 
+                                                                className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
+                                                                fill="none" 
+                                                                stroke="currentColor" 
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                />
+                            </div>
+                        ) : selected.programId && !selected.areaId ? (
+                            /* Area Cards Grid when program is selected but no area is selected */
+                            <div className="mt-4 mb-8">
+                                <p className="text-base text-gray-700 mb-6">
+                                    Select an area to view and manage its pending documents.
+                                </p>
+                                <DocumentCardGrid
+                                    items={selectedProgram?.areas || []}
+                                    getKey={area => area.id}
+                                    onCardClick={area => {
+                                        setSelected({ programId: selected.programId, areaId: area.id });
+                                        setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
+                                    }}
+                                    renderCardContent={(area, index) => {
+                                        const parametersCount = area.parameters?.length || 0;
+                                        // Use area.pending_count for pending documents
+                                        const pendingCount = area.pending_count || 0;
+                                        return (
+                                            <div className="p-5 flex flex-col h-full">
+                                                <div className="flex items-start mb-3">
+                                                    <div 
+                                                        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                        style={{ backgroundColor: '#f1f5f9' }}
+                                                    >
+                                                        {/* Icon */}
+                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                        </svg>
+                                                    </div>
+                                                    <h2 className="text-base font-bold text-[#7F0404]">
+                                                        {area.code ? `Area ${area.code}` : 'Area'} 
+                                                        {area.code ? ' - ' : ''}
+                                                        {area.name}
+                                                    </h2>
+                                                </div>
+                                                <div className="flex-grow"></div>
+                                                <div className="mt-auto">
+                                                    <div className="text-gray-600 mb-4">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="text-sm">Parameters:</span>
+                                                            <span className="font-semibold">{parametersCount}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm">Pending Documents:</span>
+                                                            <span className={`font-semibold ${pendingCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                {pendingCount}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                        <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                            <span>View Documents</span>
+                                                            <svg 
+                                                                className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
+                                                                fill="none" 
+                                                                stroke="currentColor" 
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                />
+                            </div>
+                        ) : selected.programId && selected.areaId && !selected.parameterId ? (
+                            // --- Parameter Cards Grid when area is selected but no parameter is selected ---
+                            <div>
+                                <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea ? (
+                                        <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
+                                            <span className="font-bold mr-2">Area</span>
+                                            {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
+                                            - {selectedArea.name}
+                                        </h2>
+                                    ) : null}
+                                </div>
+                                <p className="text-base text-gray-700 mb-6">
+                                    Select a parameter to view and manage its pending documents.
+                                </p>
+                                <DocumentCardGrid
+                                    items={selectedArea?.parameters || []}
+                                    getKey={param => param.id}
+                                    onCardClick={param => {
+                                        setSelected({ programId: selected.programId, areaId: selected.areaId, parameterId: param.id });
+                                        setParamExpanded(prev => ({ ...prev, [param.id]: true }));
+                                    }}
+                                    renderCardContent={(param, index) => (
+                                        <div className="p-5 flex flex-col h-full">
+                                            <div className="flex items-start mb-3">
+                                                <div
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                    style={{ backgroundColor: '#f1f5f9' }}
+                                                >
+                                                    {/* Icon */}
+                                                    <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                        <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                        <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                </div>
+                                                <h2 className="text-base font-bold text-[#7F0404]">
+                                                    {param.code ? `${param.code} - ` : ''}
+                                                    {param.name}
+                                                </h2>
+                                            </div>
+                                            <div className="flex-grow"></div>
+                                            <div className="mt-auto">
+                                                <div className="text-gray-600 mb-4">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm">Categories:</span>
+                                                        <span className="font-semibold">3</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm">Pending Documents:</span>
+                                                        <span className={`font-semibold ${param.pending_count && param.pending_count > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                            {param.pending_count ?? 0}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                    <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                        <span>View Documents</span>
+                                                        <svg
+                                                            className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                        ) : null}
+                        {/* Display area and parameter headers only when documents are being viewed */}
+                        {selected.areaId && selected.parameterId && (
+                            <>
+                                <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea ? (
+                                        <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
+                                            <span className="font-bold mr-2">Area</span>
+                                            {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
+                                            - {selectedArea.name}
+                                        </h2>
+                                    ) : null}
+                                </div>
+                                <div className="ml-8 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea && selectedParameter ? (
+                                        selected.category ? (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                                <span className="ml-2 text-xs font-semibold text-[#C46B02]">
+                                                    ({categoryList.find(cat => cat.value === selected.category)?.label || selected.category})
+                                                </span>
+                                            </h3>
+                                        ) : (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                            </h3>
+                                        )
+                                    ) : null}
+                                </div>
+                            </>
+                        )}
+                        {/* --- Document Viewer Section --- */}
+                        {selected.programId && selected.areaId && selected.parameterId && (
+                            <div className="mt-2 flex flex-col flex-1 min-h-0">
+                                {selected.parameterId && !selected.category && (
+                                    // --- Category Cards Grid when parameter is selected but no category is selected ---
+                                    <div>
+                                        <p className="text-base text-gray-700 mb-6">
+                                            Select a category to view and manage its pending documents.
+                                        </p>
+                                        <DocumentCardGrid
+                                            items={categoryList}
+                                            getKey={cat => cat.value}
+                                            onCardClick={cat => {
+                                                setSelected({
+                                                    programId: selected.programId,
+                                                    areaId: selected.areaId,
+                                                    parameterId: selected.parameterId,
+                                                    category: cat.value
+                                                });
+                                            }}
+                                            renderCardContent={(cat, index) => {
+                                                // Show correct count for this parameter/category
+                                                let pendingCount = 0;
+                                                if (selectedParameter && selectedParameter.category_pending_counts) {
+                                                    pendingCount = selectedParameter.category_pending_counts[cat.value] || 0;
                                                 }
-                                            })()
+                                                return (
+                                                    <div className="p-5 flex flex-col h-full">
+                                                        <div className="flex items-start mb-3">
+                                                            <div
+                                                                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                                style={{ backgroundColor: '#f1f5f9' }}
+                                                            >
+                                                                {/* Icon */}
+                                                                <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                    <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                                    <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                                    <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                                </svg>
+                                                            </div>
+                                                            <h2 className="text-base font-bold text-[#7F0404]">
+                                                                {cat.label}
+                                                            </h2>
+                                                        </div>
+                                                        <div className="flex-grow"></div>
+                                                        <div className="mt-auto">
+                                                            <div className="text-gray-600 mb-4">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm">Pending Documents:</span>
+                                                                    <span className={`font-semibold ${pendingCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                                                        {pendingCount}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                                <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                                    <span>View Documents</span>
+                                                                    <svg
+                                                                        className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                                {selected.category && (
+                                    <>
+                                    <div>
+                                        <p className="text-base text-gray-700 mb-2">
+                                            {viewingDocIndex === null
+                                                ? "Select a document to view."
+                                                : null
+                                            }
+                                        </p>
+                                        {/* --- Show DocumentNavigation if a document is selected --- */}
+                                        {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] ? (
+                                            <div className="w-full flex flex-col items-center">
+                                                <div className="w-full max-w-4xl mx-auto">
+                                                    <DocumentNavigation
+                                                        documents={filteredDocs}
+                                                        currentIndex={filteredViewerIndex}
+                                                        onChangeIndex={idx => goTo(idx)}
+                                                        onDownload={handleDownload}
+                                                        onPrint={handlePrint}
+                                                        onRotate={handleRotate}
+                                                        onFitMode={toggleFitMode}
+                                                        onZoom={handleZoom}
+                                                        onInfo={() => setInfoOpen(true)}
+                                                        onGrid={openGrid}
+                                                        onFullscreen={handleFullscreen}
+                                                        fitMode={fitMode}
+                                                        rotate={rotate}
+                                                        zoom={zoom}
+                                                        isFullscreen={isFullscreen}
+                                                        infoOpen={infoOpen}
+                                                        setInfoOpen={setInfoOpen}
+                                                        gridOpen={gridOpen}
+                                                        setGridOpen={setGridOpen}
+                                                        search={search}
+                                                        setSearch={setSearch}
+                                                        onSearch={handleSearch}
+                                                    />
+                                                </div>
+                                                <div
+                                                    ref={previewRef}
+                                                    className="w-full max-w-4xl mx-auto bg-white rounded-b-lg shadow-lg flex flex-col items-center justify-center overflow-hidden"
+                                                    style={{
+                                                        minHeight: 480,
+                                                        maxHeight: '70vh',
+                                                        marginBottom: 24,
+                                                        marginTop: 0,
+                                                        borderBottomLeftRadius: 14,
+                                                        borderBottomRightRadius: 14,
+                                                    }}
+                                                >
+                                                    {/* --- Document Preview --- */}
+                                                    {(() => {
+                                                        const doc = filteredDocs[filteredViewerIndex];
+                                                        if (!doc) return null;
+                                                        const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
+                                                        if (['pdf'].includes(ext)) {
+                                                            return (
+                                                                <iframe
+                                                                    src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                                                    className="w-full h-[65vh] border-none rounded-b-lg bg-white"
+                                                                    title="PDF Preview"
+                                                                    style={{
+                                                                        objectFit: 'contain',
+                                                                        minHeight: 480,
+                                                                        maxHeight: '65vh',
+                                                                    }}
+                                                                ></iframe>
+                                                            );
+                                                        } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                                                            return (
+                                                                <img
+                                                                    src={doc.url}
+                                                                    alt={doc.filename}
+                                                                    className="max-h-[65vh] max-w-full rounded-b-lg object-contain mx-auto w-auto h-auto"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        objectFit: 'contain',
+                                                                        minHeight: 480,
+                                                                        maxHeight: '65vh',
+                                                                    }}
+                                                                />
+                                                            );
+                                                        } else {
+                                                            return (
+                                                                <div className="w-full h-[65vh] flex items-center justify-center bg-gray-100 rounded-b-lg text-gray-400 text-xs">
+                                                                    No preview available for this file type.
+                                                                </div>
+                                                            );
+                                                        }
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // --- Card grid for pending documents in this category ---
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                                {filteredDocs.length === 0 ? (
+                                                    <div className="col-span-full text-gray-400 text-center">No pending documents for this category.</div>
+                                                ) : (
+                                                    filteredDocs.flatMap((doc, idx) => {
+                                                        const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
+                                                        const cards = [];
+                                                        // Always show the document preview card
+                                                        cards.push(
+                                                            <div
+                                                                key={doc.id + '-doc'}
+                                                                className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
+                                                                style={{
+                                                                    borderTopColor: '#7F0404',
+                                                                    aspectRatio: '8.5/13',
+                                                                    maxWidth: 255,
+                                                                    minHeight: 380,
+                                                                }}
+                                                                onClick={() => {
+                                                                    // Set the viewer to this document
+                                                                    const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
+                                                                    setViewerIndex(realIdx);
+                                                                    setViewingDocIndex(realIdx);
+                                                                }}
+                                                            >
+                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                    {['pdf'].includes(ext) ? (
+                                                                        <iframe
+                                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                                                            className="w-full h-56 border-none rounded bg-white"
+                                                                            title="PDF Preview"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
+                                                                        ></iframe>
+                                                                    ) : ['jpg', 'jpeg', 'png'].includes(ext) ? (
+                                                                        <img
+                                                                            src={doc.url}
+                                                                            alt={doc.filename}
+                                                                            className="max-h-56 max-w-full rounded object-contain mx-auto w-auto h-auto"
+                                                                            style={{ width: '100%', objectFit: 'contain', height: '14rem' }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-full h-56 flex items-center justify-center bg-gray-100 rounded text-gray-400 text-xs">
+                                                                            No preview available for this file type.
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
+                                                                    <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename}</div>
+                                                                    <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
+                                                                    <div className="text-xs text-gray-400 text-center">
+                                                                        {doc.uploaded_at
+                                                                            ? `Uploaded: ${doc.uploaded_at}`
+                                                                            : ''}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                        // If there is a video_filename, show a separate preview card for the video
+                                                        if (doc.video_filename) {
+                                                            const videoUrl = doc.video_filename.startsWith('http')
+                                                                ? doc.video_filename
+                                                                : `/storage/documents/${doc.video_filename}`;
+                                                            cards.push(
+                                                                <div
+                                                                    key={doc.id + '-video'}
+                                                                    className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
+                                                                    style={{
+                                                                        borderTopColor: '#7F0404',
+                                                                        aspectRatio: '8.5/13',
+                                                                        maxWidth: 255,
+                                                                        minHeight: 380,
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
+                                                                        setViewerIndex(realIdx);
+                                                                        setViewingDocIndex(realIdx);
+                                                                    }}
+                                                                >
+                                                                    <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                        <video
+                                                                            src={videoUrl}
+                                                                            controls
+                                                                            className="w-full h-56 rounded bg-black"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
+                                                                        <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename} (Video)</div>
+                                                                        <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
+                                                                        <div className="text-xs text-gray-400 text-center">
+                                                                            {doc.uploaded_at
+                                                                                ? `Uploaded: ${doc.uploaded_at}`
+                                                                                : ''}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return cards;
+                                                    })
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-                                {/* Document Info Modal */}
-                                <Transition show={infoOpen} as={Fragment}>
-                                    <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setInfoOpen(false)}>
-                                        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-                                        <Transition.Child
-                                            as={Fragment}
-                                            enter="ease-out duration-200"
-                                            enterFrom="opacity-0 scale-95"
-                                            enterTo="opacity-100 scale-100"
-                                            leave="ease-in duration-150"
-                                            leaveFrom="opacity-100 scale-100"
-                                            leaveTo="opacity-0 scale-95"
-                                        >
-                                            <div className="relative w-full max-w-sm mx-auto rounded-xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
-                                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80">
-                                                    <Dialog.Title className="text-lg font-bold text-white tracking-tight">
-                                                        Document Info
-                                                    </Dialog.Title>
-                                                    <button
-                                                        onClick={() => setInfoOpen(false)}
-                                                        className="text-white hover:text-[#FFD600] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
-                                                        aria-label="Close"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div className="px-6 py-6 flex-1">
-                                                    {currentDoc ? (
-                                                        <div className="space-y-2 text-[#7F0404]">
-                                                            <div><span className="font-semibold">Filename:</span> {currentDoc.filename}</div>
-                                                            <div><span className="font-semibold">Uploaded:</span> {currentDoc.uploaded_at}</div>
-                                                            <div><span className="font-semibold">Uploader:</span> {currentDoc.user_name || 'N/A'}</div>
-                                                            <div><span className="font-semibold">Status:</span> Pending</div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-500">No document selected.</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </Transition.Child>
-                                    </Dialog>
-                                </Transition>
-                                {/* Grid Modal */}
-                                <Transition show={gridOpen} as={Fragment}>
-                                    <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={closeGrid}>
-                                        <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
-                                        <Transition.Child
-                                            as={Fragment}
-                                            enter="ease-out duration-200"
-                                            enterFrom="opacity-0 scale-95"
-                                            enterTo="opacity-100 scale-100"
-                                            leave="ease-in duration-150"
-                                            leaveFrom="opacity-100 scale-100"
-                                            leaveTo="opacity-0 scale-95"
-                                        >
-                                            <div className="relative w-full max-w-3xl mx-auto rounded-xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
-                                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80">
-                                                    <Dialog.Title className="text-lg font-bold text-white tracking-tight">
-                                                        Document Grid
-                                                    </Dialog.Title>
-                                                    <button
-                                                        onClick={closeGrid}
-                                                        className="text-white hover:text-[#FFD600] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
-                                                        aria-label="Close"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div className="px-6 py-6 flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                    {filteredDocs.map((doc, idx) => (
-                                                        <div
-                                                            key={doc.id}
-                                                            className={`border rounded-lg p-2 cursor-pointer hover:shadow-lg transition ${doc.id === currentDoc?.id ? 'border-[#C46B02] ring-2 ring-[#FFD600]' : 'border-gray-200'}`}
-                                                            onClick={() => { goTo(idx); closeGrid(); }}
-                                                        >
-                                                            <div className="truncate text-xs font-bold text-[#7F0404] mb-2">{doc.filename}</div>
-                                                            <div className="text-xs text-gray-500 mb-1">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
-                                                            {(() => {
-                                                                const ext = doc.filename.split('.').pop()?.toLowerCase();
-                                                                if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                                    return <img src={doc.url} alt={doc.filename} className="w-full h-24 object-contain rounded" />;
-                                                                } else if (['pdf'].includes(ext)) {
-                                                                    return <div className="w-full h-24 flex items-center justify-center bg-gray-100 rounded text-[#C46B02] font-bold">PDF</div>;
-                                                                } else {
-                                                                    return <div className="w-full h-24 flex items-center justify-center bg-gray-100 rounded text-gray-400">FILE</div>;
-                                                                }
-                                                            })()}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </Transition.Child>
-                                    </Dialog>
-                                </Transition>
+                                    </>
+                                )}
                             </div>
                         )}
                         {/* --- End Document Viewer Section --- */}
                     </section>
                 </div>
             </DashboardLayout>
+
             {/* Pending Documents Modal */}
             <Transition show={pendingModalOpen} as={Fragment}>
                 <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setPendingModalOpen(false)}>
@@ -617,7 +1118,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                         leaveFrom="opacity-100 scale-100"
                         leaveTo="opacity-0 scale-95"
                     >
-                        <div className="relative w-full max-w-3xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
+                        <div className="relative w-full max-w-5xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
                             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-[#C46B02]/90 to-[#FFD600]/80 flex-shrink-0">
                                 <Dialog.Title className="text-2xl font-bold text-white tracking-tight">
                                     Pending Documents
@@ -632,62 +1133,67 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                     </svg>
                                 </button>
                             </div>
-                            <div className="px-8 py-8 flex-1 overflow-y-auto bg-white">
+                            <div className="px-8 py-8 flex-1 overflow-y-auto bg-white text-black">
                                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
-                                    <table className="min-w-full">
+                                    <table className="min-w-full text-black text-xs"> {/* Smaller font */}
                                         <thead>
                                             <tr className="bg-[#F4BB00]/30 text-[#7F0404]">
-                                                <th className="px-4 py-3 text-left font-bold">Submitted Date</th>
-                                                <th className="px-4 py-3 text-left font-bold">Uploader</th>
-                                                <th className="px-4 py-3 text-left font-bold">Program Code</th>
-                                                <th className="px-4 py-3 text-left font-bold">Area Code</th>
-                                                <th className="px-4 py-3 text-center font-bold">Actions</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Uploader</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Program</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Area</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Parameter</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Category</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Document</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Uploaded</th>
+                                                <th className="px-2 py-2 text-center font-bold whitespace-nowrap">Action</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="text-black">
                                             {loadingPendingTable ? (
                                                 <tr>
-                                                    <td colSpan={5} className="text-center text-gray-500 py-8">Loading...</td>
+                                                    <td colSpan={8} className="text-center text-gray-500 py-8">Loading...</td>
                                                 </tr>
                                             ) : pendingTableError ? (
                                                 <tr>
-                                                    <td colSpan={5} className="text-center text-red-600 py-8">{pendingTableError}</td>
+                                                    <td colSpan={8} className="text-center text-red-600 py-8">{pendingTableError}</td>
                                                 </tr>
                                             ) : pendingDocsTable.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={5} className="text-center text-gray-400 py-8">No pending documents found.</td>
+                                                    <td colSpan={8} className="text-center text-gray-400 py-8">No pending documents found.</td>
                                                 </tr>
                                             ) : (
                                                 pendingDocsTable.map((doc, idx) => (
-                                                    <tr key={doc.id} className="border-b last:border-b-0 hover:bg-gray-50 transition">
-                                                        <td className="px-4 py-3">{doc.uploaded_at}</td>
-                                                        <td className="px-4 py-3">{doc.user_name}</td>
-                                                        <td className="px-4 py-3">{doc.program_code}</td>
-                                                        <td className="px-4 py-3">{doc.area_code}</td>
-                                                        <td className="px-4 py-3 text-center">
+                                                    <tr key={doc.id + '-' + doc.type} className="border-b last:border-b-0 hover:bg-gray-50 transition">
+                                                        <td className="px-2 py-2 text-center truncate max-w-[120px] whitespace-nowrap">{doc.user_name}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[80px] whitespace-nowrap">{doc.program_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[80px] whitespace-nowrap">Area {doc.area_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[100px] whitespace-nowrap">{doc.parameter_code}</td>
+                                                        <td className="px-2 py-2 text-center truncate max-w-[90px] whitespace-nowrap">{doc.category}</td>
+                                                        <td className="px-2 py-2 inline-flex text-center justify-center items-center truncate max-w-[70px] whitespace-nowrap">
+                                                            {/* Only show thumbnail image for document or video */}
+                                                            {doc.type === 'file' && doc.file_url ? (
+                                                                doc.file_name?.toLowerCase().match(/\.(jpg|jpeg|png)$/i) ? (
+                                                                    <img src={doc.file_url} alt="preview" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                ) : doc.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                                                    <img src={`/thumbnails/pdf.png`} alt="PDF thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                ) : (
+                                                                    <img src={`/thumbnails/file.png`} alt="File thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                )
+                                                            ) : doc.type === 'video' && doc.video_url ? (
+                                                                <img src={`/thumbnails/video.png`} alt="Video thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                            ) : null}
+                                                        </td>
+                                                        <td className="px-2 py-2 truncate max-w-[110px] whitespace-nowrap">{doc.uploaded_at}</td>
+                                                        <td className="px-2 py-2 text-center">
                                                             <button
                                                                 type="button"
                                                                 className="inline-flex items-center justify-center text-[#C46B02] hover:text-[#7F0404] transition"
                                                                 title="View"
                                                                 onClick={() => {
-                                                                    const match = findProgramAreaByCodes(doc.program_code, doc.area_code);
-                                                                    if (match) {
-                                                                        setPendingModalOpen(false);
-                                                                        // Wait for modal to close, then select area and set viewerIndex to this doc
-                                                                        setTimeout(() => {
-                                                                            setSelected({ programId: match.programId, areaId: match.areaId });
-                                                                            setTimeout(() => {
-                                                                                setViewerIndex(prev => {
-                                                                                    const idx = pendingDocs.findIndex(d => d.id === doc.id);
-                                                                                    // If not found in current pendingDocs, set to 0 (will be corrected by useEffect)
-                                                                                    return idx !== -1 ? idx : 0;
-                                                                                });
-                                                                            }, 100);
-                                                                        }, 200);
-                                                                    }
+                                                                    setPendingModalOpen(false);
                                                                 }}
                                                             >
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
                                                                     <circle cx="12" cy="12" r="3" />
                                                                 </svg>
@@ -713,6 +1219,70 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                     </Transition.Child>
                 </Dialog>
             </Transition>
+
+            {/* Confirmation Modal */}
+            <Transition show={confirmModal.open} as={Fragment}>
+                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setConfirmModal({ open: false, action: null })}>
+                    <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-200"
+                        enterFrom="opacity-0 scale-95"
+                        enterTo="opacity-100 scale-100"
+                        leave="ease-in duration-150"
+                        leaveFrom="opacity-100 scale-100"
+                        leaveTo="opacity-0 scale-95"
+                    >
+                        <div className="relative w-full max-w-md mx-auto rounded-2xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
+                            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-[#C46B02]/90 to-[#FFD600]/80 flex-shrink-0">
+                                <Dialog.Title className="text-lg font-bold text-white tracking-tight">
+                                    {confirmModal.action === 'approve' ? 'Approve Document' : 'Disapprove Document'}
+                                </Dialog.Title>
+                            </div>
+                            <div className="px-6 py-6 flex-1 overflow-y-auto bg-white text-black">
+                                <p>Are you sure you want to <span className={confirmModal.action === 'approve' ? 'text-green-700 font-bold' : 'text-[#7F0404] font-bold'}>{confirmModal.action}</span> this document?</p>
+                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs">
+                                    <div><span className="font-semibold">Filename:</span> {currentDoc?.filename}</div>
+                                    <div><span className="font-semibold">Uploaded:</span> {currentDoc?.uploaded_at}</div>
+                                </div>
+                                {actionError && <div className="mt-2 text-red-600 text-sm">{actionError}</div>}
+                            </div>
+                            <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-6 pb-5 flex-shrink-0 bg-white">
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                                    onClick={() => setConfirmModal({ open: false, action: null })}
+                                    disabled={actionLoading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`px-5 py-2 rounded-lg font-semibold text-white transition ${confirmModal.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-[#7F0404] hover:bg-[#a80000]'}`}
+                                    onClick={confirmAction}
+                                    disabled={actionLoading}
+                                >
+                                    {actionLoading ? 'Processing...' : (confirmModal.action === 'approve' ? 'Approve' : 'Disapprove')}
+                                </button>
+                            </div>
+                        </div>
+                    </Transition.Child>
+                </Dialog>
+            </Transition>
+
+            <style>{`
+                table { font-size: 1rem; }
+                th, td { vertical-align: middle; }
+                .group:hover svg {
+                    filter: drop-shadow(0 2px 4px rgba(196,107,2,0.15));
+                    transition: color 0.2s, transform 0.2s;
+                    transform: scale(1.35);
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .bg-white {
+                    animation: fade-in-up 0.5s ease-out forwards;
+                }
+            `}</style>
         </>
     );
 }

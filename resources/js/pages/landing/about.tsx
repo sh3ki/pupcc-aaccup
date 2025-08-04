@@ -300,14 +300,14 @@ export default function About() {
                         <div className="absolute inset-0 w-full h-full">
                             <img
                                 src={aboutContent.mulaSayoImage}
-                                alt="Mula Sayo, Para Sa Bayan"
+                                alt="Akoy iyong-iyo, at Hinding-hindi magiging sa iba"
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                Akoy iyong-iyo, at Hinding-hindi magiging sa iba
                             </h2>
                         </div>
                     </section>

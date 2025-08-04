@@ -1,12 +1,12 @@
 import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
-import { useState } from 'react';
+import { useState, useRef, useMemo, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useRef, useMemo, useCallback, useEffect } from 'react';
 import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
+import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 
-type Parameter = { id: number; name: string; code?: string };
+type Parameter = { id: number; name: string; code?: string; approved_count?: number; category_approved_counts?: Record<string, number> };
 type Area = { id: number; name: string; code?: string; parameters?: Parameter[] };
 type Program = { id: number; name: string; code?: string; areas: Area[] };
 
@@ -18,13 +18,11 @@ interface PageProps {
 export default function FacultyDocuments(props: PageProps) {
     const sidebar = props.sidebar ?? [];
     const csrfToken = props.csrfToken;
-    // Track selected program, area, and parameter
-    const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number }>({});
-    // Track which programs and areas are expanded
+    const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
     const [expanded, setExpanded] = useState<{ [programId: number]: boolean }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
+    const [paramExpanded, setParamExpanded] = useState<{ [paramId: number]: boolean }>({});
 
-    // Find selected program/area/parameter for main content
     const selectedProgram = sidebar.find(p => p.id === selected.programId);
     const selectedArea = selectedProgram?.areas?.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
@@ -36,135 +34,55 @@ export default function FacultyDocuments(props: PageProps) {
         setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
     };
 
-    // Modal state
-    const [addModalOpen, setAddModalOpen] = useState(false);
-    const [uploadForm, setUploadForm] = useState({
-        programId: '',
-        areaId: '',
-        file: null as File | null,
-    });
-    const [uploadErrors, setUploadErrors] = useState<any>({});
-    const [uploading, setUploading] = useState(false);
-    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+    // --- Reviewer: Pending Modal State ---
+    const [pendingModalOpen, setPendingModalOpen] = useState(false);
+    const [pendingDocs, setPendingDocs] = useState<any[]>([]);
+    const [loadingPending, setLoadingPending] = useState(false);
+    const [pendingError, setPendingError] = useState('');
+    const [pendingDocView, setPendingDocView] = useState<any | null>(null);
+    const [loadingPendingDoc, setLoadingPendingDoc] = useState(false);
 
-    // Dropdown logic
-    const programOptions = useMemo(() =>
-        sidebar.map(p => ({ value: p.id, label: p.code ? `${p.code} - ${p.name}` : p.name })),
-        [sidebar]
-    );
-    const areaOptions = useMemo(() => {
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        return prog?.areas?.map(a => ({
-            value: a.id,
-            label: a.code ? `Area ${a.code} - ${a.name}` : `Area - ${a.name}`
-        })) || [];
-    }, [sidebar, uploadForm.programId]);
-
-    // File input ref
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // File preview logic
+    // Fetch pending documents when modal opens
     useEffect(() => {
-        if (!uploadForm.file) {
-            setFilePreviewUrl(null);
-            return;
-        }
-        const file = uploadForm.file;
-        if (file.type === "application/pdf") {
-            const url = URL.createObjectURL(file);
-            setFilePreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else if (file.type.startsWith("image/")) {
-            const url = URL.createObjectURL(file);
-            setFilePreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else {
-            setFilePreviewUrl(null);
-        }
-    }, [uploadForm.file]);
-
-    // Handle file drop/select
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
-    };
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
-    };
-
-    // Handle upload form change
-    const handleUploadFormChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setUploadForm(f => ({ ...f, [name]: value }));
-    };
-
-    // Handle upload submit
-    const handleUploadSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setUploadErrors({});
-        if (!uploadForm.programId) return setUploadErrors({ programId: "Select a program." });
-        if (!uploadForm.areaId) return setUploadErrors({ areaId: "Select an area." });
-        if (!uploadForm.file) return setUploadErrors({ file: "Select a document file." });
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('program_id', uploadForm.programId);
-        formData.append('area_id', uploadForm.areaId);
-        formData.append('file', uploadForm.file);
-
-        try {
-            // Use the CSRF token from props
-            const token = csrfToken;
-            
-            const response = await fetch('/faculty/documents/upload', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': token || '',
-                    // Do not set Content-Type for multipart/form-data, let the browser set it with boundary
-                },
+        if (pendingModalOpen) {
+            setLoadingPending(true);
+            setPendingError('');
+            fetch('/faculty/documents/pending', {
+                headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
-            });
-
-            // Handle the response
-            if (response.status === 419) {
-                setUploadErrors({ general: "CSRF token mismatch. Please refresh the page and try again." });
-                setUploading(false);
-                return;
-            }
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setAddModalOpen(false);
-                setUploadForm({ programId: '', areaId: '', file: null });
-                setFilePreviewUrl(null);
-                alert(data.message || 'Document uploaded successfully!');
-                window.location.reload();
-            } else {
-                if (data.errors) {
-                    setUploadErrors(data.errors);
-                } else {
-                    setUploadErrors({ general: data.message || "Upload failed." });
-                }
-            }
-        } catch (err: any) {
-            console.error("Upload error:", err);
-            setUploadErrors({ general: "Upload failed. Please try again." });
-        } finally {
-            setUploading(false);
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) setPendingDocs(data.documents);
+                    else setPendingError('Failed to load pending documents.');
+                })
+                .catch(() => setPendingError('Failed to load pending documents.'))
+                .finally(() => setLoadingPending(false));
         }
+    }, [pendingModalOpen]);
+
+    // View a pending document
+    const handleViewPendingDoc = (docId: number) => {
+        setLoadingPendingDoc(true);
+        setPendingDocView(null);
+        fetch(`/faculty/documents/pending/${docId}`, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) setPendingDocView(data.document);
+                else setPendingDocView({ error: data.message || 'Failed to load document.' });
+            })
+            .catch(() => setPendingDocView({ error: 'Failed to load document.' }))
+            .finally(() => setLoadingPendingDoc(false));
     };
 
-    // State for approved documents and viewer
-    const [approvedDocs, setApprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string }[]>([]);
+    // --- Approved Documents State ---
+    const [approvedDocs, setApprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
 
-    // Remove top nav state, but keep pageInput for document navigation
     const [search, setSearch] = useState('');
     const [pageInput, setPageInput] = useState(viewerIndex + 1);
 
@@ -172,16 +90,34 @@ export default function FacultyDocuments(props: PageProps) {
         setPageInput(viewerIndex + 1);
     }, [viewerIndex]);
 
-    // Fetch approved documents when area changes
     useEffect(() => {
-        if (selected.programId && selected.areaId) {
+        // Only fetch when all three are selected
+        if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+            setLoadingDocs(true);
+            fetch(`/faculty/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then(res => res.json())
+                .then((data) => {
+                    if (data.success) {
+                        setApprovedDocs(data.documents);
+                        setViewerIndex(0);
+                    } else {
+                        setApprovedDocs([]);
+                    }
+                })
+                .catch(() => setApprovedDocs([]))
+                .finally(() => setLoadingDocs(false));
+        } else if (selected.programId && selected.areaId) {
+            // If only program and area are selected, fetch all docs for that area (for grid counts)
             setLoadingDocs(true);
             fetch(`/faculty/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
                 .then(res => res.json())
-                .then(data => {
+                .then((data) => {
                     if (data.success) {
                         setApprovedDocs(data.documents);
                         setViewerIndex(0);
@@ -195,7 +131,7 @@ export default function FacultyDocuments(props: PageProps) {
             setApprovedDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.programId, selected.areaId]);
+    }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
 
     // --- Navigation state ---
     const [fitMode, setFitMode] = useState<'width' | 'page'>('width');
@@ -205,26 +141,38 @@ export default function FacultyDocuments(props: PageProps) {
     const [gridOpen, setGridOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    // Filtered docs for search
-    const filteredDocs = search
-        ? approvedDocs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()))
-        : approvedDocs;
+    // Filtered docs for preview card grid: filter by parameterId and category if both are selected
+    const filteredDocs = useMemo(() => {
+        let docs = approvedDocs;
+        if (selected.parameterId && selected.category) {
+            docs = docs.filter(doc =>
+                doc.parameter_id === selected.parameterId &&
+                doc.category === selected.category
+            );
+        }
+        if (search) {
+            docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
+        }
+        return docs;
+    }, [approvedDocs, selected.parameterId, selected.category, search]);
+
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
 
-    // Navigation handlers
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
         const doc = filteredDocs[idx];
         const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
-        if (realIdx !== -1) setViewerIndex(realIdx);
+        if (realIdx !== -1) {
+            setViewerIndex(realIdx);
+            setViewingDocIndex(realIdx);
+        }
     };
     const goFirst = () => goTo(0);
     const goLast = () => goTo(filteredDocs.length - 1);
     const goPrev = () => goTo(Math.max(0, filteredViewerIndex - 1));
     const goNext = () => goTo(Math.min(filteredDocs.length - 1, filteredViewerIndex + 1));
 
-    // Download
     const handleDownload = () => {
         if (!currentDoc) return;
         const link = document.createElement('a');
@@ -233,22 +181,18 @@ export default function FacultyDocuments(props: PageProps) {
         link.click();
     };
 
-    // Print
     const handlePrint = () => {
         if (!currentDoc) return;
         const win = window.open(currentDoc.url, '_blank');
         if (win) win.print();
     };
 
-    // Rotate
     const handleRotate = (dir: 'left' | 'right') => {
         setRotate(r => (dir === 'left' ? (r - 90 + 360) % 360 : (r + 90) % 360));
     };
 
-    // Fit mode
     const toggleFitMode = () => setFitMode(f => (f === 'width' ? 'page' : 'width'));
 
-    // Zoom
     const handleZoom = (dir: 'in' | 'out') => {
         setZoom(z => {
             if (dir === 'in') return Math.min(z + 0.1, 2);
@@ -256,11 +200,9 @@ export default function FacultyDocuments(props: PageProps) {
         });
     };
 
-    // Grid
     const openGrid = () => setGridOpen(true);
     const closeGrid = () => setGridOpen(false);
 
-    // Fullscreen
     const previewRef = useRef<HTMLDivElement>(null);
     const handleFullscreen = () => {
         if (!previewRef.current) return;
@@ -276,39 +218,238 @@ export default function FacultyDocuments(props: PageProps) {
         return () => document.removeEventListener('fullscreenchange', onFsChange);
     }, []);
 
-    // Reset rotate/zoom on doc change
     useEffect(() => { setRotate(0); setZoom(1); }, [viewerIndex, selected.programId, selected.areaId]);
-
-    // Page input sync
     useEffect(() => {
         setPageInput(filteredViewerIndex + 1);
     }, [filteredViewerIndex, search]);
 
-    // Search submit (optional: jump to first match)
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         if (filteredDocs.length > 0) goTo(0);
     };
 
+    // --- Add Document Modal State (copied/adapted from faculty) ---
+    const [addModalOpen, setAddModalOpen] = useState(false);
+    const [uploadForm, setUploadForm] = useState({
+        programId: '',
+        areaId: '',
+        parameterId: '',
+        category: '', // <-- add category field
+        file: null as File | null,
+        video: null as File | null, // <-- add video field
+    });
+    const [uploadErrors, setUploadErrors] = useState<any>({});
+    const [uploading, setUploading] = useState(false);
+    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null); // <-- for video preview
+
+    const programOptions = useMemo(() =>
+        sidebar.map(p => ({ value: p.id, label: p.code ? `${p.code} - ${p.name}` : p.name })),
+        [sidebar]
+    );
+    const areaOptions = useMemo(() => {
+        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
+        return prog?.areas?.map(a => ({
+            value: a.id,
+            label: a.code ? `Area ${a.code} - ${a.name}` : `Area - ${a.name}`,
+            parameters: a.parameters || [],
+        })) || [];
+    }, [sidebar, uploadForm.programId]);
+
+    // Compute parameter options based on selected area
+    const parameterOptions = useMemo(() => {
+        if (!uploadForm.programId || !uploadForm.areaId) return [];
+        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
+        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
+        return area?.parameters?.map(param => ({
+            value: param.id,
+            label: param.code ? `${param.code} - ${param.name}` : param.name,
+        })) || [];
+    }, [sidebar, uploadForm.programId, uploadForm.areaId]);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null); // <-- for video input ref
+
+    useEffect(() => {
+        if (!uploadForm.file) {
+            setFilePreviewUrl(null);
+            return;
+        }
+        const file = uploadForm.file;
+        if (file.type === "application/pdf" || file.type.startsWith("image/")) {
+            const url = URL.createObjectURL(file);
+            setFilePreviewUrl(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setFilePreviewUrl(null);
+        }
+    }, [uploadForm.file]);
+
+    // Video preview effect
+    useEffect(() => {
+        if (!uploadForm.video) {
+            setVideoPreviewUrl(null);
+            return;
+        }
+        const file = uploadForm.video;
+        if (file.type.startsWith("video/")) {
+            const url = URL.createObjectURL(file);
+            setVideoPreviewUrl(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setVideoPreviewUrl(null);
+        }
+    }, [uploadForm.video]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setUploadForm(f => ({ ...f, file }));
+    };
+    // Video file change handler
+    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const video = e.target.files?.[0] || null;
+        setUploadForm(f => ({ ...f, video }));
+    };
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files?.[0] || null;
+        setUploadForm(f => ({ ...f, file }));
+    };
+    const handleUploadFormChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setUploadForm(f => {
+            // Reset areaId, parameterId, and category if program changes
+            if (name === "programId") {
+                return { ...f, programId: value, areaId: '', parameterId: '', category: '', file: f.file, video: f.video };
+            }
+            // Reset parameterId and category if area changes
+            if (name === "areaId") {
+                return { ...f, areaId: value, parameterId: '', category: '', file: f.file, video: f.video };
+            }
+            // Reset category if parameter changes
+            if (name === "parameterId") {
+                return { ...f, parameterId: value, category: '', file: f.file, video: f.video };
+            }
+            return { ...f, [name]: value };
+        });
+    };
+    const handleUploadSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setUploadErrors({});
+        if (!uploadForm.programId) return setUploadErrors({ programId: "Select a program." });
+        if (!uploadForm.areaId) return setUploadErrors({ areaId: "Select an area." });
+        if (!uploadForm.parameterId) return setUploadErrors({ parameterId: "Select a parameter." });
+        if (!uploadForm.category) return setUploadErrors({ category: "Select a category." }); // <-- require category
+        if (!uploadForm.file) return setUploadErrors({ file: "Select a document file." });
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('program_id', uploadForm.programId);
+        formData.append('area_id', uploadForm.areaId);
+        formData.append('parameter_id', uploadForm.parameterId);
+        formData.append('category', uploadForm.category); // <-- append category
+        formData.append('file', uploadForm.file);
+        // Append video if present
+        if (uploadForm.video) {
+            formData.append('video', uploadForm.video);
+        }
+
+        try {
+            const token = csrfToken;
+            const response = await fetch('/faculty/documents/upload', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token || '',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (response.status === 419) {
+                setUploadErrors({ general: "CSRF token mismatch. Please refresh the page and try again." });
+                setUploading(false);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setAddModalOpen(false);
+                setUploadForm({ programId: '', areaId: '', parameterId: '', category: '', file: null, video: null });
+                setFilePreviewUrl(null);
+                setVideoPreviewUrl(null);
+                alert(data.message || 'Document uploaded successfully!');
+                window.location.reload();
+            } else {
+                if (data.errors) {
+                    setUploadErrors(data.errors);
+                } else {
+                    setUploadErrors({ general: data.message || "Upload failed." });
+                }
+            }
+        } catch (err: any) {
+            setUploadErrors({ general: "Upload failed. Please try again." });
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    // Helper: is selected area 8 or 9?
+    const isArea8or9 = (() => {
+        if (!uploadForm.programId || !uploadForm.areaId) return false;
+        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
+        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
+        // Accept both numeric and Roman numeral codes
+        const code = (area?.code || '').toString().toUpperCase();
+        return area && (
+            code === 'VIII' || code === 'IX'
+        );
+    })();
+
+    // Helper: category list
+    const categoryList = [
+        { value: 'system', label: 'System' },
+        { value: 'implementation', label: 'Implementation' },
+        { value: 'outcomes', label: 'Outcomes' },
+    ];
+
+    // --- Add state to track if a document is being viewed ---
+    const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
+
+    // --- Reset viewingDocIndex when navigating via sidebar/category ---
+    useEffect(() => {
+        setViewingDocIndex(null);
+    }, [
+        selected.programId,
+        selected.areaId,
+        selected.parameterId,
+        selected.category
+    ]);
+
     return (
         <>
-            <Head title="Faculty Documents" />
+            <Head title="Reviewer Documents" />
             <DashboardLayout>
-                {/* Remove pt-[38px] here */}
-                <div className="flex w-full min-h-[calc(100vh-64px-40px)]">
-                    {/* Sidebar: flush left, sticky below header */}
+                <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
+                    {/* Sidebar - Reduced width */}
                     <aside
-                        className="w-1/5 bg-gray-50 p-4 h-[calc(100vh-64px-40px)] sticky top-16 self-start overflow-y-auto"
+                        className="min-w-[265px] bg-gray-50 p-4 h-[calc(100vh-64px-40px)] sticky top-16 self-start overflow-y-auto"
                         style={{
                             minHeight: 'calc(100vh - 64px - 40px)',
                             maxHeight: 'calc(100vh - 64px - 40px)',
+                            flexBasis: '240px',
+                            flexShrink: 0
                         }}
                     >
                         <button
                             type="button"
-                            className={`text-lg font-bold mb-2 w-full text-left px-2 py-2 rounded transition
+                            className={`text-base font-bold mb-2 w-full text-left px-2 py-1.5 rounded transition
                                 ${!selected.programId ? 'text-[#7F0404] underline underline-offset-4 decoration-2' : 'text-[#7F0404] hover:bg-gray-100'}`}
-                            onClick={() => setSelected({})}
+                            onClick={() => {
+                                setSelected({});
+                                setViewingDocIndex(null); // <-- reset viewer
+                            }}
                         >
                             My Program Documents
                         </button>
@@ -318,7 +459,6 @@ export default function FacultyDocuments(props: PageProps) {
                             )}
                             {sidebar.map(program => (
                                 <div key={program.id} className="mb-2">
-                                    {/* Program collapsible header */}
                                     <button
                                         type="button"
                                         className={`flex items-center w-full font-semibold px-2 py-1 rounded transition
@@ -326,7 +466,8 @@ export default function FacultyDocuments(props: PageProps) {
                                         `}
                                         onClick={() => {
                                             toggleExpand(program.id);
-                                            setSelected({ programId: program.id, areaId: undefined, parameterId: undefined });
+                                            setSelected({ programId: program.id, areaId: undefined, parameterId: undefined, category: undefined });
+                                            setViewingDocIndex(null); // <-- reset viewer
                                         }}
                                     >
                                         <span className="flex-1 text-left">
@@ -343,7 +484,6 @@ export default function FacultyDocuments(props: PageProps) {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                         </svg>
                                     </button>
-                                    {/* Areas under program, collapsible */}
                                     {expanded[program.id] && program.areas && program.areas.length > 0 && (
                                         <ul className="ml-4 mt-1 list-none text-sm text-gray-700">
                                             {program.areas.map(area => (
@@ -357,10 +497,10 @@ export default function FacultyDocuments(props: PageProps) {
                                                         `}
                                                         onClick={() => {
                                                             toggleAreaExpand(area.id);
-                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: undefined });
+                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: undefined, category: undefined });
+                                                            setViewingDocIndex(null); // <-- reset viewer
                                                         }}
                                                     >
-                                                        {/* Dot for area */}
                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
                                                             <span className="w-2 h-2 bg-[#7F0404] rounded-full inline-block"></span>
                                                         </span>
@@ -382,7 +522,6 @@ export default function FacultyDocuments(props: PageProps) {
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                         </svg>
                                                     </button>
-                                                    {/* Parameters under area, collapsible */}
                                                     {areaExpanded[area.id] && area.parameters && area.parameters.length > 0 && (
                                                         <ul className="ml-4 mt-1 list-none text-xs text-gray-700">
                                                             {area.parameters.map(param => (
@@ -390,13 +529,16 @@ export default function FacultyDocuments(props: PageProps) {
                                                                     <button
                                                                         type="button"
                                                                         className={`flex items-center w-full text-left px-2 py-1 rounded transition
-                                                                            ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id
+                                                                            ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && !selected.category
                                                                                 ? 'text-[#7F0404] underline underline-offset-4 decoration-2'
                                                                                 : 'hover:bg-gray-100'}
                                                                         `}
-                                                                        onClick={() => setSelected({ programId: program.id, areaId: area.id, parameterId: param.id })}
+                                                                        onClick={() => {
+                                                                            setParamExpanded(prev => ({ ...prev, [param.id]: !prev[param.id] }));
+                                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: undefined });
+                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                        }}
                                                                     >
-                                                                        {/* Dot for parameter */}
                                                                         <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
                                                                             <span className="w-1.5 h-1.5 bg-[#7F0404] rounded-full inline-block"></span>
                                                                         </span>
@@ -409,7 +551,51 @@ export default function FacultyDocuments(props: PageProps) {
                                                                             ) : ''}
                                                                             {param.name}
                                                                         </span>
+                                                                        <svg
+                                                                            className={`w-3 h-3 ml-2 transition-transform ${paramExpanded[param.id] ? 'rotate-90' : ''}`}
+                                                                            fill="none"
+                                                                            stroke="currentColor"
+                                                                            viewBox="0 0 24 24"
+                                                                        >
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                        </svg>
                                                                     </button>
+                                                                    {/* Category sub-links */}
+                                                                    {paramExpanded[param.id] && (
+                                                                        <ul className="ml-4 mt-1 list-none text-[11px] text-gray-700">
+                                                                            {categoryList.map(cat => (
+                                                                                <li key={cat.value}>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className={`flex items-center w-full text-left px-2 py-1 rounded transition
+                                                                                            ${selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && selected.category === cat.value
+                                                                                                ? 'text-[#7F0404] underline underline-offset-4 decoration-2 font-bold'
+                                                                                                : 'hover:bg-gray-100'}
+                                                                                        `}
+                                                                                        style={{
+                                                                                            fontSize: '11px',
+                                                                                            paddingLeft: 18,
+                                                                                            textDecorationColor: selected.programId === program.id && selected.areaId === area.id && selected.parameterId === param.id && selected.category === cat.value ? '#7F0404' : undefined
+                                                                                        }}
+                                                                                        onClick={() => {
+                                                                                            setSelected({ programId: program.id, areaId: area.id, parameterId: param.id, category: cat.value });
+                                                                                            setViewingDocIndex(null); // <-- reset viewer
+                                                                                        }}
+                                                                                    >
+                                                                                        <span className="flex-shrink-0 flex items-center h-full pt-0.5 mr-2">
+                                                                                            <span
+                                                                                                className="w-1 h-1 rounded-full inline-block"
+                                                                                                style={{
+                                                                                                    backgroundColor: '#7F0404'
+                                                                                                }}
+                                                                                            ></span>
+                                                                                        </span>
+                                                                                        <span className="flex-1">{cat.label}</span>
+                                                                                    </button>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    )}
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -422,16 +608,15 @@ export default function FacultyDocuments(props: PageProps) {
                             ))}
                         </nav>
                     </aside>
+                    
                     {/* Main Content */}
-                    <section className="flex-1 w-full px-8 py-4 text-left flex flex-col min-h-[calc(100vh-64px-40px)] max-h-[calc(100vh-64px-40px)]">
-                        {/* Header row: title left, buttons right */}
+                    <section className="flex-1 w-full px-6 py-4 text-left flex flex-col min-h-[calc(100vh-64px-40px)] max-h-[calc(100vh-64px-40px)] overflow-auto">
                         <div className="flex items-center justify-between flex-shrink-0">
                             <div>
-                                {/* Render the heading as before */}
                                 {!selected.programId ? (
-                                    <h1 className="text-4xl font-bold text-[#7F0404]">Documents</h1>
+                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Documents</h1>
                                 ) : selectedProgram ? (
-                                    <h1 className="text-3xl font-bold text-[#7F0404]">
+                                    <h1 className="text-lg font-bold text-[#7F0404]">
                                         {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
                                         {selectedProgram.name}
                                     </h1>
@@ -440,227 +625,550 @@ export default function FacultyDocuments(props: PageProps) {
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    className="flex items-center bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-3 py-2 rounded shadow transition"
-                                    // TODO: Add onClick handler
-                                >
-                                    {/* Pending icon */}
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
-                                    </svg>
-                                    Pending
-                                </button>
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-semibold px-3 py-2 rounded shadow transition"
+                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
                                     onClick={() => setAddModalOpen(true)}
                                 >
-                                    {/* Add icon */}
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                     </svg>
                                     Add
                                 </button>
                             </div>
                         </div>
-                        {/* Subtitle or instructions */}
+                        
+                        {/* Program Cards Grid when no program is selected */}
                         {!selected.programId ? (
-                            <p className="text-lg text-gray-700 mb-8">This is the documents page for faculty.</p>
-                        ) : null}
-                        {/* Always render area and parameter containers to preserve layout */}
-                        <div className="ml-6 min-h-[1rem] flex items-center flex-shrink-0">
-                            {selectedProgram && selectedArea ? (
-                                <h2 className="text-xl font-semibold text-[#7F0404] flex items-center">
-                                    <span className="font-bold mr-2">Area</span>
-                                    {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
-                                    - {selectedArea.name}
-                                </h2>
-                            ) : null}
-                        </div>
-                        <div className="ml-12 min-h-[1rem] flex items-center flex-shrink-0">
-                            {selectedProgram && selectedArea && selectedParameter ? (
-                                <h3 className="text-lg font-medium text-[#7F0404] flex items-center">
-                                    {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
-                                    - {selectedParameter.name}
-                                </h3>
-                            ) : null}
-                        </div>
-                        {/* --- Document Viewer Section --- */}
-                        {selected.programId && selected.areaId && (
-                            <div className="mt-2 flex flex-col flex-1 min-h-0">
-                                {/* Navigation bar */}
-                                <DocumentNavigation
-                                    documents={filteredDocs}
-                                    currentIndex={filteredViewerIndex >= 0 ? filteredViewerIndex : 0}
-                                    onChangeIndex={goTo}
-                                    onDownload={handleDownload}
-                                    onPrint={handlePrint}
-                                    onRotate={handleRotate}
-                                    onFitMode={toggleFitMode}
-                                    onZoom={handleZoom}
-                                    onInfo={() => setInfoOpen(true)}
-                                    onGrid={openGrid}
-                                    onFullscreen={handleFullscreen}
-                                    fitMode={fitMode}
-                                    rotate={rotate}
-                                    zoom={zoom}
-                                    isFullscreen={isFullscreen}
-                                    infoOpen={infoOpen}
-                                    setInfoOpen={setInfoOpen}
-                                    gridOpen={gridOpen}
-                                    setGridOpen={setGridOpen}
-                                    search={search}
-                                    setSearch={setSearch}
-                                    onSearch={handleSearch}
-                                />
-                                {/* Document Preview */}
-                                <div
-                                    ref={previewRef}
-                                    className="border border-t-0 rounded-b-lg bg-white flex-1 min-h-0 flex items-center justify-center p-0"
-                                    style={isFullscreen
-                                        ? { height: '100vh', minHeight: 0 }
-                                        : { maxHeight: '100%' }
-                                    }
-                                >
-                                    <div className="w-full h-full flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
-                                        {loadingDocs ? (
-                                            <div className="text-gray-500">Loading documents...</div>
-                                        ) : filteredDocs.length === 0 ? (
-                                            <div className="text-gray-400 text-center">No approved documents for this area.</div>
-                                        ) : (
-                                            (() => {
-                                                const doc = currentDoc;
-                                                if (!doc) return null;
-                                                const ext = doc.filename.split('.').pop()?.toLowerCase();
-                                                const transform = `rotate(${rotate}deg) scale(${zoom})`;
-                                                if (['pdf'].includes(ext)) {
-                                                    return (
-                                                        <iframe
-                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                            className="w-full h-full border-none rounded bg-white"
-                                                            title="PDF Document"
-                                                            style={{ transform, transition: 'transform 0.2s', height: '100%' }}
-                                                        ></iframe>
-                                                    );
-                                                } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                    return (
-                                                        <img
-                                                            src={doc.url}
-                                                            alt={doc.filename}
-                                                            className="max-h-full max-w-full rounded object-contain mx-auto w-auto h-auto"
-                                                            style={{ transform, transition: 'transform 0.2s', maxHeight: '100%', maxWidth: '100%' }}
-                                                        />
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <div className="text-gray-500 text-center">
-                                                            Preview not available for this file type.<br />
-                                                            <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[#7F0404] underline">
-                                                                Download / Open
-                                                            </a>
+                            <div className="mt-4 mb-8">
+                                <p className="text-base text-gray-700 mb-6">Select a program to view and manage its documents.</p>
+                                <DocumentCardGrid
+                                    items={sidebar}
+                                    getKey={program => program.id}
+                                    onCardClick={program => {
+                                        setSelected({ programId: program.id });
+                                        setExpanded(prev => ({ ...prev, [program.id]: true }));
+                                    }}
+                                    renderCardContent={(program, index) => {
+                                        // Use program.approved_count for approved documents
+                                        return (
+                                            <div className="p-5 flex flex-col h-full">
+                                                <div className="flex items-start mb-3">
+                                                    <div 
+                                                        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                        style={{ backgroundColor: '#f1f5f9' }}
+                                                    >
+                                                        {/* Icon */}
+                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                        </svg>
+                                                    </div>
+                                                    <h2 className="text-base font-bold text-[#7F0404]">
+                                                        {program.code ? program.code : ''} 
+                                                        {program.code ? ' - ' : ''}
+                                                        {program.name}
+                                                    </h2>
+                                                </div>
+                                                
+                                                {/* Using flex-grow to push the following content to the bottom */}
+                                                <div className="flex-grow"></div>
+                                                
+                                                {/* Bottom aligned content */}
+                                                <div className="mt-auto">
+                                                    <div className="text-gray-600 mb-4">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="text-sm">Areas:</span>
+                                                            <span className="font-semibold">{program.areas.length}</span>
                                                         </div>
-                                                    );
+                                                        
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm">Approved Documents:</span>
+                                                            <span className={`font-semibold ${program.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                {program.approved_count}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                        <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                            <span>View Documents</span>
+                                                            <svg 
+                                                                className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
+                                                                fill="none" 
+                                                                stroke="currentColor" 
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                />
+                            </div>
+                        ) : selected.programId && !selected.areaId ? (
+                            /* Area Cards Grid when program is selected but no area is selected */
+                            <div className="mt-4 mb-8">
+                                <p className="text-base text-gray-700 mb-6">
+                                    Select an area to view and manage its documents.
+                                </p>
+                                <DocumentCardGrid
+                                    items={selectedProgram?.areas || []}
+                                    getKey={area => area.id}
+                                    onCardClick={area => {
+                                        setSelected({ programId: selected.programId, areaId: area.id });
+                                        setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
+                                    }}
+                                    renderCardContent={(area, index) => {
+                                        const parametersCount = area.parameters?.length || 0;
+                                        // Use area.approved_count for approved documents
+                                        const approvedCount = area.approved_count || 0;
+                                        return (
+                                            <div className="p-5 flex flex-col h-full">
+                                                <div className="flex items-start mb-3">
+                                                    <div 
+                                                        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                        style={{ backgroundColor: '#f1f5f9' }}
+                                                    >
+                                                        {/* Icon */}
+                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                        </svg>
+                                                    </div>
+                                                    <h2 className="text-base font-bold text-[#7F0404]">
+                                                        {area.code ? `Area ${area.code}` : 'Area'} 
+                                                        {area.code ? ' - ' : ''}
+                                                        {area.name}
+                                                    </h2>
+                                                </div>
+                                                
+                                                {/* Using flex-grow to push the following content to the bottom */}
+                                                <div className="flex-grow"></div>
+                                                
+                                                {/* Bottom aligned content */}
+                                                <div className="mt-auto">
+                                                    <div className="text-gray-600 mb-4">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="text-sm">Parameters:</span>
+                                                            <span className="font-semibold">{parametersCount}</span>
+                                                        </div>
+                                                        
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm">Approved Documents:</span>
+                                                            <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                {approvedCount}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                        <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                            <span>View Documents</span>
+                                                            <svg 
+                                                                className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
+                                                                fill="none" 
+                                                                stroke="currentColor" 
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                />
+                            </div>
+                        ) : selected.programId && selected.areaId && !selected.parameterId ? (
+                            // --- Parameter Cards Grid when area is selected but no parameter is selected ---
+                            <div>
+                                {/* Area title below program title */}
+                                <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea ? (
+                                        <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
+                                            <span className="font-bold mr-2">Area</span>
+                                            {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
+                                            - {selectedArea.name}
+                                        </h2>
+                                    ) : null}
+                                </div>
+                                <p className="text-base text-gray-700 mb-6">
+                                    Select a parameter to view and manage its documents.
+                                </p>
+                                <DocumentCardGrid
+                                    items={selectedArea?.parameters || []}
+                                    getKey={param => param.id}
+                                    onCardClick={param => {
+                                        setSelected({ programId: selected.programId, areaId: selected.areaId, parameterId: param.id });
+                                        setParamExpanded(prev => ({ ...prev, [param.id]: true })); // <-- expand selected parameter
+                                    }}
+                                    renderCardContent={(param, index) => (
+                                        <div className="p-5 flex flex-col h-full">
+                                            <div className="flex items-start mb-3">
+                                                <div
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                    style={{ backgroundColor: '#f1f5f9' }}
+                                                >
+                                                    {/* Icon */}
+                                                    <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                        <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                        <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                </div>
+                                                <h2 className="text-base font-bold text-[#7F0404]">
+                                                    {param.code ? `${param.code} - ` : ''}
+                                                    {param.name}
+                                                </h2>
+                                            </div>
+                                            <div className="flex-grow"></div>
+                                            <div className="mt-auto">
+                                                <div className="text-gray-600 mb-4">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm">Categories:</span>
+                                                        <span className="font-semibold">3</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm">Approved Documents:</span>
+                                                        <span className={`font-semibold ${param.approved_count > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                            {param.approved_count || 0}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                    <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                        <span>View Documents</span>
+                                                        <svg
+                                                            className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                        ) : null}
+                        {/* Display area and parameter headers only when documents are being viewed */}
+                        {selected.areaId && selected.parameterId && (
+                            <>
+                                <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea ? (
+                                        <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
+                                            <span className="font-bold mr-2">Area</span>
+                                            {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
+                                            - {selectedArea.name}
+                                        </h2>
+                                    ) : null}
+                                </div>
+                                <div className="ml-8 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea && selectedParameter ? (
+                                        selected.category ? (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                                <span className="ml-2 text-xs font-semibold text-[#C46B02]">
+                                                    ({categoryList.find(cat => cat.value === selected.category)?.label || selected.category})
+                                                </span>
+                                            </h3>
+                                        ) : (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                            </h3>
+                                        )
+                                    ) : null}
+                                </div>
+                            </>
+                        )}
+                        {/* --- Document Viewer Section --- */}
+                        {selected.programId && selected.areaId && selected.parameterId && (
+                            <div className="mt-2 flex flex-col flex-1 min-h-0">
+                                {selected.parameterId && !selected.category && (
+                                    // --- Category Cards Grid when parameter is selected but no category is selected ---
+                                    <div>
+                                        <p className="text-base text-gray-700 mb-6">
+                                            Select a category to view and manage its documents.
+                                        </p>
+                                        <DocumentCardGrid
+                                            items={categoryList}
+                                            getKey={cat => cat.value}
+                                            onCardClick={cat => {
+                                                setSelected({
+                                                    programId: selected.programId,
+                                                    areaId: selected.areaId,
+                                                    parameterId: selected.parameterId,
+                                                    category: cat.value
+                                                });
+                                            }}
+                                            renderCardContent={(cat, index) => {
+                                                // Show correct count for this parameter/category
+                                                let approvedCount = 0;
+                                                if (selectedParameter && selectedParameter.category_approved_counts) {
+                                                    approvedCount = selectedParameter.category_approved_counts[cat.value] || 0;
                                                 }
-                                            })()
+                                                return (
+                                                    <div className="p-5 flex flex-col h-full">
+                                                        <div className="flex items-start mb-3">
+                                                            <div
+                                                                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                                style={{ backgroundColor: '#f1f5f9' }}
+                                                            >
+                                                                {/* Icon */}
+                                                                <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                    <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
+                                                                    <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                                                                    <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                                                </svg>
+                                                            </div>
+                                                            <h2 className="text-base font-bold text-[#7F0404]">
+                                                                {cat.label}
+                                                            </h2>
+                                                        </div>
+                                                        <div className="flex-grow"></div>
+                                                        <div className="mt-auto">
+                                                            <div className="text-gray-600 mb-4">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm">Approved Documents:</span>
+                                                                    <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                        {approvedCount}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                                <div className="flex items-center text-xs font-medium text-[#7F0404] group">
+                                                                    <span>View Documents</span>
+                                                                    <svg
+                                                                        className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                                {selected.category && (
+                                    <>
+                                    <div>
+                                        <p className="text-base text-gray-700 mb-2">
+                                            {/* Removed the Back to list button */}
+                                            {viewingDocIndex === null
+                                                ? "Select a document to view."
+                                                : null
+                                            }
+                                        </p>
+                                        {/* --- Show DocumentNavigation if a document is selected --- */}
+                                        {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] ? (
+                                            <div className="w-full flex flex-col items-center">
+                                                <div className="w-full max-w-4xl mx-auto">
+                                                    <DocumentNavigation
+                                                        documents={filteredDocs}
+                                                        currentIndex={filteredViewerIndex}
+                                                        onChangeIndex={idx => goTo(idx)}
+                                                        onDownload={handleDownload}
+                                                        onPrint={handlePrint}
+                                                        onRotate={handleRotate}
+                                                        onFitMode={toggleFitMode}
+                                                        onZoom={handleZoom}
+                                                        onInfo={() => setInfoOpen(true)}
+                                                        onGrid={openGrid}
+                                                        onFullscreen={handleFullscreen}
+                                                        fitMode={fitMode}
+                                                        rotate={rotate}
+                                                        zoom={zoom}
+                                                        isFullscreen={isFullscreen}
+                                                        infoOpen={infoOpen}
+                                                        setInfoOpen={setInfoOpen}
+                                                        gridOpen={gridOpen}
+                                                        setGridOpen={setGridOpen}
+                                                        search={search}
+                                                        setSearch={setSearch}
+                                                        onSearch={handleSearch}
+                                                    />
+                                                </div>
+                                                <div
+                                                    ref={previewRef}
+                                                    className="w-full max-w-4xl mx-auto bg-white rounded-b-lg shadow-lg flex flex-col items-center justify-center overflow-hidden"
+                                                    style={{
+                                                        minHeight: 480,
+                                                        maxHeight: '70vh',
+                                                        marginBottom: 24,
+                                                        marginTop: 0,
+                                                        borderBottomLeftRadius: 14,
+                                                        borderBottomRightRadius: 14,
+                                                    }}
+                                                >
+                                                    {/* --- Document Preview --- */}
+                                                    {(() => {
+                                                        const doc = filteredDocs[filteredViewerIndex];
+                                                        if (!doc) return null;
+                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
+                                                        if (['pdf'].includes(ext)) {
+                                                            return (
+                                                                <iframe
+                                                                    src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                                                    className="w-full h-[65vh] border-none rounded-b-lg bg-white"
+                                                                    title="PDF Preview"
+                                                                    style={{
+                                                                        objectFit: 'contain',
+                                                                        minHeight: 480,
+                                                                        maxHeight: '65vh',
+                                                                    }}
+                                                                ></iframe>
+                                                            );
+                                                        } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                                                            return (
+                                                                <img
+                                                                    src={doc.url}
+                                                                    alt={doc.filename}
+                                                                    className="max-h-[65vh] max-w-full rounded-b-lg object-contain mx-auto w-auto h-auto"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        objectFit: 'contain',
+                                                                        minHeight: 480,
+                                                                        maxHeight: '65vh',
+                                                                    }}
+                                                                />
+                                                            );
+                                                        } else {
+                                                            return (
+                                                                <div className="w-full h-[65vh] flex items-center justify-center bg-gray-100 rounded-b-lg text-gray-400 text-xs">
+                                                                    No preview available for this file type.
+                                                                </div>
+                                                            );
+                                                        }
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // --- Card grid for approved documents in this category ---
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                                {filteredDocs.length === 0 ? (
+                                                    <div className="col-span-full text-gray-400 text-center">No approved documents for this category.</div>
+                                                ) : (
+                                                    filteredDocs.flatMap((doc, idx) => {
+                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
+                                                        const cards = [];
+                                                        // Always show the document preview card
+                                                        cards.push(
+                                                            <div
+                                                                key={doc.id + '-doc'}
+                                                                className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
+                                                                style={{
+                                                                    borderTopColor: '#7F0404',
+                                                                    aspectRatio: '8.5/13',
+                                                                    maxWidth: 255,
+                                                                    minHeight: 380,
+                                                                }}
+                                                                onClick={() => {
+                                                                    const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                    setViewerIndex(realIdx);
+                                                                    setViewingDocIndex(realIdx);
+                                                                }}
+                                                            >
+                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                    {['pdf'].includes(ext) ? (
+                                                                        <iframe
+                                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                                                            className="w-full h-56 border-none rounded bg-white"
+                                                                            title="PDF Preview"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
+                                                                        ></iframe>
+                                                                    ) : ['jpg', 'jpeg', 'png'].includes(ext) ? (
+                                                                        <img
+                                                                            src={doc.url}
+                                                                            alt={doc.filename}
+                                                                            className="max-h-56 max-w-full rounded object-contain mx-auto w-auto h-auto"
+                                                                            style={{ width: '100%', objectFit: 'contain', height: '14rem' }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-full h-56 flex items-center justify-center bg-gray-100 rounded text-gray-400 text-xs">
+                                                                            No preview available for this file type.
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
+                                                                    <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename}</div>
+                                                                    <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
+                                                                    <div className="text-xs text-gray-400 text-center">
+                                                                        {doc.updated_at
+                                                                            ? `Approved: ${doc.updated_at}`
+                                                                            : doc.uploaded_at
+                                                                                ? `Approved: ${doc.uploaded_at}`
+                                                                                : ''}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                        // If there is a video_filename, show a separate preview card for the video
+                                                        if (doc.video_filename) {
+                                                            const videoUrl = doc.video_filename.startsWith('http')
+                                                                ? doc.video_filename
+                                                                : `/storage/documents/${doc.video_filename}`;
+                                                            cards.push(
+                                                                <div
+                                                                    key={doc.id + '-video'}
+                                                                    className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
+                                                                    style={{
+                                                                        borderTopColor: '#7F0404',
+                                                                        aspectRatio: '8.5/13',
+                                                                        maxWidth: 255,
+                                                                        minHeight: 380,
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                        setViewerIndex(realIdx);
+                                                                        setViewingDocIndex(realIdx);
+                                                                    }}
+                                                                >
+                                                                    <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                        <video
+                                                                            src={videoUrl}
+                                                                            controls
+                                                                            className="w-full h-56 rounded bg-black"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
+                                                                        <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename} (Video)</div>
+                                                                        <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
+                                                                        <div className="text-xs text-gray-400 text-center">
+                                                                            {doc.updated_at
+                                                                                ? `Approved: ${doc.updated_at}`
+                                                                                : doc.uploaded_at
+                                                                                    ? `Approved: ${doc.uploaded_at}`
+                                                                                    : ''}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return cards;
+                                                    })
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-                                {/* Document Info Modal */}
-                                <Transition show={infoOpen} as={Fragment}>
-                                    <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setInfoOpen(false)}>
-                                        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-                                        <Transition.Child
-                                            as={Fragment}
-                                            enter="ease-out duration-200"
-                                            enterFrom="opacity-0 scale-95"
-                                            enterTo="opacity-100 scale-100"
-                                            leave="ease-in duration-150"
-                                            leaveFrom="opacity-100 scale-100"
-                                            leaveTo="opacity-0 scale-95"
-                                        >
-                                            <div className="relative w-full max-w-sm mx-auto rounded-xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
-                                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80">
-                                                    <Dialog.Title className="text-lg font-bold text-white tracking-tight">
-                                                        Document Info
-                                                    </Dialog.Title>
-                                                    <button
-                                                        onClick={() => setInfoOpen(false)}
-                                                        className="text-white hover:text-[#FFD600] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
-                                                        aria-label="Close"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div className="px-6 py-6 flex-1">
-                                                    {currentDoc ? (
-                                                        <div className="space-y-2 text-[#7F0404]">
-                                                            <div><span className="font-semibold">Filename:</span> {currentDoc.filename}</div>
-                                                            <div><span className="font-semibold">Uploaded:</span> {currentDoc.uploaded_at}</div>
-                                                            <div><span className="font-semibold">Status:</span> Approved</div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-500">No document selected.</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </Transition.Child>
-                                    </Dialog>
-                                </Transition>
-                                {/* Grid Modal */}
-                                <Transition show={gridOpen} as={Fragment}>
-                                    <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={closeGrid}>
-                                        <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
-                                        <Transition.Child
-                                            as={Fragment}
-                                            enter="ease-out duration-200"
-                                            enterFrom="opacity-0 scale-95"
-                                            enterTo="opacity-100 scale-100"
-                                            leave="ease-in duration-150"
-                                            leaveFrom="opacity-100 scale-100"
-                                            leaveTo="opacity-0 scale-95"
-                                        >
-                                            <div className="relative w-full max-w-3xl mx-auto rounded-xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
-                                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80">
-                                                    <Dialog.Title className="text-lg font-bold text-white tracking-tight">
-                                                        Document Grid
-                                                    </Dialog.Title>
-                                                    <button
-                                                        onClick={closeGrid}
-                                                        className="text-white hover:text-[#FFD600] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
-                                                        aria-label="Close"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div className="px-6 py-6 flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                    {filteredDocs.map((doc, idx) => (
-                                                        <div
-                                                            key={doc.id}
-                                                            className={`border rounded-lg p-2 cursor-pointer hover:shadow-lg transition ${doc.id === currentDoc?.id ? 'border-[#C46B02] ring-2 ring-[#FFD600]' : 'border-gray-200'}`}
-                                                            onClick={() => { goTo(idx); closeGrid(); }}
-                                                        >
-                                                            <div className="truncate text-xs font-bold text-[#7F0404] mb-2">{doc.filename}</div>
-                                                            {(() => {
-                                                                const ext = doc.filename.split('.').pop()?.toLowerCase();
-                                                                if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                                    return <img src={doc.url} alt={doc.filename} className="w-full h-24 object-contain rounded" />;
-                                                                } else if (['pdf'].includes(ext)) {
-                                                                    return <div className="w-full h-24 flex items-center justify-center bg-gray-100 rounded text-[#C46B02] font-bold">PDF</div>;
-                                                                } else {
-                                                                    return <div className="w-full h-24 flex items-center justify-center bg-gray-100 rounded text-gray-400">FILE</div>;
-                                                                }
-                                                            })()}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </Transition.Child>
-                                    </Dialog>
-                                </Transition>
+                                    </>
+                                )}
                             </div>
                         )}
                         {/* --- End Document Viewer Section --- */}
@@ -668,7 +1176,7 @@ export default function FacultyDocuments(props: PageProps) {
                 </div>
             </DashboardLayout>
 
-            {/* Add Document Modal */}
+            {/* Add Document Modal (copied/adapted from faculty) */}
             <Transition show={addModalOpen} as={Fragment}>
                 <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setAddModalOpen(false)}>
                     <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
@@ -681,9 +1189,14 @@ export default function FacultyDocuments(props: PageProps) {
                         leaveFrom="opacity-100 scale-100"
                         leaveTo="opacity-0 scale-95"
                     >
-                        <div className="relative w-full max-w-2xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
+                        <div
+                            className="relative w-full max-w-2xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col"
+                            style={{
+                                maxHeight: '90vh', // Prevent modal from exceeding viewport
+                            }}
+                        >
                             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80 flex-shrink-0">
-                                <Dialog.Title className="text-2xl font-bold text-white tracking-tight">
+                                <Dialog.Title className="text-xl font-bold text-white tracking-tight">
                                     Add Document
                                 </Dialog.Title>
                                 <button
@@ -691,15 +1204,20 @@ export default function FacultyDocuments(props: PageProps) {
                                     className="text-white hover:text-[#FDDE54] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
                                     aria-label="Close"
                                 >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
                             </div>
-                            <div className="px-8 py-8 flex-1 overflow-y-auto">
+                            <div
+                                className="px-8 py-8 flex-1 overflow-y-auto"
+                                style={{
+                                    minHeight: 0,
+                                    maxHeight: 'calc(90vh - 120px)', // Adjust for header/footer
+                                }}
+                            >
                                 <form onSubmit={handleUploadSubmit}>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
-                                        {/* Left: Fields */}
                                         <div className="flex flex-col">
                                             <div className="mb-4">
                                                 <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Program <span className="text-red-600">*</span></label>
@@ -734,10 +1252,47 @@ export default function FacultyDocuments(props: PageProps) {
                                                 </select>
                                                 {uploadErrors.areaId && <div className="text-red-600 text-xs mt-1">{uploadErrors.areaId}</div>}
                                             </div>
+                                            {/* Parameter Dropdown */}
+                                            <div className="mb-4">
+                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Parameter <span className="text-red-600">*</span></label>
+                                                <select
+                                                    name="parameterId"
+                                                    value={uploadForm.parameterId}
+                                                    onChange={handleUploadFormChange}
+                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
+                                                    required
+                                                    disabled={!uploadForm.areaId}
+                                                >
+                                                    <option value="">Select parameter</option>
+                                                    {parameterOptions.map(opt => (
+                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                    ))}
+                                                </select>
+                                                {uploadErrors.parameterId && <div className="text-red-600 text-xs mt-1">{uploadErrors.parameterId}</div>}
+                                            </div>
+                                            {/* Category Dropdown */}
+                                            <div className="mb-4">
+                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Category <span className="text-red-600">*</span></label>
+                                                <select
+                                                    name="category"
+                                                    value={uploadForm.category}
+                                                    onChange={handleUploadFormChange}
+                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
+                                                    required
+                                                    disabled={!uploadForm.parameterId}
+                                                >
+                                                    <option value="">Select category</option>
+                                                    <option value="system">System</option>
+                                                    <option value="implementation">Implementation</option>
+                                                    <option value="outcomes">Outcomes</option>
+                                                </select>
+                                                {uploadErrors.category && <div className="text-red-600 text-xs mt-1">{uploadErrors.category}</div>}
+                                            </div>
                                             <div className="flex-1 flex flex-col">
                                                 <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Document File <span className="text-red-600">*</span></label>
                                                 <div
-                                                    className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
+                                                    className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
+                                                    style={{ minHeight: '5rem', maxHeight: '7rem' }}
                                                     onClick={() => fileInputRef.current?.click()}
                                                     onDrop={handleDrop}
                                                     onDragOver={e => e.preventDefault()}
@@ -767,41 +1322,104 @@ export default function FacultyDocuments(props: PageProps) {
                                                 </div>
                                                 {uploadErrors.file && <div className="text-red-600 text-xs mt-1">{uploadErrors.file}</div>}
                                             </div>
+                                            {/* --- Video File Upload (only for Area 8 or 9) --- */}
+                                            {isArea8or9 && (
+                                                <div className="flex-1 flex flex-col mt-4">
+                                                    <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Video File (optional)</label>
+                                                    <div
+                                                        className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
+                                                        style={{ minHeight: '5rem', maxHeight: '7rem' }}
+                                                        onClick={() => videoInputRef.current?.click()}
+                                                    >
+                                                        {uploadForm.video ? (
+                                                            <div>
+                                                                <div className="font-semibold">{uploadForm.video.name}</div>
+                                                                <div className="text-xs text-gray-500">{uploadForm.video.type} ({(uploadForm.video.size / 1024).toFixed(1)} KB)</div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="mt-2 text-xs text-red-600 underline"
+                                                                    onClick={e => { e.stopPropagation(); setUploadForm(f => ({ ...f, video: null })); }}
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400">Click to upload a video file (MP4, MOV, AVI, etc.)</span>
+                                                        )}
+                                                        <input
+                                                            ref={videoInputRef}
+                                                            type="file"
+                                                            accept="video/*"
+                                                            className="hidden"
+                                                            onChange={handleVideoChange}
+                                                        />
+                                                    </div>
+                                                    {/* No error display, since not required */}
+                                                </div>
+                                            )}
+                                            {/* --- End Video File Upload --- */}
                                         </div>
-                                        {/* Right: Preview */}
                                         <div className="flex flex-col">
                                             <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Preview</label>
-                                            <div className="border rounded-lg bg-white flex items-center justify-center flex-1 overflow-hidden">
-                                                {filePreviewUrl && uploadForm.file?.type === "application/pdf" ? (
-                                                    <div 
-                                                        className="w-full h-full overflow-y-auto"
-                                                        style={{
-                                                            scrollbarWidth: 'thin',
-                                                            scrollbarColor: '#C46B02 #f1f5f9'
-                                                        }}
-                                                    >
-                                                        <iframe 
-                                                            src={`${filePreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                                                            className="w-full h-full border-none rounded bg-white" 
-                                                            title="PDF Preview"
-                                                        ></iframe>
-                                                    </div>
-                                                ) : filePreviewUrl && uploadForm.file?.type.startsWith("image/") ? (
-                                                    <div 
-                                                        className="w-full h-full overflow-auto flex items-center justify-center p-4"
-                                                        style={{
-                                                            scrollbarWidth: 'thin',
-                                                            scrollbarColor: '#C46B02 #f1f5f9'
-                                                        }}
-                                                    >
-                                                        <img src={filePreviewUrl} alt="Preview" className="max-h-full max-w-full rounded object-contain" />
-                                                    </div>
-                                                ) : uploadForm.file ? (
-                                                    <div className="text-gray-500 text-sm">Preview not available for this file type.</div>
+                                            <div
+                                                className="border rounded-lg bg-white flex items-center justify-center overflow-hidden"
+                                                style={{
+                                                    minHeight: '180px',
+                                                    maxHeight: '400px',
+                                                    width: '100%',
+                                                    maxWidth: '100%',
+                                                    aspectRatio: '8.5/11', // Portrait document aspect ratio
+                                                }}
+                                            >
+                                                {uploadForm.file ? (
+                                                    uploadForm.file.type === "application/pdf" ? (
+                                                        <div 
+                                                            className="w-full h-full overflow-y-auto"
+                                                            style={{
+                                                                scrollbarWidth: 'thin',
+                                                                scrollbarColor: '#C46B02 #f1f5f9'
+                                                            }}
+                                                        >
+                                                            <iframe 
+                                                                src={`${filePreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
+                                                                className="w-full h-full border-none rounded bg-white" 
+                                                                title="PDF Preview"
+                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                            ></iframe>
+                                                        </div>
+                                                    ) : uploadForm.file.type.startsWith("image/") ? (
+                                                        <div 
+                                                            className="w-full h-full overflow-auto flex items-center justify-center p-4"
+                                                            style={{
+                                                                scrollbarWidth: 'thin',
+                                                                scrollbarColor: '#C46B02 #f1f5f9'
+                                                            }}
+                                                        >
+                                                            <img
+                                                                src={filePreviewUrl}
+                                                                alt="Preview"
+                                                                className="max-h-full max-w-full rounded object-contain"
+                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-gray-500 text-sm">Preview not available for this file type.</div>
+                                                    )
                                                 ) : (
                                                     <div className="text-gray-400 text-center">No file selected.</div>
                                                 )}
                                             </div>
+                                            {/* Video preview (if video selected) */}
+                                            {isArea8or9 && uploadForm.video && videoPreviewUrl && (
+                                                <div className="mt-4">
+                                                    <label className="block text-xs font-semibold mb-1 text-[#7F0404]">Video Preview</label>
+                                                    <video
+                                                        src={videoPreviewUrl}
+                                                        controls
+                                                        className="w-full max-h-48 rounded"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     {uploadErrors.general && <div className="text-red-600 text-xs mt-4">{uploadErrors.general}</div>}
@@ -829,6 +1447,27 @@ export default function FacultyDocuments(props: PageProps) {
                     </Transition.Child>
                 </Dialog>
             </Transition>
+
+            <style jsx>{`
+                table { font-size: 1rem; }
+                th, td { vertical-align: middle; }
+                .group:hover svg {
+                    filter: drop-shadow(0 2px 4px rgba(196,107,2,0.15));
+                    transition: color 0.2s, transform 0.2s;
+                    transform: scale(1.35);
+                }
+                .group svg { transition: color 0.2s, transform 0.2s; }
+                .group:active { transform: scale(0.95); }
+                
+                @keyframes fade-in-up {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                .bg-white {
+                    animation: fade-in-up 0.5s ease-out forwards;
+                }
+            `}</style>
         </>
     );
 }
