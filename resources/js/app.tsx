@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ui/toast';
+import './echo'; // Import Echo configuration
 
 const appName = import.meta.env.VITE_APP_NAME || 'PUP Calauan Campus';
 

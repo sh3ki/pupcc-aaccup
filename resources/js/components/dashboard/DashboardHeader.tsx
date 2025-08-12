@@ -1,6 +1,8 @@
 import { usePage, Link } from '@inertiajs/react';
 import { ChevronDown } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { SharedData } from '@/types';
+import { useUnreadMessagesCount } from '../../hooks/useUnreadMessages';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -11,11 +13,14 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-const NAVS = {
+type Role = 'admin' | 'reviewer' | 'faculty';
+type NavEntry = { name: string; href: string };
+const NAVS: Record<Role, NavEntry[]> = {
     admin: [
         { name: 'Dashboard', href: '/admin/dashboard' },
         { name: 'User Management', href: '/admin/users' },
         { name: 'Documents', href: '/admin/documents' },
+    { name: 'Messages', href: '/admin/messages' },
         { name: 'Settings', href: '/admin/settings' },
     ],
     reviewer: [
@@ -33,31 +38,7 @@ const NAVS = {
 };
 
 // Add dropdown items from Header.tsx
-const facultyDropdownItems = [
-    { name: 'Accreditation Task Force', href: '/about/accreditation', description: '' },
-    { name: 'BTLED Faculty', href: '/about/btled', description: '' },
-    { name: 'BSENT Faculty', href: '/about/bsent', description: '' },
-    { name: 'BSIT Faculty', href: '/about/bsit', description: '' },
-];
-
-const programsDropdownItems = [
-    { name: 'BTLED Program', href: '/pus/btled', description: '' },
-    { name: 'BSENT Program', href: '/pus/bsent', description: '' },
-    { name: 'BSIT Program', href: '/pus/bsit', description: '' },
-];
-
-const exhibitDropdownItems = [
-    { name: "Citizen's Charter", href: "#", description: "" },
-    { name: "Student Handbook", href: "#", description: "" },
-    { name: "University Code", href: "#", description: "" },
-    { name: "University Policies & Guidelines", href: "#", description: "" },
-    { name: "OBE Syllabi", href: "#", description: "" },
-    { name: "Instructional Materials", href: "#", description: "" },
-    { name: "Faculty Manual", href: "#", description: "" },
-    { name: "Administrative Manual", href: "#", description: "" },
-    { name: "CHED Memorandum Order", href: "#", description: "" },
-    { name: "Licensure", href: "#", description: "" },
-];
+// Note: additional dropdown item collections were removed as they were unused.
 
 // Document dropdown items for each role
 const adminDocumentDropdownItems = [
@@ -108,7 +89,8 @@ const layoutNavItems = [
 ];
 
 export default function DashboardHeader() {
-    const { auth } = usePage().props as any;
+    const { auth } = usePage<SharedData>().props;
+    const { total: unreadTotal } = useUnreadMessagesCount();
     const [menuOpen, setMenuOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [layoutDropdownOpen, setLayoutDropdownOpen] = useState(false);
@@ -121,8 +103,8 @@ export default function DashboardHeader() {
     const [mobileAboutOpen, setMobileAboutOpen] = useState(false);
     const [mobileProgramsOpen, setMobileProgramsOpen] = useState(false);
     const [mobileExhibitOpen, setMobileExhibitOpen] = useState(false);
-    const role = auth?.user?.role || 'faculty';
-    const navItems = NAVS[role] || NAVS.faculty;
+    const role = (auth?.user?.role as Role) || 'faculty';
+    const navItems = NAVS[role];
     const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
 
     // Check if current path is in admin/layout section
@@ -267,7 +249,7 @@ export default function DashboardHeader() {
                                                         {item.name === 'About' ? (
                                                             <Link
                                                                 href="/admin/layout/about"
-                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                                className="w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
                                                             >
                                                                 {item.name}
                                                                 <ChevronDown className="w-3 h-3 ml-1 inline-block" />
@@ -275,7 +257,7 @@ export default function DashboardHeader() {
                                                         ) : item.name === 'Programs Under Survey' ? (
                                                             <Link
                                                                 href="/admin/layout/programs"
-                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                                className="w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
                                                             >
                                                                 {item.name}
                                                                 <ChevronDown className="w-3 h-3 ml-1 inline-block" />
@@ -283,7 +265,7 @@ export default function DashboardHeader() {
                                                         ) : item.name === 'Exhibit' ? (
                                                             <Link
                                                                 href="/admin/layout/exhibit"
-                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                                                                className="w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50 flex items-center"
                                                             >
                                                                 {item.name}
                                                                 <ChevronDown className="w-3 h-3 ml-1 inline-block" />
@@ -291,7 +273,7 @@ export default function DashboardHeader() {
                                                         ) : (
                                                             <button
                                                                 type="button"
-                                                                className="block w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 flex items-center"
+                                                                className="w-full text-left px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 flex items-center"
                                                                 tabIndex={0}
                                                             >
                                                                 {item.name}
@@ -440,7 +422,14 @@ export default function DashboardHeader() {
                                 }`}
                                 style={{ color: 'black' }}
                             >
-                                {item.name}
+                                <span className="relative inline-block">
+                                    {item.name}
+                                    {item.name === 'Messages' && unreadTotal > 0 && (
+                                        <span className="absolute -top-1 -right-5 inline-flex w-4.5 h-4.5 items-center justify-center rounded-full bg-[#7D2A2A] px-1 text-[10px] font-semibold leading-none text-white shadow-sm">
+                                            {unreadTotal > 99 ? '99+' : unreadTotal}
+                                        </span>
+                                    )}
+                                </span>
                                 <div
                                     className={`absolute bottom-0 left-0 w-full h-0.5 transition-all duration-300 ${
                                         currentPath === item.href
@@ -744,7 +733,14 @@ export default function DashboardHeader() {
                                 onClick={() => setMenuOpen(false)}
                             >
                                 <span className="relative inline-block">
-                                    {item.name}
+                                    <span className="relative inline-block">
+                                        {item.name}
+                                        {item.name === 'Messages' && unreadTotal > 0 && (
+                                            <span className="absolute -top-1 -right-1 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white shadow-sm">
+                                                {unreadTotal > 99 ? '99+' : unreadTotal}
+                                            </span>
+                                        )}
+                                    </span>
                                     <span
                                         className={`block absolute left-0 right-0 mx-auto bottom-[-2px] h-0.5 transition-all duration-300 min-w-[2.5rem] w-auto ${
                                             currentPath === item.href

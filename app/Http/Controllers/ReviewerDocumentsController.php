@@ -141,7 +141,7 @@ class ReviewerDocumentsController extends Controller
         $user = $request->user();
 
         // Check if reviewer is assigned to this program/area
-        $hasAccess = \App\Models\UserAssign::where('user_id', $user->id)
+        $hasAccess = UserAssign::where('user_id', $user->id)
             ->where('program_id', $request->program_id)
             ->where('area_id', $request->area_id)
             ->exists();
@@ -153,7 +153,8 @@ class ReviewerDocumentsController extends Controller
         // Fetch ALL approved documents for this program and area (not just by reviewer)
         $query = Document::where('program_id', $request->program_id)
             ->where('area_id', $request->area_id)
-            ->where('status', 'approved');
+            ->where('status', 'approved')
+            ->with(['user:id,name', 'checker:id,name']);
 
         // Filter by parameter_id if provided
         if ($request->has('parameter_id')) {
@@ -164,17 +165,19 @@ class ReviewerDocumentsController extends Controller
             $query->where('category', $request->category);
         }
 
-        $documents = $query->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($doc) {
+    $documents = $query->orderBy('created_at', 'desc')
+        ->get()
+        ->map(function ($doc) {
                 return [
                     'id' => $doc->id,
                     'filename' => $doc->doc_filename,
-                    'url' => \Storage::url("documents/{$doc->doc_filename}"),
+            'url' => Storage::url("documents/{$doc->doc_filename}"),
                     'video_filename' => $doc->video_filename,
-                    'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
+            'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
                     'uploaded_at' => $doc->created_at->toDateTimeString(),
                     'user_name' => $doc->user->name ?? '',
+                    'approved_at' => $doc->updated_at ? $doc->updated_at->toDateTimeString() : null,
+                    'approved_by' => $doc->checker->name ?? null,
                     'parameter_id' => $doc->parameter_id,
                     'category' => $doc->category,
                 ];
@@ -197,7 +200,7 @@ class ReviewerDocumentsController extends Controller
             'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm|max:51200',
         ]);
 
-        $user = $request->user();
+    $user = $request->user();
         $file = $request->file('file');
         $filename = \Illuminate\Support\Str::random(16) . '_' . time() . '.' . $file->getClientOriginalExtension();
 
@@ -212,6 +215,7 @@ class ReviewerDocumentsController extends Controller
             $video->storeAs("documents/", $videoFilename, 'public');
         }
 
+
         $document = Document::create([
             'user_id' => $user->id,
             'program_id' => $request->program_id,
@@ -222,6 +226,9 @@ class ReviewerDocumentsController extends Controller
             'video_filename' => $videoFilename,
             'status' => 'pending',
         ]);
+
+        // Broadcast DocumentCreated event
+        event(new \App\Events\DocumentCreated($document));
 
         return response()->json([
             'success' => true,
@@ -367,13 +374,13 @@ class ReviewerDocumentsController extends Controller
                 ->with(['user:id,name', 'program:id,code', 'area:id,code'])
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($doc) {
+                ->map(function ($doc) use ($user) {
                     return [
                         'id' => $doc->id,
                         'filename' => $doc->doc_filename,
-                        'url' => $doc->doc_filename ? \Storage::url("documents/{$doc->doc_filename}") : null,
+                        'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
                         'video_filename' => $doc->video_filename,
-                        'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
+                        'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
                         'uploaded_at' => $doc->created_at->toDateTimeString(),
                         'user_name' => $doc->user->name ?? '',
                         'parameter_id' => $doc->parameter_id,
@@ -382,6 +389,7 @@ class ReviewerDocumentsController extends Controller
                         'area_id' => $doc->area_id,
                         'program_code' => $doc->program->code ?? '',
                         'area_code' => $doc->area->code ?? '',
+                        'can_delete' => $doc->user_id === $user->id,
                     ];
                 });
 
@@ -416,27 +424,157 @@ class ReviewerDocumentsController extends Controller
             }
         });
 
-        $documents = $query->orderBy('created_at', 'desc')->get()->map(function ($doc) {
-            return [
-                'id' => $doc->id,
-                'filename' => $doc->doc_filename,
-                'url' => $doc->doc_filename ? \Storage::url("documents/{$doc->doc_filename}") : null,
-                'video_filename' => $doc->video_filename,
-                'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
-                'uploaded_at' => $doc->created_at->toDateTimeString(),
-                'user_name' => $doc->user->name ?? '',
-                'parameter_id' => $doc->parameter_id,
-                'category' => $doc->category,
-                'program_id' => $doc->program_id,
-                'area_id' => $doc->area_id,
-                'program_code' => $doc->program->code ?? '',
-                'area_code' => $doc->area->code ?? '',
-            ];
-        });
+        // Add pagination with 5 documents per page
+        $perPage = 5;
+        $page = $request->input('page', 1);
+        $total = $query->count();
+        $totalPages = ceil($total / $perPage);
+        
+    $documents = $query->orderBy('created_at', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+        ->get()
+        ->map(function ($doc) use ($user) {
+                return [
+                    'id' => $doc->id,
+                    'filename' => $doc->doc_filename,
+            'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
+                    'video_filename' => $doc->video_filename,
+            'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                    'uploaded_at' => $doc->created_at->toDateTimeString(),
+                    'user_name' => $doc->user->name ?? '',
+                    'parameter_id' => $doc->parameter_id,
+                    'category' => $doc->category,
+                    'program_id' => $doc->program_id,
+                    'area_id' => $doc->area_id,
+                    'program_code' => $doc->program->code ?? '',
+                    'area_code' => $doc->area->code ?? '',
+            'can_delete' => $doc->user_id === $user->id,
+                ];
+            });
 
         return response()->json([
             'success' => true,
             'documents' => $documents,
+            'pagination' => [
+                'current_page' => (int) $page,
+                'total_pages' => $totalPages,
+                'per_page' => $perPage,
+                'total' => $total,
+                'has_next' => $page < $totalPages,
+                'has_prev' => $page > 1,
+            ],
+        ]);
+    }
+
+    // Add this method to provide fresh sidebar data for real-time updates
+    public function pendingSidebar(Request $request)
+    {
+        $user = $request->user();
+
+        // Get all assignments for the reviewer
+        $assignments = \App\Models\UserAssign::with(['program', 'area'])
+            ->where('user_id', $user->id)
+            ->get();
+
+        // --- Compute pending document counts for programs, areas, parameters, and categories ---
+        $programIds = [];
+        $areaIds = [];
+        foreach ($assignments as $assign) {
+            if ($assign->program_id) $programIds[] = $assign->program_id;
+            if ($assign->area_id) $areaIds[] = $assign->area_id;
+        }
+        $programIds = array_unique($programIds);
+        $areaIds = array_unique($areaIds);
+
+        // Get all pending documents for these programs (for sidebar counts)
+        $pendingDocs = \App\Models\Document::where('status', 'pending')
+            ->whereIn('program_id', $programIds)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        // Precompute counts
+        $programPendingCounts = [];
+        $areaPendingCounts = [];
+        $parameterPendingCounts = [];
+        $parameterCategoryPendingCounts = [];
+
+        foreach ($pendingDocs as $doc) {
+            // Program count
+            if (!isset($programPendingCounts[$doc->program_id])) $programPendingCounts[$doc->program_id] = 0;
+            $programPendingCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaPendingCounts[$doc->area_id])) $areaPendingCounts[$doc->area_id] = 0;
+                $areaPendingCounts[$doc->area_id]++;
+            }
+
+            // Parameter count
+            if ($doc->parameter_id) {
+                if (!isset($parameterPendingCounts[$doc->parameter_id])) $parameterPendingCounts[$doc->parameter_id] = 0;
+                $parameterPendingCounts[$doc->parameter_id]++;
+
+                // Category count within this parameter
+                $key = $doc->parameter_id . '-' . $doc->category;
+                if (!isset($parameterCategoryPendingCounts[$key])) $parameterCategoryPendingCounts[$key] = 0;
+                $parameterCategoryPendingCounts[$key]++;
+            }
+        }
+
+        // Build sidebar data
+        $sidebar = [];
+        foreach ($assignments as $assign) {
+            $program = $assign->program;
+            $area = $assign->area;
+            if (!$program) continue;
+
+            $programId = $program->id;
+            if (!isset($sidebar[$programId])) {
+                $sidebar[$programId] = [
+                    'id' => $program->id,
+                    'name' => $program->name,
+                    'code' => $program->code ?? null,
+                    'areas' => [],
+                    'pending_count' => $programPendingCounts[$programId] ?? 0,
+                ];
+            }
+
+            if ($area && !collect($sidebar[$programId]['areas'])->contains('id', $area->id)) {
+                $parameters = \App\Models\Parameter::where('program_id', $program->id)
+                    ->where('area_id', $area->id)
+                    ->get()
+                    ->map(function ($param) use ($parameterPendingCounts, $parameterCategoryPendingCounts) {
+                        $paramId = $param->id;
+                        $categoryCounts = [
+                            'system' => $parameterCategoryPendingCounts[$paramId . '-system'] ?? 0,
+                            'implementation' => $parameterCategoryPendingCounts[$paramId . '-implementation'] ?? 0,
+                            'outcomes' => $parameterCategoryPendingCounts[$paramId . '-outcomes'] ?? 0,
+                        ];
+                        $pending_count = $parameterPendingCounts[$paramId] ?? 0;
+                        return [
+                            'id' => $param->id,
+                            'name' => $param->name,
+                            'code' => $param->code,
+                            'pending_count' => $pending_count,
+                            'category_pending_counts' => $categoryCounts,
+                        ];
+                    })
+                    ->toArray();
+
+                $sidebar[$programId]['areas'][] = [
+                    'id' => $area->id,
+                    'name' => $area->name,
+                    'code' => $area->code ?? null,
+                    'parameters' => $parameters,
+                    'pending_count' => $areaPendingCounts[$area->id] ?? 0, // area-level pending count
+                ];
+            }
+        }
+        $sidebar = array_values($sidebar);
+
+        return response()->json([
+            'success' => true,
+            'sidebar' => $sidebar,
         ]);
     }
 
@@ -457,9 +595,9 @@ class ReviewerDocumentsController extends Controller
         $documentData = [
             'id' => $document->id,
             'filename' => $document->doc_filename,
-            'url' => \Storage::url("documents/{$document->doc_filename}"),
+            'url' => Storage::url("documents/{$document->doc_filename}"),
             'video_filename' => $document->video_filename,
-            'video_url' => $document->video_filename ? \Storage::url("documents/{$document->video_filename}") : null,
+            'video_url' => $document->video_filename ? Storage::url("documents/{$document->video_filename}") : null,
             'uploaded_at' => $document->created_at->toDateTimeString(),
             'user_name' => $document->user->name ?? '',
             'program_id' => $document->program_id,
@@ -477,6 +615,7 @@ class ReviewerDocumentsController extends Controller
         $user = $request->user();
         $request->validate([
             'status' => 'required|in:approved,disapproved',
+            'comment' => 'nullable|string',
         ]);
 
         // Check if reviewer is assigned to this program/area
@@ -494,6 +633,14 @@ class ReviewerDocumentsController extends Controller
         }
 
         $document->status = $request->status;
+        // Save comment only when disapproved, otherwise clear it
+        if ($request->status === 'disapproved') {
+            $document->comment = $request->input('comment'); // can be null or string
+        } else {
+            $document->comment = null;
+        }
+        // Track reviewer who checked
+        $document->checked_by = $user->id;
         $document->save();
 
         return response()->json(['success' => true, 'message' => 'Document status updated.']);
@@ -628,7 +775,8 @@ class ReviewerDocumentsController extends Controller
 
         $query = Document::where('program_id', $request->program_id)
             ->where('area_id', $request->area_id)
-            ->where('status', 'disapproved');
+            ->where('status', 'disapproved')
+            ->with(['user', 'checker']);
 
         if ($request->has('parameter_id')) {
             $query->where('parameter_id', $request->parameter_id);
@@ -643,11 +791,14 @@ class ReviewerDocumentsController extends Controller
                 return [
                     'id' => $doc->id,
                     'filename' => $doc->doc_filename,
-                    'url' => \Storage::url("documents/{$doc->doc_filename}"),
+                    'url' => Storage::url("documents/{$doc->doc_filename}"),
                     'video_filename' => $doc->video_filename,
-                    'video_url' => $doc->video_filename ? \Storage::url("documents/{$doc->video_filename}") : null,
-                    'uploaded_at' => $doc->created_at->toDateTimeString(),
-                    'user_name' => $doc->user->name ?? '',
+                    'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                    'uploaded_at' => optional($doc->created_at)->toDateTimeString(),
+                    'user_name' => optional($doc->user)->name ?? '',
+                    'disapproved_by' => optional($doc->checker)->name,
+                    'disapproved_at' => optional($doc->updated_at)->toDateTimeString(),
+                    'comment' => $doc->comment,
                     'parameter_id' => $doc->parameter_id,
                     'category' => $doc->category,
                 ];
@@ -656,6 +807,139 @@ class ReviewerDocumentsController extends Controller
         return response()->json([
             'success' => true,
             'documents' => $documents,
+        ]);
+    }
+    /**
+     * Delete a pending document by ID - only if current user is the uploader
+     */
+    public function destroyPending(Request $request, Document $document)
+    {
+        $user = $request->user();
+
+        if ($document->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Only pending documents can be deleted.'], 400);
+        }
+
+        if ($document->user_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You can only delete your own uploads.'], 403);
+        }
+
+        // Delete files from storage (document and optional video)
+        if ($document->doc_filename && Storage::disk('public')->exists('documents/' . $document->doc_filename)) {
+            Storage::disk('public')->delete('documents/' . $document->doc_filename);
+        }
+        if ($document->video_filename && Storage::disk('public')->exists('documents/' . $document->video_filename)) {
+            Storage::disk('public')->delete('documents/' . $document->video_filename);
+        }
+
+        $document->delete();
+
+        // Broadcast an update so UIs can refresh (reuse existing event)
+        event(new \App\Events\DocumentUpdated($document));
+
+        return response()->json(['success' => true, 'message' => 'Document deleted successfully.']);
+    }
+
+    /**
+     * Get dashboard statistics and recent activities for reviewer
+     */
+    public function dashboardData(Request $request)
+    {
+        $user = $request->user();
+
+        // Get all assignments for the reviewer
+        $assignments = UserAssign::with(['program', 'area'])
+            ->where('user_id', $user->id)
+            ->get();
+
+        // Gather all program/area IDs assigned to the user
+        $programIds = [];
+        $areaIds = [];
+        foreach ($assignments as $assign) {
+            if ($assign->program_id) $programIds[] = $assign->program_id;
+            if ($assign->area_id) $areaIds[] = $assign->area_id;
+        }
+        $programIds = array_unique($programIds);
+        $areaIds = array_unique($areaIds);
+
+        // Calculate statistics for documents in assigned programs/areas
+        $totalDocuments = Document::whereIn('program_id', $programIds)
+            ->whereIn('area_id', $areaIds)
+            ->count();
+        
+        $pendingReview = Document::whereIn('program_id', $programIds)
+            ->whereIn('area_id', $areaIds)
+            ->where('status', 'pending')
+            ->count();
+        
+        $approvedDocuments = Document::whereIn('program_id', $programIds)
+            ->whereIn('area_id', $areaIds)
+            ->where('status', 'approved')
+            ->where('checked_by', $user->id)
+            ->count();
+        
+        $disapprovedDocuments = Document::whereIn('program_id', $programIds)
+            ->whereIn('area_id', $areaIds)
+            ->where('status', 'disapproved')
+            ->where('checked_by', $user->id)
+            ->count();
+
+        // Count unread messages (assuming you have a messaging system)
+        $unreadMessages = 0; // Placeholder - implement based on your messaging system
+
+        // Count assigned programs
+        $assignedPrograms = count($programIds);
+
+        // Get recent activities (last 10 activities for documents in assigned programs)
+        $recentDocuments = Document::whereIn('program_id', $programIds)
+            ->whereIn('area_id', $areaIds)
+            ->with(['program:id,name,code', 'area:id,name,code', 'parameter:id,name,code', 'user:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $recentActivities = [];
+        foreach ($recentDocuments as $doc) {
+            $activity = [
+                'id' => $doc->id,
+                'timestamp' => $doc->updated_at->toISOString(),
+                'programName' => $doc->program->name ?? 'Unknown Program',
+                'areaName' => $doc->area->name ?? 'Unknown Area',
+            ];
+
+            if ($doc->status === 'pending') {
+                $activity['type'] = 'document_submitted';
+                $activity['title'] = 'New document submitted';
+                $activity['description'] = 'Document submitted by ' . ($doc->user->name ?? 'Unknown User') . ' in ' . ($doc->program->name ?? 'Unknown Program');
+            } elseif ($doc->status === 'approved' && $doc->checked_by === $user->id) {
+                $activity['type'] = 'document_approved';
+                $activity['title'] = 'Document approved';
+                $activity['description'] = 'You approved a document in ' . ($doc->program->name ?? 'Unknown Program');
+            } elseif ($doc->status === 'disapproved' && $doc->checked_by === $user->id) {
+                $activity['type'] = 'document_disapproved';
+                $activity['title'] = 'Document disapproved';
+                $activity['description'] = 'You disapproved a document in ' . ($doc->program->name ?? 'Unknown Program');
+            } else {
+                $activity['type'] = 'document_reviewed';
+                $activity['title'] = 'Document reviewed';
+                $activity['description'] = 'Document activity in ' . ($doc->program->name ?? 'Unknown Program');
+            }
+
+            $recentActivities[] = $activity;
+        }
+
+        $stats = [
+            'totalDocuments' => $totalDocuments,
+            'pendingReview' => $pendingReview,
+            'approvedDocuments' => $approvedDocuments,
+            'disapprovedDocuments' => $disapprovedDocuments,
+            'unreadMessages' => $unreadMessages,
+            'assignedPrograms' => $assignedPrograms,
+        ];
+
+        return response()->json([
+            'stats' => $stats,
+            'recentActivities' => $recentActivities,
         ]);
     }
 }

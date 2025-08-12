@@ -1,10 +1,21 @@
 import { Head } from '@inertiajs/react';
+import { LuFileClock } from "react-icons/lu";
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useState, useRef, useMemo, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
+import DocumentUploadModal from '@/components/DocumentUploadModal';
+import PdfViewer from '@/components/PdfViewer';
+import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
+import PDFThumbnail from '@/components/PDFThumbnail';
+import '../../echo'; // Import Echo for real-time functionality
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker?url';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc;
 
 // Types adapted for pending
 type Parameter = { id: number; name: string; code?: string; pending_count?: number; category_pending_counts?: Record<string, number> };
@@ -17,8 +28,15 @@ interface PageProps {
 }
 
 export default function ReviewerDocumentsPending(props: PageProps) {
-    const sidebar = props.sidebar ?? [];
+    const [sidebar, setSidebar] = useState<Program[]>(props.sidebar ?? []);
     const csrfToken = props.csrfToken;
+    // --- Add Document Modal State ---
+    const [addModalOpen, setAddModalOpen] = useState(false);
+
+    const handleUploadSuccess = () => {
+        // Refresh the current view by reloading the pending documents
+        window.location.reload();
+    };
     const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
     const [expanded, setExpanded] = useState<{ [programId: number]: boolean }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
@@ -36,24 +54,74 @@ export default function ReviewerDocumentsPending(props: PageProps) {
     };
 
     // --- Pending Modal State ---
+    type PendingTableRow = {
+        id: number;
+        type: 'file' | 'video';
+        user_name?: string;
+        program_code?: string;
+        program_name?: string;
+        area_code?: string;
+        area_name?: string;
+        parameter_code?: string;
+        paramName?: string;
+        category?: string;
+        file_url?: string | null;
+        file_name?: string | null;
+        video_url?: string | null;
+        video_name?: string | null;
+        uploaded_at?: string;
+        can_delete?: boolean;
+    };
     const [pendingModalOpen, setPendingModalOpen] = useState(false);
-    const [pendingDocsTable, setPendingDocsTable] = useState<any[]>([]);
+    const [pendingDocsTable, setPendingDocsTable] = useState<PendingTableRow[]>([]);
     const [loadingPendingTable, setLoadingPendingTable] = useState(false);
     const [pendingTableError, setPendingTableError] = useState('');
+    const [deleteLoadingId, setDeleteLoadingId] = useState<number | null>(null);
+    
+    // Pagination state for pending documents modal
+    const [currentTablePage, setCurrentTablePage] = useState(1);
+    const [tablePagination, setTablePagination] = useState({
+        current_page: 1,
+        total_pages: 1,
+        per_page: 5,
+        total: 0,
+        has_next: false,
+        has_prev: false,
+    });
+
+    // --- Real-time Notification State ---
+    const [realtimeNotification, setRealtimeNotification] = useState<string | null>(null);
 
     // Helper: flatten docs for modal (split file/video, add program/area/parameter/category info)
-    const flattenPendingDocs = (docs: any[], sidebar: Program[]) => {
-        const result: any[] = [];
+    type PendingServerDoc = {
+        id: number;
+        program_id: number;
+        area_id: number;
+        parameter_id: number;
+        category?: string;
+        filename?: string | null;
+        url?: string | null;
+        video_filename?: string | null;
+        video_url?: string | null;
+        uploaded_at?: string;
+        user_name?: string;
+        can_delete?: boolean;
+    };
+
+    const flattenPendingDocs = (docs: PendingServerDoc[], sidebar: Program[]): PendingTableRow[] => {
+        const result: PendingTableRow[] = [];
         docs.forEach(doc => {
             // Find program, area, parameter
             let program_code = '', area_code = '', parameter_code = '', category = '';
-            let paramName = '';
+            let program_name = '', area_name = '', paramName = '';
             for (const prog of sidebar) {
                 if (prog.id === doc.program_id) {
                     program_code = prog.code || '';
+                    program_name = prog.name || '';
                     for (const area of prog.areas) {
                         if (area.id === doc.area_id) {
                             area_code = area.code || '';
+                            area_name = area.name || '';
                             if (area.parameters) {
                                 for (const param of area.parameters) {
                                     if (param.id === doc.parameter_id) {
@@ -73,26 +141,34 @@ export default function ReviewerDocumentsPending(props: PageProps) {
             // Document file row
             if (doc.filename) {
                 result.push({
-                    ...doc,
+                    id: doc.id,
                     type: 'file',
+                    user_name: doc.user_name,
                     program_code,
+                    program_name,
                     area_code,
+                    area_name,
                     parameter_code,
                     paramName,
                     category,
-                    file_url: doc.url,
-                    file_name: doc.filename,
+                    file_url: doc.url || null,
+                    file_name: doc.filename || null,
                     video_url: null,
                     video_name: null,
+                    uploaded_at: doc.uploaded_at,
+                    can_delete: doc.can_delete,
                 });
             }
             // Video file row
             if (doc.video_filename && doc.video_url) {
                 result.push({
-                    ...doc,
+                    id: doc.id,
                     type: 'video',
+                    user_name: doc.user_name,
                     program_code,
+                    program_name,
                     area_code,
+                    area_name,
                     parameter_code,
                     paramName,
                     category,
@@ -100,24 +176,38 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                     file_name: null,
                     video_url: doc.video_url,
                     video_name: doc.video_filename,
+                    uploaded_at: doc.uploaded_at,
+                    can_delete: doc.can_delete,
                 });
             }
         });
         return result;
     };
 
-    // Fetch all pending documents for modal table
-    const fetchPendingTable = () => {
+    // Fetch all pending documents for modal table with pagination
+    const fetchPendingTable = (page = 1) => {
         setLoadingPendingTable(true);
         setPendingTableError('');
-        fetch('/reviewer/documents/pending/data', {
+        fetch(`/reviewer/documents/pending/data?page=${page}`, {
             headers: { 'Accept': 'application/json' },
             credentials: 'same-origin',
         })
             .then(res => res.json())
             .then(data => {
-                if (data.success) setPendingDocsTable(flattenPendingDocs(data.documents, sidebar));
-                else setPendingTableError('Failed to load pending documents.');
+                if (data.success) {
+                    setPendingDocsTable(flattenPendingDocs(data.documents, sidebar));
+                    setTablePagination(data.pagination || {
+                        current_page: 1,
+                        total_pages: 1,
+                        per_page: 5,
+                        total: 0,
+                        has_next: false,
+                        has_prev: false,
+                    });
+                    setCurrentTablePage(page);
+                } else {
+                    setPendingTableError('Failed to load pending documents.');
+                }
             })
             .catch(() => setPendingTableError('Failed to load pending documents.'))
             .finally(() => setLoadingPendingTable(false));
@@ -126,8 +216,153 @@ export default function ReviewerDocumentsPending(props: PageProps) {
     // Open modal and fetch data
     const openPendingModal = () => {
         setPendingModalOpen(true);
-        fetchPendingTable();
+        fetchPendingTable(1); // Start from page 1
     };
+
+    // Delete confirmation modal state (for pending modal table)
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, doc: PendingTableRow | null }>({ open: false, doc: null });
+    const [deleteActionLoading, setDeleteActionLoading] = useState(false);
+    const [deleteActionError, setDeleteActionError] = useState('');
+
+    // Open delete confirmation modal
+    const openDeleteConfirm = (docRow: PendingTableRow) => {
+        setDeleteActionError('');
+        setDeleteConfirm({ open: true, doc: docRow });
+    };
+
+    // Handle viewing a document from the modal table
+    const handleViewFromModal = (docRow: PendingTableRow) => {
+        // Find the program, area, parameter IDs from the sidebar using codes
+        let targetProgramId: number | undefined;
+        let targetAreaId: number | undefined;
+        let targetParameterId: number | undefined;
+        
+        for (const program of sidebar) {
+            if (program.code === docRow.program_code) {
+                targetProgramId = program.id;
+                for (const area of program.areas) {
+                    if (area.code === docRow.area_code) {
+                        targetAreaId = area.id;
+                        if (area.parameters) {
+                            for (const param of area.parameters) {
+                                if (param.code === docRow.parameter_code) {
+                                    targetParameterId = param.id;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        // Navigate the sidebar to the correct selection
+        if (targetProgramId && targetAreaId && targetParameterId && docRow.category) {
+            setSelected({
+                programId: targetProgramId,
+                areaId: targetAreaId,
+                parameterId: targetParameterId,
+                category: docRow.category
+            });
+
+            // Expand the sidebar sections
+            setExpanded(prev => ({ ...prev, [targetProgramId!]: true }));
+            setAreaExpanded(prev => ({ ...prev, [targetAreaId!]: true }));
+            setParamExpanded(prev => ({ ...prev, [targetParameterId!]: true }));
+
+            // Close the modal
+            setPendingModalOpen(false);
+
+            // Wait a bit for the pendingDocs to load, then find and set the viewing index
+            setTimeout(() => {
+                const docToFind = pendingDocs.find(doc => doc.id === docRow.id);
+                if (docToFind) {
+                    const realIdx = pendingDocs.findIndex(d => d.id === docRow.id);
+                    if (realIdx !== -1) {
+                        setViewerIndex(realIdx);
+                        setViewingDocIndex(realIdx);
+                    }
+                }
+            }, 500); // Give time for the useEffect to fetch pendingDocs
+        }
+    };
+
+    // Perform delete on confirm
+    const confirmDeletePending = async () => {
+        if (!deleteConfirm.doc) return;
+        const docId = deleteConfirm.doc.id;
+        try {
+            setDeleteActionLoading(true);
+            setDeleteLoadingId(docId);
+            const res = await fetch(`/reviewer/documents/pending/${docId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                credentials: 'same-origin',
+            });
+            let data;
+            if (res.status === 404) {
+                // Treat 404 as successful delete (already deleted)
+                data = { success: true };
+            } else {
+                data = await res.json();
+            }
+            if (!data.success) throw new Error(data.message || 'Failed to delete document');
+
+            // Refresh the pending modal table
+            fetchPendingTable(currentTablePage);
+
+            // Refresh the card grids by removing the deleted doc from pendingDocs
+            setPendingDocs(prev => prev.filter(d => d.id !== docId));
+
+            // If the currently viewed doc is the one deleted, adjust viewer selection
+            if (currentDoc && currentDoc.id === docId) {
+                const idx = viewingDocIndex ?? 0;
+                const newPendingDocs = pendingDocs.filter(d => d.id !== docId);
+                if (newPendingDocs.length === 0) {
+                    setViewingDocIndex(null);
+                } else {
+                    const newFiltered = newPendingDocs.filter(doc =>
+                        (!selected.parameterId || doc.parameter_id === selected.parameterId) &&
+                        (!selected.category || doc.category === selected.category)
+                    );
+                    if (newFiltered.length === 0) {
+                        setViewingDocIndex(null);
+                    } else {
+                        setViewingDocIndex(Math.max(0, Math.min(idx, newFiltered.length - 1)));
+                    }
+                }
+            }
+
+            setDeleteConfirm({ open: false, doc: null });
+            setDeleteActionError('');
+        } catch (e: unknown) {
+            // Only show error if not a 404
+            const msg = e instanceof Error ? e.message : 'Failed to delete';
+            setDeleteActionError(msg);
+        } finally {
+            setDeleteActionLoading(false);
+            setDeleteLoadingId(null);
+        }
+    };
+
+    // Pagination handlers for the table
+    const handleFirstPage = () => fetchPendingTable(1);
+    const handlePrevPage = () => {
+        if (tablePagination.has_prev) {
+            fetchPendingTable(tablePagination.current_page - 1);
+        }
+    };
+    const handleNextPage = () => {
+        if (tablePagination.has_next) {
+            fetchPendingTable(tablePagination.current_page + 1);
+        }
+    };
+    const handleLastPage = () => fetchPendingTable(tablePagination.total_pages);
 
     // --- Pending Documents State (same as approved, but for pending) ---
     const [pendingDocs, setPendingDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string, parameter_id?: number, category?: string }[]>([]);
@@ -184,13 +419,99 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         }
     }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
 
+    // --- Real-time Echo listener ---
+    useEffect(() => {
+        // Listen to general document updates channel
+        const channel = window.Echo.channel('document-updates')
+            .listen('DocumentUpdated', (e: any) => {
+                setRealtimeNotification(`Document updated: ${e.message}`);
+                setTimeout(() => setRealtimeNotification(null), 5000);
+                refreshPendingDocs();
+            })
+            .listen('DocumentCreated', (e: any) => {
+                setRealtimeNotification('New document added!');
+                setTimeout(() => setRealtimeNotification(null), 5000);
+                refreshPendingDocs();
+            });
+
+        function refreshPendingDocs() {
+            // Always refresh sidebar data first
+            fetch('/reviewer/documents/pending/sidebar', {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then(res => res.json())
+                .then((data) => {
+                    if (data.success) {
+                        // Update the sidebar state to reflect new counts
+                        setSidebar(data.sidebar);
+                    }
+                })
+                .catch(() => {});
+
+            // If pending modal is open, refresh the table on current page
+            if (pendingModalOpen) {
+                fetchPendingTable(currentTablePage);
+            }
+
+            // Then refresh the document list if a specific selection is active
+            if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+                fetch(`/reviewer/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                })
+                    .then(res => res.json())
+                    .then((data) => {
+                        if (data.success) {
+                            setPendingDocs(data.documents);
+                        }
+                    })
+                    .catch(() => {});
+            } else if (selected.programId && selected.areaId) {
+                fetch(`/reviewer/documents/pending/data?program_id=${selected.programId}&area_id=${selected.areaId}`, {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                })
+                    .then(res => res.json())
+                    .then((data) => {
+                        if (data.success) {
+                            setPendingDocs(data.documents);
+                        }
+                    })
+                    .catch(() => {});
+            }
+        }
+
+        // Cleanup on unmount
+        return () => {
+            window.Echo.leaveChannel('document-updates');
+        };
+    }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
+
     // --- Navigation state ---
-    const [fitMode, setFitMode] = useState<'width' | 'page'>('width');
+    const [fitMode, setFitMode] = useState<'width' | 'height' | null>(null);
     const [rotate, setRotate] = useState(0);
     const [infoOpen, setInfoOpen] = useState(false);
-    const [zoom, setZoom] = useState(1);
+    const [zoom, setZoom] = useState(0.9); // Start with 90%
     const [gridOpen, setGridOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // --- PDF page navigation state ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    // --- Video state ---
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [volume, setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const videoPlayerRef = useRef<VideoPlayerRef>(null);
+
+    // Reset to first page when document changes
+    useEffect(() => {
+        setCurrentPage(1);
+        setTotalPages(1);
+    }, [viewerIndex]);
 
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
@@ -235,17 +556,106 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         setRotate(r => (dir === 'left' ? (r - 90 + 360) % 360 : (r + 90) % 360));
     };
 
-    const toggleFitMode = () => setFitMode(f => (f === 'width' ? 'page' : 'width'));
+    const toggleFitMode = () => {
+        setFitMode(f => {
+            if (f === null) {
+                // Switch to fit-to-width: set zoom to 100%
+                setZoom(1.0);
+                return 'width';
+            } else if (f === 'width') {
+                // Switch to fit-to-height: set zoom to 50%
+                setZoom(0.5);
+                return 'height';
+            } else {
+                // Switch back to default: set zoom to 90%
+                setZoom(0.9);
+                return null;
+            }
+        });
+    };
 
     const handleZoom = (dir: 'in' | 'out') => {
         setZoom(z => {
-            if (dir === 'in') return Math.min(z + 0.1, 2);
-            else return Math.max(z - 0.1, 0.5);
+            const newZoom = dir === 'in' ? Math.min(z + 0.1, 1.0) : Math.max(z - 0.1, 0.5);
+            
+            // Update fitMode based on zoom value
+            if (Math.abs(newZoom - 1.0) < 0.01) {
+                setFitMode('width');
+            } else if (Math.abs(newZoom - 0.5) < 0.01) {
+                setFitMode('height');
+            } else {
+                setFitMode(null);
+            }
+            
+            return newZoom;
         });
     };
 
     const openGrid = () => setGridOpen(true);
     const closeGrid = () => setGridOpen(false);
+
+    // --- Video control handlers ---
+    const handleRewind = () => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.rewind();
+        }
+    };
+
+    const handlePlayPause = () => {
+        if (videoPlayerRef.current) {
+            if (isPlaying) {
+                videoPlayerRef.current.pause();
+            } else {
+                videoPlayerRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
+    };
+
+    const handleFastForward = () => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.fastForward();
+        }
+    };
+
+    const handleVolumeChange = (newVolume: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setVolume(newVolume);
+            setVolume(newVolume);
+            setIsMuted(newVolume === 0);
+        }
+    };
+
+    const handleMuteToggle = () => {
+        if (videoPlayerRef.current) {
+            if (isMuted) {
+                videoPlayerRef.current.setVolume(volume || 0.5);
+                setIsMuted(false);
+            } else {
+                videoPlayerRef.current.setVolume(0);
+                setIsMuted(true);
+            }
+        }
+    };
+
+    const handleSpeedChange = (speed: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setPlaybackRate(speed);
+            setPlaybackSpeed(speed);
+        }
+    };
+
+    const handlePictureInPicture = () => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.requestPictureInPicture();
+        }
+    };
+
+    const handleTimeUpdate = (time: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setCurrentTime(time);
+        }
+    };
 
     const previewRef = useRef<HTMLDivElement>(null);
     const handleFullscreen = () => {
@@ -262,7 +672,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         return () => document.removeEventListener('fullscreenchange', onFsChange);
     }, []);
 
-    useEffect(() => { setRotate(0); setZoom(1); }, [viewerIndex, selected.programId, selected.areaId]);
+    useEffect(() => { setRotate(0); setZoom(0.9); setFitMode(null); }, [viewerIndex, selected.programId, selected.areaId]);
     useEffect(() => {
         setPageInput(filteredViewerIndex + 1);
     }, [filteredViewerIndex, search]);
@@ -297,14 +707,17 @@ export default function ReviewerDocumentsPending(props: PageProps) {
 
     // --- Approve/Disapprove handlers ---
     const [confirmModal, setConfirmModal] = useState<{ open: boolean, action: 'approve' | 'disapprove' | null }>({ open: false, action: null });
+    const [disapproveComment, setDisapproveComment] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
     const [actionError, setActionError] = useState('');
 
     const handleApprove = () => {
-        setConfirmModal({ open: true, action: 'approve' });
+    setDisapproveComment('');
+    setConfirmModal({ open: true, action: 'approve' });
     };
     const handleDisapprove = () => {
-        setConfirmModal({ open: true, action: 'disapprove' });
+    setDisapproveComment('');
+    setConfirmModal({ open: true, action: 'disapprove' });
     };
 
     const confirmAction = async () => {
@@ -319,7 +732,10 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
                 },
-                body: JSON.stringify({ status: confirmModal.action === 'approve' ? 'approved' : 'disapproved' })
+                body: JSON.stringify({
+                    status: confirmModal.action === 'approve' ? 'approved' : 'disapproved',
+                    comment: confirmModal.action === 'disapprove' ? disapproveComment : undefined,
+                })
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.message || 'Failed to update status');
@@ -342,6 +758,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                 }
             }
             setConfirmModal({ open: false, action: null });
+            setDisapproveComment('');
         } catch (e: any) {
             setActionError(e.message || 'Failed to update status');
         } finally {
@@ -352,7 +769,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
     return (
         <>
             <Head title="Reviewer Pending Documents" />
-            <DashboardLayout>
+            <DashboardLayout>                
                 <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
                     {/* Sidebar - Same as approved, but for pending */}
                     <aside
@@ -375,6 +792,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                         >
                             My Program Pending Documents
                         </button>
+                        
                         <nav>
                             {sidebar.length === 0 && (
                                 <div className="text-gray-500 text-sm">No assignments found.</div>
@@ -547,6 +965,16 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                             <div className="flex gap-2">
                                 <button
                                     type="button"
+                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
+                                    onClick={() => setAddModalOpen(true)}
+                                >
+                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Add
+                                </button>
+                                <button
+                                    type="button"
                                     className="flex items-center bg-[#C46B02] hover:bg-[#a86a00] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
                                     onClick={openPendingModal}
                                 >
@@ -560,7 +988,6 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                         <button
                                             type="button"
                                             className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
-                                            style={{ minWidth: 110 }}
                                             onClick={handleApprove}
                                         >
                                             {/* Approve Icon */}
@@ -570,7 +997,6 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                         <button
                                             type="button"
                                             className="flex items-center bg-[#7F0404] hover:bg-[#a80000] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
-                                            style={{ minWidth: 130 }}
                                             onClick={handleDisapprove}
                                         >
                                             {/* Disapprove Icon */}
@@ -603,11 +1029,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
                                                         {/* Icon */}
-                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
+                                                        <LuFileClock className="w-5 h-5 text-[#7F0404]" />
                                                     </div>
                                                     <h2 className="text-base font-bold text-[#7F0404]">
                                                         {program.code ? program.code : ''} 
@@ -673,11 +1095,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
                                                         {/* Icon */}
-                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
+                                                        <LuFileClock className="w-5 h-5 text-[#7F0404]" />
                                                     </div>
                                                     <h2 className="text-base font-bold text-[#7F0404]">
                                                         {area.code ? `Area ${area.code}` : 'Area'} 
@@ -748,11 +1166,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                     style={{ backgroundColor: '#f1f5f9' }}
                                                 >
                                                     {/* Icon */}
-                                                    <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                        <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                        <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                    </svg>
+                                                    <LuFileClock className="w-5 h-5 text-[#7F0404]" />
                                                 </div>
                                                 <h2 className="text-base font-bold text-[#7F0404]">
                                                     {param.code ? `${param.code} - ` : ''}
@@ -858,11 +1272,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                                 style={{ backgroundColor: '#f1f5f9' }}
                                                             >
                                                                 {/* Icon */}
-                                                                <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                    <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                                    <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                                    <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                                </svg>
+                                                                <LuFileClock className="w-5 h-5 text-[#7F0404]" />
                                                             </div>
                                                             <h2 className="text-base font-bold text-[#7F0404]">
                                                                 {cat.label}
@@ -909,86 +1319,94 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                         </p>
                                         {/* --- Show DocumentNavigation if a document is selected --- */}
                                         {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] ? (
-                                            <div className="w-full flex flex-col items-center">
+                                            <div className="w-full flex flex-col items-center pb-4">
                                                 <div className="w-full max-w-4xl mx-auto">
-                                                    <DocumentNavigation
-                                                        documents={filteredDocs}
-                                                        currentIndex={filteredViewerIndex}
-                                                        onChangeIndex={idx => goTo(idx)}
-                                                        onDownload={handleDownload}
-                                                        onPrint={handlePrint}
-                                                        onRotate={handleRotate}
-                                                        onFitMode={toggleFitMode}
-                                                        onZoom={handleZoom}
-                                                        onInfo={() => setInfoOpen(true)}
-                                                        onGrid={openGrid}
-                                                        onFullscreen={handleFullscreen}
-                                                        fitMode={fitMode}
-                                                        rotate={rotate}
-                                                        zoom={zoom}
-                                                        isFullscreen={isFullscreen}
-                                                        infoOpen={infoOpen}
-                                                        setInfoOpen={setInfoOpen}
-                                                        gridOpen={gridOpen}
-                                                        setGridOpen={setGridOpen}
-                                                        search={search}
-                                                        setSearch={setSearch}
-                                                        onSearch={handleSearch}
-                                                    />
-                                                </div>
-                                                <div
-                                                    ref={previewRef}
-                                                    className="w-full max-w-4xl mx-auto bg-white rounded-b-lg shadow-lg flex flex-col items-center justify-center overflow-hidden"
-                                                    style={{
-                                                        minHeight: 480,
-                                                        maxHeight: '70vh',
-                                                        marginBottom: 24,
-                                                        marginTop: 0,
-                                                        borderBottomLeftRadius: 14,
-                                                        borderBottomRightRadius: 14,
-                                                    }}
-                                                >
-                                                    {/* --- Document Preview --- */}
                                                     {(() => {
-                                                        const doc = filteredDocs[filteredViewerIndex];
-                                                        if (!doc) return null;
-                                                        const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
-                                                        if (['pdf'].includes(ext)) {
-                                                            return (
-                                                                <iframe
-                                                                    src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                                    className="w-full h-[65vh] border-none rounded-b-lg bg-white"
-                                                                    title="PDF Preview"
-                                                                    style={{
-                                                                        objectFit: 'contain',
-                                                                        minHeight: 480,
-                                                                        maxHeight: '65vh',
-                                                                    }}
-                                                                ></iframe>
-                                                            );
-                                                        } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                            return (
-                                                                <img
-                                                                    src={doc.url}
-                                                                    alt={doc.filename}
-                                                                    className="max-h-[65vh] max-w-full rounded-b-lg object-contain mx-auto w-auto h-auto"
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        objectFit: 'contain',
-                                                                        minHeight: 480,
-                                                                        maxHeight: '65vh',
-                                                                    }}
-                                                                />
-                                                            );
-                                                        } else {
-                                                            return (
-                                                                <div className="w-full h-[65vh] flex items-center justify-center bg-gray-100 rounded-b-lg text-gray-400 text-xs">
-                                                                    No preview available for this file type.
-                                                                </div>
-                                                            );
-                                                        }
+                                                        const currentDoc = filteredDocs[filteredViewerIndex];
+                                                        const isVideoFile = !!(currentDoc?.filename && 
+                                                            ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(
+                                                                currentDoc.filename.split('.').pop()?.toLowerCase() || ''
+                                                            ));
+                                                        
+                                                        return (
+                                                            <DocumentNavigation
+                                                                currentDocument={currentDoc}
+                                                                currentPage={currentPage}
+                                                                totalPages={totalPages}
+                                                                onPageChange={setCurrentPage}
+                                                                onDownload={handleDownload}
+                                                                onPrint={handlePrint}
+                                                                onRotate={handleRotate}
+                                                                onFitMode={toggleFitMode}
+                                                                onZoom={handleZoom}
+                                                                onInfo={() => setInfoOpen(true)}
+                                                                onGrid={openGrid}
+                                                                onFullscreen={handleFullscreen}
+                                                                fitMode={fitMode}
+                                                                rotate={rotate}
+                                                                zoom={zoom}
+                                                                isFullscreen={isFullscreen}
+                                                                infoOpen={infoOpen}
+                                                                setInfoOpen={setInfoOpen}
+                                                                gridOpen={gridOpen}
+                                                                setGridOpen={setGridOpen}
+                                                                search={search}
+                                                                setSearch={setSearch}
+                                                                onSearch={handleSearch}
+                                                                // Video props - only pass when it's a video file
+                                                                forceVideoMode={isVideoFile}
+                                                                onRewind={isVideoFile ? handleRewind : undefined}
+                                                                onPlayPause={isVideoFile ? handlePlayPause : undefined}
+                                                                onFastForward={isVideoFile ? handleFastForward : undefined}
+                                                                onVolumeChange={isVideoFile ? handleVolumeChange : undefined}
+                                                                onMuteToggle={isVideoFile ? handleMuteToggle : undefined}
+                                                                onSpeedChange={isVideoFile ? handleSpeedChange : undefined}
+                                                                onPictureInPicture={isVideoFile ? handlePictureInPicture : undefined}
+                                                                onTimeUpdate={isVideoFile ? handleTimeUpdate : undefined}
+                                                                isPlaying={isVideoFile ? isPlaying : undefined}
+                                                                volume={isVideoFile ? volume : undefined}
+                                                                isMuted={isVideoFile ? isMuted : undefined}
+                                                                playbackSpeed={isVideoFile ? playbackSpeed : undefined}
+                                                            />
+                                                        );
                                                     })()}
                                                 </div>
+                                                {(() => {
+                                                    const currentDoc = filteredDocs[filteredViewerIndex];
+                                                    const ext = currentDoc?.filename?.split('.').pop()?.toLowerCase() || '';
+                                                    const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext);
+                                                    if (isVideo) {
+                                                        // Video is handled by DocumentNavigation's VideoNavigation
+                                                        return null;
+                                                    }
+                                                    if (ext === 'pdf') {
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
+                                                                <PdfViewer
+                                                                    url={currentDoc.url}
+                                                                    currentPage={currentPage}
+                                                                    onTotalPagesChange={setTotalPages}
+                                                                    zoom={zoom}
+                                                                    rotate={rotate}
+                                                                    className="w-full h-full"
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                    // For non-video non-pdf (e.g., images), show a simple preview
+                                                    if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center" style={{ height: '72vh' }}>
+                                                                <img src={currentDoc.url} alt={currentDoc.filename} className="max-h-full max-w-full object-contain" />
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div className="w-full max-w-4xl mx-auto bg-gray-50 text-gray-500 flex items-center justify-center" style={{ height: '40vh' }}>
+                                                            No preview available for this file type.
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         ) : (
                                             // --- Card grid for pending documents in this category ---
@@ -996,10 +1414,10 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                 {filteredDocs.length === 0 ? (
                                                     <div className="col-span-full text-gray-400 text-center">No pending documents for this category.</div>
                                                 ) : (
-                                                    filteredDocs.flatMap((doc, idx) => {
+                                                    filteredDocs.flatMap((doc) => {
                                                         const ext = (doc.filename || '').split('.').pop()?.toLowerCase() || '';
                                                         const cards = [];
-                                                        // Always show the document preview card
+                                                        // Unified preview card for all files (including videos)
                                                         cards.push(
                                                             <div
                                                                 key={doc.id + '-doc'}
@@ -1007,7 +1425,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                                 style={{
                                                                     borderTopColor: '#7F0404',
                                                                     aspectRatio: '8.5/13',
-                                                                    maxWidth: 255,
+                                                                    maxWidth: 230,
                                                                     minHeight: 380,
                                                                 }}
                                                                 onClick={() => {
@@ -1017,79 +1435,41 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                                     setViewingDocIndex(realIdx);
                                                                 }}
                                                             >
-                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2 overflow-hidden">
                                                                     {['pdf'].includes(ext) ? (
-                                                                        <iframe
-                                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                                            className="w-full h-56 border-none rounded bg-white"
-                                                                            title="PDF Preview"
-                                                                            style={{ objectFit: 'contain', height: '17rem' }}
-                                                                        ></iframe>
+                                                                        <PDFThumbnail 
+                                                                            url={doc.url} 
+                                                                            className="w-full h-68 border-none rounded bg-white overflow-x-hidden"
+                                                                            style={{ objectFit: 'contain', height: '17rem', overflowX: 'hidden' }}
+                                                                        />
                                                                     ) : ['jpg', 'jpeg', 'png'].includes(ext) ? (
                                                                         <img
                                                                             src={doc.url}
                                                                             alt={doc.filename}
-                                                                            className="max-h-56 max-w-full rounded object-contain mx-auto w-auto h-auto"
-                                                                            style={{ width: '100%', objectFit: 'contain', height: '14rem' }}
+                                                                            className="max-h-68 max-w-full rounded object-contain mx-auto w-auto h-auto overflow-x-hidden"
+                                                                            style={{ width: '100%', objectFit: 'contain', height: '17rem', overflowX: 'hidden' }}
+                                                                        />
+                                                                    ) : ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext) ? (
+                                                                        <video
+                                                                            src={doc.url}
+                                                                            controls
+                                                                            className="w-full h-56 rounded bg-black"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
                                                                         />
                                                                     ) : (
-                                                                        <div className="w-full h-56 flex items-center justify-center bg-gray-100 rounded text-gray-400 text-xs">
+                                                                        <div className="w-full h-68 flex items-center justify-center px-5 text-center bg-gray-100 rounded text-gray-400 text-xs">
                                                                             No preview available for this file type.
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                                 <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
-                                                                    <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename}</div>
                                                                     <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
                                                                     <div className="text-xs text-gray-400 text-center">
-                                                                        {doc.uploaded_at
-                                                                            ? `Uploaded: ${doc.uploaded_at}`
-                                                                            : ''}
+                                                                        {doc.uploaded_at ? `Uploaded: ${doc.uploaded_at}` : ''}
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         );
-                                                        // If there is a video_filename, show a separate preview card for the video
-                                                        if (doc.video_filename) {
-                                                            const videoUrl = doc.video_filename.startsWith('http')
-                                                                ? doc.video_filename
-                                                                : `/storage/documents/${doc.video_filename}`;
-                                                            cards.push(
-                                                                <div
-                                                                    key={doc.id + '-video'}
-                                                                    className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
-                                                                    style={{
-                                                                        borderTopColor: '#7F0404',
-                                                                        aspectRatio: '8.5/13',
-                                                                        maxWidth: 255,
-                                                                        minHeight: 380,
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        const realIdx = pendingDocs.findIndex(d => d.id === doc.id);
-                                                                        setViewerIndex(realIdx);
-                                                                        setViewingDocIndex(realIdx);
-                                                                    }}
-                                                                >
-                                                                    <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
-                                                                        <video
-                                                                            src={videoUrl}
-                                                                            controls
-                                                                            className="w-full h-56 rounded bg-black"
-                                                                            style={{ objectFit: 'contain', height: '17rem' }}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
-                                                                        <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename} (Video)</div>
-                                                                        <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
-                                                                        <div className="text-xs text-gray-400 text-center">
-                                                                            {doc.uploaded_at
-                                                                                ? `Uploaded: ${doc.uploaded_at}`
-                                                                                : ''}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
                                                         return cards;
                                                     })
                                                 )}
@@ -1133,7 +1513,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                     </svg>
                                 </button>
                             </div>
-                            <div className="px-8 py-8 flex-1 overflow-y-auto bg-white text-black">
+                            <div className="px-8 pt-4 flex-1 overflow-y-auto bg-white text-black">
                                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
                                     <table className="min-w-full text-black text-xs"> {/* Smaller font */}
                                         <thead>
@@ -1162,7 +1542,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                     <td colSpan={8} className="text-center text-gray-400 py-8">No pending documents found.</td>
                                                 </tr>
                                             ) : (
-                                                pendingDocsTable.map((doc, idx) => (
+                                                pendingDocsTable.map((doc) => (
                                                     <tr key={doc.id + '-' + doc.type} className="border-b last:border-b-0 hover:bg-gray-50 transition">
                                                         <td className="px-2 py-2 text-center truncate max-w-[120px] whitespace-nowrap">{doc.user_name}</td>
                                                         <td className="px-2 py-2 text-center truncate max-w-[80px] whitespace-nowrap">{doc.program_code}</td>
@@ -1175,7 +1555,7 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                                 doc.file_name?.toLowerCase().match(/\.(jpg|jpeg|png)$/i) ? (
                                                                     <img src={doc.file_url} alt="preview" className="w-10 h-12 object-cover border rounded shadow-sm" />
                                                                 ) : doc.file_name?.toLowerCase().endsWith('.pdf') ? (
-                                                                    <img src={`/thumbnails/pdf.png`} alt="PDF thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
+                                                                    <PDFThumbnail url={doc.file_url} className="w-10 h-12 object-cover border rounded shadow-sm" />
                                                                 ) : (
                                                                     <img src={`/thumbnails/file.png`} alt="File thumbnail" className="w-10 h-12 object-cover border rounded shadow-sm" />
                                                                 )
@@ -1184,20 +1564,31 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                                             ) : null}
                                                         </td>
                                                         <td className="px-2 py-2 truncate max-w-[110px] whitespace-nowrap">{doc.uploaded_at}</td>
-                                                        <td className="px-2 py-2 text-center">
+                                                        <td className="px-2 py-2 text-center space-x-2">
                                                             <button
                                                                 type="button"
                                                                 className="inline-flex items-center justify-center text-[#C46B02] hover:text-[#7F0404] transition"
                                                                 title="View"
-                                                                onClick={() => {
-                                                                    setPendingModalOpen(false);
-                                                                }}
+                                                                onClick={() => handleViewFromModal(doc)}
                                                             >
                                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
                                                                     <circle cx="12" cy="12" r="3" />
                                                                 </svg>
                                                             </button>
+                                {doc.type === 'file' && doc.can_delete && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="inline-flex items-center justify-center text-red-600 hover:text-red-800 transition disabled:opacity-50"
+                                                                    title="Delete"
+                                    disabled={deleteLoadingId === doc.id}
+                                    onClick={() => openDeleteConfirm(doc)}
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))
@@ -1205,6 +1596,75 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                         </tbody>
                                     </table>
                                 </div>
+                                
+                                {/* Modern Pagination Controls */}
+                                {tablePagination.total_pages > 1 && (
+                                    <div className="flex items-center justify-between px-6 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/70">
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm font-medium text-gray-700">
+                                                Showing <span className="font-semibold text-[#7F0404]">{((tablePagination.current_page - 1) * tablePagination.per_page) + 1}</span> to{' '}
+                                                <span className="font-semibold text-[#7F0404]">{Math.min(tablePagination.current_page * tablePagination.per_page, tablePagination.total)}</span> of{' '}
+                                                <span className="font-semibold text-[#7F0404]">{tablePagination.total}</span> documents
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={handleFirstPage}
+                                                disabled={!tablePagination.has_prev || loadingPendingTable}
+                                                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-50 hover:text-[#7F0404] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                                                title="Go to first page"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handlePrevPage}
+                                                disabled={!tablePagination.has_prev || loadingPendingTable}
+                                                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border-t border-b border-gray-300 hover:bg-gray-50 hover:text-[#7F0404] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                                                title="Go to previous page"
+                                            >
+                                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                                </svg>
+                                                Previous
+                                            </button>
+                                            <div className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-[#7F0404] to-[#C46B02] border-t border-b border-gray-300 shadow-sm">
+                                                <span className="flex items-center gap-2">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-2 0V2m-6 0V2m6 18V6H7v14z" />
+                                                    </svg>
+                                                    Page {tablePagination.current_page} of {tablePagination.total_pages}
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleNextPage}
+                                                disabled={!tablePagination.has_next || loadingPendingTable}
+                                                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border-t border-b border-gray-300 hover:bg-gray-50 hover:text-[#7F0404] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                                                title="Go to next page"
+                                            >
+                                                Next
+                                                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleLastPage}
+                                                disabled={!tablePagination.has_next || loadingPendingTable}
+                                                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-50 hover:text-[#7F0404] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                                                title="Go to last page"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-8 pb-6 flex-shrink-0 bg-white">
                                 <button
@@ -1213,6 +1673,70 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                     onClick={() => setPendingModalOpen(false)}
                                 >
                                     Close
+                                </button>
+                            </div>
+                        </div>
+                    </Transition.Child>
+                </Dialog>
+            </Transition>
+
+            {/* Delete Confirmation Modal */}
+            <Transition show={deleteConfirm.open} as={Fragment}>
+                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setDeleteConfirm({ open: false, doc: null })}>
+                    <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-200"
+                        enterFrom="opacity-0 scale-95"
+                        enterTo="opacity-100 scale-100"
+                        leave="ease-in duration-150"
+                        leaveFrom="opacity-100 scale-100"
+                        leaveTo="opacity-0 scale-95"
+                    >
+                        <div className="relative w-full max-w-md mx-auto rounded-2xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#C46B02] flex flex-col">
+                            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-[#C46B02]/90 to-[#FFD600]/80 flex-shrink-0">
+                                <Dialog.Title className="text-lg font-bold text-white tracking-tight">Delete Document</Dialog.Title>
+                            </div>
+                            <div className="px-6 py-6 flex-1 overflow-y-auto bg-white text-black">
+                                <p>Are you sure you want to <span className="text-[#7F0404] font-bold">delete</span> this document? This action cannot be undone.</p>
+                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs space-y-1">
+                                    <div>
+                                        <span className="font-semibold">Program:</span> {deleteConfirm.doc?.program_code || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Area:</span> {deleteConfirm.doc?.area_code ? `Area ${deleteConfirm.doc.area_code}` : '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Parameter:</span> {deleteConfirm.doc?.parameter_code || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Category:</span> {deleteConfirm.doc?.category || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded by:</span> {deleteConfirm.doc?.user_name || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded at:</span> {deleteConfirm.doc?.uploaded_at || '—'}
+                                    </div>
+                                </div>
+                                {deleteActionError && <div className="mt-2 text-red-600 text-sm">{deleteActionError}</div>}
+                            </div>
+                            <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-6 pb-5 flex-shrink-0 bg-white">
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                                    onClick={() => setDeleteConfirm({ open: false, doc: null })}
+                                    disabled={deleteActionLoading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold text-white transition bg-[#7F0404] hover:bg-[#a80000]"
+                                    onClick={confirmDeletePending}
+                                    disabled={deleteActionLoading}
+                                >
+                                    {deleteActionLoading ? 'Deleting...' : 'Delete'}
                                 </button>
                             </div>
                         </div>
@@ -1241,9 +1765,58 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                             </div>
                             <div className="px-6 py-6 flex-1 overflow-y-auto bg-white text-black">
                                 <p>Are you sure you want to <span className={confirmModal.action === 'approve' ? 'text-green-700 font-bold' : 'text-[#7F0404] font-bold'}>{confirmModal.action}</span> this document?</p>
-                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs">
-                                    <div><span className="font-semibold">Filename:</span> {currentDoc?.filename}</div>
-                                    <div><span className="font-semibold">Uploaded:</span> {currentDoc?.uploaded_at}</div>
+                                {confirmModal.action === 'disapprove' && (
+                                    <div className="mt-3">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+                                        <textarea
+                                            className="w-full border border-gray-300 rounded p-2 text-sm"
+                                            rows={3}
+                                            placeholder="Add a comment for disapproval (optional)"
+                                            value={disapproveComment}
+                                            onChange={(e) => setDisapproveComment(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs space-y-1">
+                                    <div>
+                                        <span className="font-semibold">Program:</span>{' '}
+                                        {selectedProgram ? (
+                                            <>
+                                                {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
+                                                {selectedProgram.name}
+                                            </>
+                                        ) : '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Area:</span>{' '}
+                                        {selectedArea ? (
+                                            <>
+                                                {selectedArea.code ? `${selectedArea.code} - ` : ''}
+                                                {selectedArea.name}
+                                            </>
+                                        ) : '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Parameter:</span>{' '}
+                                        {selectedParameter ? (
+                                            <>
+                                                {selectedParameter.code ? `${selectedParameter.code} - ` : ''}
+                                                {selectedParameter.name}
+                                            </>
+                                        ) : '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Category:</span>{' '}
+                                        {selected.category ? (categoryList.find(c => c.value === selected.category)?.label || selected.category) : '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded by:</span>{' '}
+                                        {currentDoc?.user_name || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded at:</span>{' '}
+                                        {currentDoc?.uploaded_at || '—'}
+                                    </div>
                                 </div>
                                 {actionError && <div className="mt-2 text-red-600 text-sm">{actionError}</div>}
                             </div>
@@ -1283,6 +1856,14 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                     animation: fade-in-up 0.5s ease-out forwards;
                 }
             `}</style>
+            <DocumentUploadModal
+                isOpen={addModalOpen}
+                onClose={() => setAddModalOpen(false)}
+                sidebar={sidebar}
+                csrfToken={csrfToken}
+                uploadEndpoint="/reviewer/documents/upload"
+                onUploadSuccess={handleUploadSuccess}
+            />
         </>
     );
 }

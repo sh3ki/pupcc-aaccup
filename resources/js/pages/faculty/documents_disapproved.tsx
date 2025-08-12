@@ -1,10 +1,16 @@
+
+
+import { LuFileX2 } from "react-icons/lu";
 import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
-import { useState, useRef, useMemo, useEffect, Fragment } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
+import DocumentUploadModal from '@/components/DocumentUploadModal';
+import PdfViewer from '@/components/PdfViewer';
+import { VideoPlayerRef } from '@/components/VideoViewer';
+import PDFThumbnail from '@/components/PDFThumbnail';
 
 type Parameter = { id: number; name: string; code?: string; disapproved_count?: number; category_disapproved_counts?: Record<string, number> };
 type Area = { id: number; name: string; code?: string; parameters?: Parameter[]; disapproved_count?: number };
@@ -15,7 +21,7 @@ interface PageProps {
     csrfToken: string;
 }
 
-export default function FacultyDocumentsDisapproved(props: PageProps) {
+export default function FacultyDocuments(props: PageProps) {
     const sidebar = props.sidebar ?? [];
     const csrfToken = props.csrfToken;
     const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
@@ -33,58 +39,32 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
     const toggleAreaExpand = (areaId: number) => {
         setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
     };
+    // no-op toggle helper removed; directly using setParamExpanded inline to match approved
 
-    // --- Faculty: Pending Modal State ---
-    const [pendingModalOpen, setPendingModalOpen] = useState(false);
-    const [pendingDocs, setPendingDocs] = useState<any[]>([]);
-    const [loadingPending, setLoadingPending] = useState(false);
-    const [pendingError, setPendingError] = useState('');
-    const [pendingDocView, setPendingDocView] = useState<any | null>(null);
-    const [loadingPendingDoc, setLoadingPendingDoc] = useState(false);
-
-    // Fetch pending documents when modal opens
-    useEffect(() => {
-        if (pendingModalOpen) {
-            setLoadingPending(true);
-            setPendingError('');
-            fetch('/faculty/documents/pending/data', {
-                headers: { 'Accept': 'application/json' },
-                credentials: 'same-origin',
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) setPendingDocs(data.documents);
-                    else setPendingError('Failed to load pending documents.');
-                })
-                .catch(() => setPendingError('Failed to load pending documents.'))
-                .finally(() => setLoadingPending(false));
-        }
-    }, [pendingModalOpen]);
-
-    // View a pending document
-    const handleViewPendingDoc = (docId: number) => {
-        setLoadingPendingDoc(true);
-        setPendingDocView(null);
-        fetch(`/faculty/documents/pending/${docId}`, {
-            headers: { 'Accept': 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) setPendingDocView(data.document);
-                else setPendingDocView({ error: data.message || 'Failed to load document.' });
-            })
-            .catch(() => setPendingDocView({ error: 'Failed to load document.' }))
-            .finally(() => setLoadingPendingDoc(false));
-    };
+    const categoryList = [
+        { value: 'system', label: 'System' },
+        { value: 'implementation', label: 'Implementation' },
+        { value: 'outcomes', label: 'Outcomes' },
+    ];
 
     // --- Disapproved Documents State ---
-    const [disapprovedDocs, setDisapprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string }[]>([]);
+    const [disapprovedDocs, setDisapprovedDocs] = useState<{
+        id: number,
+        filename: string,
+        url: string,
+        uploaded_at: string,
+        user_name?: string,
+        parameter_id?: number,
+        category?: string,
+        disapproved_by?: string | null,
+        disapproved_at?: string | null,
+    comment?: string | null,
+    }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
-    const [loadingDocs, setLoadingDocs] = useState(false);
+    const [, setLoadingDocs] = useState(false);
 
     const [search, setSearch] = useState('');
-    const [pageInput, setPageInput] = useState(viewerIndex + 1);
+    const [, setPageInput] = useState(viewerIndex + 1);
 
     useEffect(() => {
         setPageInput(viewerIndex + 1);
@@ -134,12 +114,29 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
     }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
 
     // --- Navigation state ---
-    const [fitMode, setFitMode] = useState<'width' | 'page'>('width');
+    const [fitMode, setFitMode] = useState<'width' | 'height' | null>(null);
     const [rotate, setRotate] = useState(0);
     const [infoOpen, setInfoOpen] = useState(false);
-    const [zoom, setZoom] = useState(1);
+    const [zoom, setZoom] = useState(0.9); // Start with 90%
     const [gridOpen, setGridOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // --- PDF page navigation state ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    // --- Video state ---
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [volume, setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const videoPlayerRef = useRef<VideoPlayerRef>(null);
+
+    // Reset to first page when document changes
+    useEffect(() => {
+        setCurrentPage(1);
+        setTotalPages(1);
+    }, [viewerIndex]);
 
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
@@ -168,10 +165,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
             setViewingDocIndex(realIdx);
         }
     };
-    const goFirst = () => goTo(0);
-    const goLast = () => goTo(filteredDocs.length - 1);
-    const goPrev = () => goTo(Math.max(0, filteredViewerIndex - 1));
-    const goNext = () => goTo(Math.min(filteredDocs.length - 1, filteredViewerIndex + 1));
+    // navigation helpers used via goTo directly where needed
 
     const handleDownload = () => {
         if (!currentDoc) return;
@@ -191,17 +185,109 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
         setRotate(r => (dir === 'left' ? (r - 90 + 360) % 360 : (r + 90) % 360));
     };
 
-    const toggleFitMode = () => setFitMode(f => (f === 'width' ? 'page' : 'width'));
+    const toggleFitMode = () => {
+        setFitMode(f => {
+            if (f === null) {
+                // Switch to fit-to-width: set zoom to 100%
+                setZoom(1.0);
+                return 'width';
+            } else if (f === 'width') {
+                // Switch to fit-to-height: set zoom to 50%
+                setZoom(0.5);
+                return 'height';
+            } else {
+                // Switch back to default: set zoom to 90%
+                setZoom(0.9);
+                return null;
+            }
+        });
+    };
 
     const handleZoom = (dir: 'in' | 'out') => {
         setZoom(z => {
-            if (dir === 'in') return Math.min(z + 0.1, 2);
-            else return Math.max(z - 0.1, 0.5);
+            const newZoom = dir === 'in' ? Math.min(z + 0.1, 1.0) : Math.max(z - 0.1, 0.5);
+            
+            // Update fitMode based on zoom value
+            if (Math.abs(newZoom - 1.0) < 0.01) {
+                setFitMode('width');
+            } else if (Math.abs(newZoom - 0.5) < 0.01) {
+                setFitMode('height');
+            } else {
+                setFitMode(null);
+            }
+            
+            return newZoom;
         });
     };
 
     const openGrid = () => setGridOpen(true);
-    const closeGrid = () => setGridOpen(false);
+    // grid open/close handled inline
+
+    // --- Video control handlers ---
+    const handleRewind = () => {
+        if (videoPlayerRef.current) {
+            const currentTime = videoPlayerRef.current.getCurrentTime();
+            videoPlayerRef.current.setCurrentTime(Math.max(0, currentTime - 10));
+        }
+    };
+
+    const handlePlayPause = () => {
+        if (videoPlayerRef.current) {
+            if (isPlaying) {
+                videoPlayerRef.current.pause();
+            } else {
+                videoPlayerRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
+    };
+
+    const handleFastForward = () => {
+        if (videoPlayerRef.current) {
+            const currentTime = videoPlayerRef.current.getCurrentTime();
+            const duration = videoPlayerRef.current.getDuration();
+            videoPlayerRef.current.setCurrentTime(Math.min(duration, currentTime + 10));
+        }
+    };
+
+    const handleVolumeChange = (newVolume: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setVolume(newVolume);
+            setVolume(newVolume);
+            setIsMuted(newVolume === 0);
+        }
+    };
+
+    const handleMuteToggle = () => {
+        if (videoPlayerRef.current) {
+            if (isMuted) {
+                videoPlayerRef.current.setVolume(volume || 0.5);
+                setIsMuted(false);
+            } else {
+                videoPlayerRef.current.setVolume(0);
+                setIsMuted(true);
+            }
+        }
+    };
+
+    const handleSpeedChange = (speed: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setPlaybackRate(speed);
+            setPlaybackSpeed(speed);
+        }
+    };
+
+    const handlePictureInPicture = () => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.requestPictureInPicture();
+        }
+    };
+
+    const handleTimeUpdate = (time: number) => {
+        if (videoPlayerRef.current) {
+            videoPlayerRef.current.setCurrentTime(time);
+        }
+    };
 
     const previewRef = useRef<HTMLDivElement>(null);
     const handleFullscreen = () => {
@@ -218,7 +304,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
         return () => document.removeEventListener('fullscreenchange', onFsChange);
     }, []);
 
-    useEffect(() => { setRotate(0); setZoom(1); }, [viewerIndex, selected.programId, selected.areaId]);
+    useEffect(() => { setRotate(0); setZoom(0.9); setFitMode(null); }, [viewerIndex, selected.programId, selected.areaId]);
     useEffect(() => {
         setPageInput(filteredViewerIndex + 1);
     }, [filteredViewerIndex, search]);
@@ -228,191 +314,13 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
         if (filteredDocs.length > 0) goTo(0);
     };
 
-    // --- Add Document Modal State (copied/adapted from faculty) ---
+    // --- Add Document Modal State ---
     const [addModalOpen, setAddModalOpen] = useState(false);
-    const [uploadForm, setUploadForm] = useState({
-        programId: '',
-        areaId: '',
-        parameterId: '',
-        category: '', // <-- add category field
-        file: null as File | null,
-        video: null as File | null, // <-- add video field
-    });
-    const [uploadErrors, setUploadErrors] = useState<any>({});
-    const [uploading, setUploading] = useState(false);
-    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
-    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null); // <-- for video preview
 
-    const programOptions = useMemo(() =>
-        sidebar.map(p => ({ value: p.id, label: p.code ? `${p.code} - ${p.name}` : p.name })),
-        [sidebar]
-    );
-    const areaOptions = useMemo(() => {
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        return prog?.areas?.map(a => ({
-            value: a.id,
-            label: a.code ? `Area ${a.code} - ${a.name}` : `Area - ${a.name}`,
-            parameters: a.parameters || [],
-        })) || [];
-    }, [sidebar, uploadForm.programId]);
-
-    // Compute parameter options based on selected area
-    const parameterOptions = useMemo(() => {
-        if (!uploadForm.programId || !uploadForm.areaId) return [];
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
-        return area?.parameters?.map(param => ({
-            value: param.id,
-            label: param.code ? `${param.code} - ${param.name}` : param.name,
-        })) || [];
-    }, [sidebar, uploadForm.programId, uploadForm.areaId]);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null); // <-- for video input ref
-
-    useEffect(() => {
-        if (!uploadForm.file) {
-            setFilePreviewUrl(null);
-            return;
-        }
-        const file = uploadForm.file;
-        if (file.type === "application/pdf" || file.type.startsWith("image/")) {
-            const url = URL.createObjectURL(file);
-            setFilePreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else {
-            setFilePreviewUrl(null);
-        }
-    }, [uploadForm.file]);
-
-    // Video preview effect
-    useEffect(() => {
-        if (!uploadForm.video) {
-            setVideoPreviewUrl(null);
-            return;
-        }
-        const file = uploadForm.video;
-        if (file.type.startsWith("video/")) {
-            const url = URL.createObjectURL(file);
-            setVideoPreviewUrl(url);
-            return () => URL.revokeObjectURL(url);
-        } else {
-            setVideoPreviewUrl(null);
-        }
-    }, [uploadForm.video]);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
+    const handleUploadSuccess = () => {
+        // Refresh the current view by reloading the disapproved documents
+        window.location.reload();
     };
-    // Video file change handler
-    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const video = e.target.files?.[0] || null;
-        setUploadForm(f => ({ ...f, video }));
-    };
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0] || null;
-        setUploadForm(f => ({ ...f, file }));
-    };
-    const handleUploadFormChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setUploadForm(f => {
-            // Reset areaId, parameterId, and category if program changes
-            if (name === "programId") {
-                return { ...f, programId: value, areaId: '', parameterId: '', category: '', file: f.file, video: f.video };
-            }
-            // Reset parameterId and category if area changes
-            if (name === "areaId") {
-                return { ...f, areaId: value, parameterId: '', category: '', file: f.file, video: f.video };
-            }
-            // Reset category if parameter changes
-            if (name === "parameterId") {
-                return { ...f, parameterId: value, category: '', file: f.file, video: f.video };
-            }
-            return { ...f, [name]: value };
-        });
-    };
-    const handleUploadSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setUploadErrors({});
-        if (!uploadForm.programId) return setUploadErrors({ programId: "Select a program." });
-        if (!uploadForm.areaId) return setUploadErrors({ areaId: "Select an area." });
-        if (!uploadForm.parameterId) return setUploadErrors({ parameterId: "Select a parameter." });
-        if (!uploadForm.category) return setUploadErrors({ category: "Select a category." }); // <-- require category
-        if (!uploadForm.file) return setUploadErrors({ file: "Select a document file." });
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('program_id', uploadForm.programId);
-        formData.append('area_id', uploadForm.areaId);
-        formData.append('parameter_id', uploadForm.parameterId);
-        formData.append('category', uploadForm.category); // <-- append category
-        formData.append('file', uploadForm.file);
-        // Append video if present
-        if (uploadForm.video) {
-            formData.append('video', uploadForm.video);
-        }
-
-        try {
-            const token = csrfToken;
-            const response = await fetch('/reviewer/documents/upload', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': token || '',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (response.status === 419) {
-                setUploadErrors({ general: "CSRF token mismatch. Please refresh the page and try again." });
-                setUploading(false);
-                return;
-            }
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setAddModalOpen(false);
-                setUploadForm({ programId: '', areaId: '', parameterId: '', category: '', file: null, video: null });
-                setFilePreviewUrl(null);
-                setVideoPreviewUrl(null);
-                alert(data.message || 'Document uploaded successfully!');
-                window.location.reload();
-            } else {
-                if (data.errors) {
-                    setUploadErrors(data.errors);
-                } else {
-                    setUploadErrors({ general: data.message || "Upload failed." });
-                }
-            }
-        } catch (err: any) {
-            setUploadErrors({ general: "Upload failed. Please try again." });
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    // Helper: is selected area 8 or 9?
-    const isArea8or9 = (() => {
-        if (!uploadForm.programId || !uploadForm.areaId) return false;
-        const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
-        const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
-        // Accept both numeric and Roman numeral codes
-        const code = (area?.code || '').toString().toUpperCase();
-        return area && (
-            code === 'VIII' || code === 'IX'
-        );
-    })();
-
-    // Helper: category list
-    const categoryList = [
-        { value: 'system', label: 'System' },
-        { value: 'implementation', label: 'Implementation' },
-        { value: 'outcomes', label: 'Outcomes' },
-    ];
 
     // --- Add state to track if a document is being viewed ---
     const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
@@ -429,7 +337,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
 
     return (
         <>
-            <Head title="Reviewer Disapproved Documents" />
+            <Head title="Faculty Disapproved Documents" />
             <DashboardLayout>
                 <div className="flex w-full min-h-[calc(100vh-64px-40px)] overflow-hidden">
                     {/* Sidebar - Reduced width */}
@@ -560,7 +468,6 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                                         </svg>
                                                                     </button>
-                                                                    {/* Category sub-links */}
                                                                     {paramExpanded[param.id] && (
                                                                         <ul className="ml-4 mt-1 list-none text-[11px] text-gray-700">
                                                                             {categoryList.map(cat => (
@@ -614,7 +521,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                         <div className="flex items-center justify-between flex-shrink-0">
                             <div>
                                 {!selected.programId ? (
-                                    <h1 className="text-xl font-bold text-[#7F0404]">Reviewer Disapproved Documents</h1>
+                                    <h1 className="text-xl font-bold text-[#7F0404]">Faculty Disapproved Documents</h1>
                                 ) : selectedProgram ? (
                                     <h1 className="text-lg font-bold text-[#7F0404]">
                                         {selectedProgram.code ? `${selectedProgram.code} - ` : ''}
@@ -622,7 +529,18 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                     </h1>
                                 ) : null}
                             </div>
-                            {/* No Add button for disapproved page */}
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
+                                    onClick={() => setAddModalOpen(true)}
+                                >
+                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Add
+                                </button>
+                            </div>
                         </div>
                         
                         {/* Program Cards Grid when no program is selected */}
@@ -636,7 +554,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                         setSelected({ programId: program.id });
                                         setExpanded(prev => ({ ...prev, [program.id]: true }));
                                     }}
-                                    renderCardContent={(program, index) => {
+                                    renderCardContent={(program) => {
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -644,11 +562,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
-                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
+                                                        <LuFileX2 className="w-5 h-5 text-[#7F0404]" />
                                                     </div>
                                                     <h2 className="text-base font-bold text-[#7F0404]">
                                                         {program.code ? program.code : ''} 
@@ -665,8 +579,8 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                         </div>
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-sm">Disapproved Documents:</span>
-                                                            <span className={`font-semibold ${program.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
-                                                                {program.disapproved_count}
+                                                            <span className={`font-semibold ${(program.disapproved_count ?? 0) > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                                {program.disapproved_count ?? 0}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -701,9 +615,8 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                         setSelected({ programId: selected.programId, areaId: area.id });
                                         setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
                                     }}
-                                    renderCardContent={(area, index) => {
+                                    renderCardContent={(area) => {
                                         const parametersCount = area.parameters?.length || 0;
-                                        const disapprovedCount = area.disapproved_count || 0;
                                         return (
                                             <div className="p-5 flex flex-col h-full">
                                                 <div className="flex items-start mb-3">
@@ -711,11 +624,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                         style={{ backgroundColor: '#f1f5f9' }}
                                                     >
-                                                        <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
+                                                        <LuFileX2 className="w-5 h-5 text-[#7F0404]" />
                                                     </div>
                                                     <h2 className="text-base font-bold text-[#7F0404]">
                                                         {area.code ? `Area ${area.code}` : 'Area'} 
@@ -732,8 +641,8 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                         </div>
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-sm">Disapproved Documents:</span>
-                                                            <span className={`font-semibold ${area.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
-                                                                {area.disapproved_count}
+                                                            <span className={`font-semibold ${(area.disapproved_count ?? 0) > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                                {area.disapproved_count ?? 0}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -746,7 +655,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                                 stroke="currentColor" 
                                                                 viewBox="0 0 24 24"
                                                             >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
                                                         </div>
                                                     </div>
@@ -777,18 +686,14 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                         setSelected({ programId: selected.programId, areaId: selected.areaId, parameterId: param.id });
                                         setParamExpanded(prev => ({ ...prev, [param.id]: true }));
                                     }}
-                                    renderCardContent={(param, index) => (
+                                    renderCardContent={(param) => (
                                         <div className="p-5 flex flex-col h-full">
                                             <div className="flex items-start mb-3">
                                                 <div
                                                     className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                     style={{ backgroundColor: '#f1f5f9' }}
                                                 >
-                                                    <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                        <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                        <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                    </svg>
+                                                    <LuFileX2 className="w-5 h-5 text-[#7F0404]" />
                                                 </div>
                                                 <h2 className="text-base font-bold text-[#7F0404]">
                                                     {param.code ? `${param.code} - ` : ''}
@@ -804,8 +709,8 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                     </div>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-sm">Disapproved Documents:</span>
-                                                        <span className={`font-semibold ${param.disapproved_count > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
-                                                            {param.disapproved_count || 0}
+                                                        <span className={`font-semibold ${(param.disapproved_count ?? 0) > 0 ? 'text-[#7F0404]' : 'text-gray-500'}`}>
+                                                            {param.disapproved_count ?? 0}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -828,6 +733,37 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                 />
                             </div>
                         ) : null}
+                        {selected.areaId && selected.parameterId && (
+                            <>
+                                <div className="ml-4 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea ? (
+                                        <h2 className="text-base font-semibold text-[#7F0404] flex items-center">
+                                            <span className="font-bold mr-2">Area</span>
+                                            {selectedArea.code ? <span className="font-bold mr-2">{selectedArea.code}</span> : null}
+                                            - {selectedArea.name}
+                                        </h2>
+                                    ) : null}
+                                </div>
+                                <div className="ml-8 min-h-[1rem] flex items-center flex-shrink-0">
+                                    {selectedProgram && selectedArea && selectedParameter ? (
+                                        selected.category ? (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                                <span className="ml-2 text-xs font-semibold text-[#C46B02]">
+                                                    ({categoryList.find((cat: { value: string; label: string }) => cat.value === selected.category)?.label || selected.category})
+                                                </span>
+                                            </h3>
+                                        ) : (
+                                            <h3 className="text-sm font-medium text-[#7F0404] flex items-center">
+                                                {selectedParameter.code ? <span className="font-bold mr-2">{selectedParameter.code}</span> : null}
+                                                - {selectedParameter.name}
+                                            </h3>
+                                        )
+                                    ) : null}
+                                </div>
+                            </>
+                        )}
                         {selected.programId && selected.areaId && selected.parameterId && (
                             <div className="mt-2 flex flex-col flex-1 min-h-0">
                                 {selected.parameterId && !selected.category && (
@@ -838,8 +774,8 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                         </p>
                                         <DocumentCardGrid
                                             items={categoryList}
-                                            getKey={cat => cat.value}
-                                            onCardClick={cat => {
+                                            getKey={(cat: { value: string; label: string }) => cat.value}
+                                            onCardClick={(cat: { value: string; label: string }) => {
                                                 setSelected({
                                                     programId: selected.programId,
                                                     areaId: selected.areaId,
@@ -847,7 +783,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                     category: cat.value
                                                 });
                                             }}
-                                            renderCardContent={(cat, index) => {
+                                            renderCardContent={(cat: { value: string; label: string }) => {
                                                 let disapprovedCount = 0;
                                                 if (selectedParameter && selectedParameter.category_disapproved_counts) {
                                                     disapprovedCount = selectedParameter.category_disapproved_counts[cat.value] || 0;
@@ -859,11 +795,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                                 className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
                                                                 style={{ backgroundColor: '#f1f5f9' }}
                                                             >
-                                                                <svg className="w-5 h-5 text-[#7F0404]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                    <path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H5z" strokeLinecap="round" strokeLinejoin="round" />
-                                                                    <path d="M14 3v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                                                                    <path d="M9 14l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                                                </svg>
+                                                                <LuFileX2 className="w-5 h-5 text-[#7F0404]" />
                                                             </div>
                                                             <h2 className="text-base font-bold text-[#7F0404]">
                                                                 {cat.label}
@@ -911,86 +843,126 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                         </p>
                                         {/* --- Show DocumentNavigation if a document is selected --- */}
                                         {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] ? (
-                                            <div className="w-full flex flex-col items-center">
+                                            <div className="w-full flex flex-col items-center pb-4">
                                                 <div className="w-full max-w-4xl mx-auto">
-                                                    <DocumentNavigation
-                                                        documents={filteredDocs}
-                                                        currentIndex={filteredViewerIndex}
-                                                        onChangeIndex={idx => goTo(idx)}
-                                                        onDownload={handleDownload}
-                                                        onPrint={handlePrint}
-                                                        onRotate={handleRotate}
-                                                        onFitMode={toggleFitMode}
-                                                        onZoom={handleZoom}
-                                                        onInfo={() => setInfoOpen(true)}
-                                                        onGrid={openGrid}
-                                                        onFullscreen={handleFullscreen}
-                                                        fitMode={fitMode}
-                                                        rotate={rotate}
-                                                        zoom={zoom}
-                                                        isFullscreen={isFullscreen}
-                                                        infoOpen={infoOpen}
-                                                        setInfoOpen={setInfoOpen}
-                                                        gridOpen={gridOpen}
-                                                        setGridOpen={setGridOpen}
-                                                        search={search}
-                                                        setSearch={setSearch}
-                                                        onSearch={handleSearch}
-                                                    />
-                                                </div>
-                                                <div
-                                                    ref={previewRef}
-                                                    className="w-full max-w-4xl mx-auto bg-white rounded-b-lg shadow-lg flex flex-col items-center justify-center overflow-hidden"
-                                                    style={{
-                                                        minHeight: 480,
-                                                        maxHeight: '70vh',
-                                                        marginBottom: 24,
-                                                        marginTop: 0,
-                                                        borderBottomLeftRadius: 14,
-                                                        borderBottomRightRadius: 14,
-                                                    }}
-                                                >
-                                                    {/* --- Document Preview --- */}
                                                     {(() => {
-                                                        const doc = filteredDocs[filteredViewerIndex];
-                                                        if (!doc) return null;
-                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
-                                                        if (['pdf'].includes(ext)) {
-                                                            return (
-                                                                <iframe
-                                                                    src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                                    className="w-full h-[65vh] border-none rounded-b-lg bg-white"
-                                                                    title="PDF Preview"
-                                                                    style={{
-                                                                        objectFit: 'contain',
-                                                                        minHeight: 480,
-                                                                        maxHeight: '65vh',
-                                                                    }}
-                                                                ></iframe>
-                                                            );
-                                                        } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
-                                                            return (
-                                                                <img
-                                                                    src={doc.url}
-                                                                    alt={doc.filename}
-                                                                    className="max-h-[65vh] max-w-full rounded-b-lg object-contain mx-auto w-auto h-auto"
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        objectFit: 'contain',
-                                                                        minHeight: 480,
-                                                                        maxHeight: '65vh',
-                                                                    }}
-                                                                />
-                                                            );
-                                                        } else {
-                                                            return (
-                                                                <div className="w-full h-[65vh] flex items-center justify-center bg-gray-100 rounded-b-lg text-gray-400 text-xs">
-                                                                    No preview available for this file type.
-                                                                </div>
-                                                            );
-                                                        }
+                                                        const currentDoc = filteredDocs[filteredViewerIndex];
+                                                        const isVideoFile = !!(currentDoc?.filename && 
+                                                            ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(
+                                                                currentDoc.filename.split('.').pop()?.toLowerCase() || ''
+                                                            ));
+                                                        
+                                                        return (
+                                                            <DocumentNavigation
+                                                                currentDocument={currentDoc}
+                                                                currentPage={currentPage}
+                                                                totalPages={totalPages}
+                                                                onPageChange={setCurrentPage}
+                                                                onDownload={handleDownload}
+                                                                onPrint={handlePrint}
+                                                                onRotate={handleRotate}
+                                                                onFitMode={toggleFitMode}
+                                                                onZoom={handleZoom}
+                                                                onInfo={() => setInfoOpen(true)}
+                                                                onGrid={openGrid}
+                                                                onFullscreen={handleFullscreen}
+                                                                fitMode={fitMode}
+                                                                rotate={rotate}
+                                                                zoom={zoom}
+                                                                isFullscreen={isFullscreen}
+                                                                infoOpen={infoOpen}
+                                                                setInfoOpen={setInfoOpen}
+                                                                gridOpen={gridOpen}
+                                                                setGridOpen={setGridOpen}
+                                                                search={search}
+                                                                setSearch={setSearch}
+                                                                onSearch={handleSearch}
+                                                                // Video props - only pass when it's a video file
+                                                                forceVideoMode={isVideoFile}
+                                                                onRewind={isVideoFile ? handleRewind : undefined}
+                                                                onPlayPause={isVideoFile ? handlePlayPause : undefined}
+                                                                onFastForward={isVideoFile ? handleFastForward : undefined}
+                                                                onVolumeChange={isVideoFile ? handleVolumeChange : undefined}
+                                                                onMuteToggle={isVideoFile ? handleMuteToggle : undefined}
+                                                                onSpeedChange={isVideoFile ? handleSpeedChange : undefined}
+                                                                onPictureInPicture={isVideoFile ? handlePictureInPicture : undefined}
+                                                                onTimeUpdate={isVideoFile ? handleTimeUpdate : undefined}
+                                                                isPlaying={isVideoFile ? isPlaying : undefined}
+                                                                volume={isVideoFile ? volume : undefined}
+                                                                isMuted={isVideoFile ? isMuted : undefined}
+                                                                playbackSpeed={isVideoFile ? playbackSpeed : undefined}
+                                                            />
+                                                        );
                                                     })()}
                                                 </div>
+                                                {(() => {
+                                                    const doc = filteredDocs[filteredViewerIndex];
+                                                    if (!doc) return null;
+                                                    const ext = (doc.filename.split('.').pop() || '').toLowerCase();
+                                                    const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext);
+                                                    if (isVideo) return (
+                                                        <div className="w-full max-w-4xl mx-auto bg-white rounded-b-lg p-4 border border-gray-200 mt-2">
+                                                            <div className="text-sm text-gray-700">
+                                                                <div className="mb-1"><span className="font-semibold">Reviewed by:</span> {doc.disapproved_by || '—'}</div>
+                                                                <div className="font-semibold mb-1">Comment:</div>
+                                                                <div className="whitespace-pre-wrap break-words">{doc.comment || '—'}</div>
+                                                            </div>
+                                                        </div>
+                                                    ); // handled by video controls; plus show comment block
+                                                    if (ext === 'pdf') {
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
+                                                                <PdfViewer
+                                                                    url={doc.url}
+                                                                    currentPage={currentPage}
+                                                                    onTotalPagesChange={setTotalPages}
+                                                                    zoom={zoom}
+                                                                    rotate={rotate}
+                                                                    className="w-full h-full"
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto">
+                                                                <div className="bg-gray-50 flex items-center justify-center" style={{ height: '72vh' }}>
+                                                                    <img src={doc.url} alt={doc.filename} className="max-h-full max-w-full object-contain" />
+                                                                </div>
+                                                                <div className="bg-white rounded-b-lg p-4 border border-gray-200 mt-2">
+                                                                    <div className="text-sm text-gray-700">
+                                                                        <div className="mb-1"><span className="font-semibold">Reviewed by:</span> {doc.disapproved_by || '—'}</div>
+                                                                        <div className="font-semibold mb-1">Comment:</div>
+                                                                        <div className="whitespace-pre-wrap break-words">{doc.comment || '—'}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div className="w-full max-w-4xl mx-auto bg-gray-50 text-gray-500 flex items-center justify-center" style={{ height: '40vh' }}>
+                                                            No preview available for this file type.
+                                                        </div>
+                                                    );
+                                                })()}
+                                                {/* Comment block for PDF: place below the viewer */}
+                                                {(() => {
+                                                    const doc = filteredDocs[filteredViewerIndex];
+                                                    if (!doc) return null;
+                                                    const ext = (doc.filename.split('.').pop() || '').toLowerCase();
+                                                    if (ext === 'pdf') {
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto bg-white rounded-b-lg p-4 border border-gray-200 mt-2">
+                                                                <div className="text-sm text-gray-700">
+                                                                    <div className="mb-1"><span className="font-semibold">Reviewed by:</span> {doc.disapproved_by || '—'}</div>
+                                                                    <div className="font-semibold mb-1">Comment:</div>
+                                                                    <div className="whitespace-pre-wrap break-words">{doc.comment || '—'}</div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                             </div>
                                         ) : (
                                             // --- Card grid for disapproved documents in this category ---
@@ -998,10 +970,10 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                 {filteredDocs.length === 0 ? (
                                                     <div className="col-span-full text-gray-400 text-center">No disapproved documents for this category.</div>
                                                 ) : (
-                                                    filteredDocs.flatMap((doc, idx) => {
-                                                        const ext = doc.filename.split('.').pop()?.toLowerCase();
+                                                    filteredDocs.flatMap((doc) => {
+                                                        const ext = (doc.filename.split('.').pop() || '').toLowerCase();
                                                         const cards = [];
-                                                        // Always show the document preview card
+                                                        // Unified preview card for all files (including videos)
                                                         cards.push(
                                                             <div
                                                                 key={doc.id + '-doc'}
@@ -1009,7 +981,7 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                                 style={{
                                                                     borderTopColor: '#7F0404',
                                                                     aspectRatio: '8.5/13',
-                                                                    maxWidth: 255,
+                                                                    maxWidth: 230,
                                                                     minHeight: 380,
                                                                 }}
                                                                 onClick={() => {
@@ -1018,83 +990,43 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                                                                     setViewingDocIndex(realIdx);
                                                                 }}
                                                             >
-                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
+                                                                <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2 overflow-hidden">
                                                                     {['pdf'].includes(ext) ? (
-                                                                        <iframe
-                                                                            src={`${doc.url}#toolbar=0&navpanes=0&scrollbar=0`}
-                                                                            className="w-full h-56 border-none rounded bg-white"
-                                                                            title="PDF Preview"
-                                                                            style={{ objectFit: 'contain', height: '17rem' }}
-                                                                        ></iframe>
+                                                                        <PDFThumbnail
+                                                                            url={doc.url}
+                                                                            className="w-full h-68 border-none rounded bg-white overflow-x-hidden"
+                                                                            scale={0.5}
+                                                                        />
                                                                     ) : ['jpg', 'jpeg', 'png'].includes(ext) ? (
                                                                         <img
                                                                             src={doc.url}
                                                                             alt={doc.filename}
-                                                                            className="max-h-56 max-w-full rounded object-contain mx-auto w-auto h-auto"
-                                                                            style={{ width: '100%', objectFit: 'contain', height: '14rem' }}
+                                                                            className="max-h-68 max-w-full rounded object-contain mx-auto w-auto h-auto overflow-x-hidden"
+                                                                            style={{ width: '100%', objectFit: 'contain', height: '17rem', overflowX: 'hidden' }}
+                                                                        />
+                                                                    ) : ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext) ? (
+                                                                        <video
+                                                                            src={doc.url}
+                                                                            controls
+                                                                            className="w-full h-56 rounded bg-black"
+                                                                            style={{ objectFit: 'contain', height: '17rem' }}
                                                                         />
                                                                     ) : (
-                                                                        <div className="w-full h-56 flex items-center justify-center bg-gray-100 rounded text-gray-400 text-xs">
+                                                                        <div className="w-full h-68 flex items-center justify-center px-5 text-center bg-gray-100 rounded text-gray-400 text-xs">
                                                                             No preview available for this file type.
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                                 <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
-                                                                    <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename}</div>
-                                                                    <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
-                                                                    <div className="text-xs text-gray-400 text-center">
-                                                                        {doc.updated_at
-                                                                            ? `Disapproved: ${doc.updated_at}`
-                                                                            : doc.uploaded_at
-                                                                                ? `Disapproved: ${doc.uploaded_at}`
-                                                                                : ''}
+                                                                    <div className="text-[11px] text-gray-600 text-left w-full">
+                                                                        <div className="truncate"><span className="font-semibold">Uploaded by:</span> {doc.user_name || '—'}</div>
+                                                                        <div className="truncate"><span className="font-semibold">Uploaded at:</span> {doc.uploaded_at || '—'}</div>
+                                                                        <div className="truncate"><span className="font-semibold">Disapproved by:</span> {doc.disapproved_by || '—'}</div>
+                                                                        <div className="truncate"><span className="font-semibold">Disapproved at:</span> {doc.disapproved_at || '—'}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         );
-                                                        // If there is a video_filename, show a separate preview card for the video
-                                                        if (doc.video_filename) {
-                                                            const videoUrl = doc.video_filename.startsWith('http')
-                                                                ? doc.video_filename
-                                                                : `/storage/documents/${doc.video_filename}`;
-                                                            cards.push(
-                                                                <div
-                                                                    key={doc.id + '-video'}
-                                                                    className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
-                                                                    style={{
-                                                                        borderTopColor: '#7F0404',
-                                                                        aspectRatio: '8.5/13',
-                                                                        maxWidth: 255,
-                                                                        minHeight: 380,
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        const realIdx = disapprovedDocs.findIndex(d => d.id === doc.id);
-                                                                        setViewerIndex(realIdx);
-                                                                        setViewingDocIndex(realIdx);
-                                                                    }}
-                                                                >
-                                                                    <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2">
-                                                                        <video
-                                                                            src={videoUrl}
-                                                                            controls
-                                                                            className="w-full h-56 rounded bg-black"
-                                                                            style={{ objectFit: 'contain', height: '17rem' }}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
-                                                                        <div className="truncate w-full text-xs font-bold text-[#7F0404] mb-1 text-center">{doc.filename} (Video)</div>
-                                                                        <div className="text-xs text-gray-500 mb-1 text-center">{doc.user_name ? `By: ${doc.user_name}` : ''}</div>
-                                                                        <div className="text-xs text-gray-400 text-center">
-                                                                            {doc.updated_at
-                                                                                ? `Disapproved: ${doc.updated_at}`
-                                                                                : doc.uploaded_at
-                                                                                    ? `Disapproved: ${doc.uploaded_at}`
-                                                                                    : ''}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
                                                         return cards;
                                                     })
                                                 )}
@@ -1109,277 +1041,15 @@ export default function FacultyDocumentsDisapproved(props: PageProps) {
                 </div>
             </DashboardLayout>
 
-            {/* Add Document Modal (copied/adapted from faculty) */}
-            <Transition show={addModalOpen} as={Fragment}>
-                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setAddModalOpen(false)}>
-                    <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-                    <Transition.Child
-                        as={Fragment}
-                        enter="ease-out duration-200"
-                        enterFrom="opacity-0 scale-95"
-                        enterTo="opacity-100 scale-100"
-                        leave="ease-in duration-150"
-                        leaveFrom="opacity-100 scale-100"
-                        leaveTo="opacity-0 scale-95"
-                    >
-                        <div
-                            className="relative w-full max-w-2xl mx-auto rounded-3xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col"
-                            style={{
-                                maxHeight: '90vh', // Prevent modal from exceeding viewport
-                            }}
-                        >
-                            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#C46B02]/80 flex-shrink-0">
-                                <Dialog.Title className="text-xl font-bold text-white tracking-tight">
-                                    Add Document
-                                </Dialog.Title>
-                                <button
-                                    onClick={() => setAddModalOpen(false)}
-                                    className="text-white hover:text-[#FDDE54] transition-all duration-200 rounded-full p-1.5 focus:outline-none"
-                                    aria-label="Close"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                            <div
-                                className="px-8 py-8 flex-1 overflow-y-auto"
-                                style={{
-                                    minHeight: 0,
-                                    maxHeight: 'calc(90vh - 120px)', // Adjust for header/footer
-                                }}
-                            >
-                                <form onSubmit={handleUploadSubmit}>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
-                                        <div className="flex flex-col">
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Program <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="programId"
-                                                    value={uploadForm.programId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                >
-                                                    <option value="">Select program</option>
-                                                    {programOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.programId && <div className="text-red-600 text-xs mt-1">{uploadErrors.programId}</div>}
-                                            </div>
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Area <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="areaId"
-                                                    value={uploadForm.areaId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.programId}
-                                                >
-                                                    <option value="">Select area</option>
-                                                    {areaOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.areaId && <div className="text-red-600 text-xs mt-1">{uploadErrors.areaId}</div>}
-                                            </div>
-                                            {/* Parameter Dropdown */}
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Parameter <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="parameterId"
-                                                    value={uploadForm.parameterId}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.areaId}
-                                                >
-                                                    <option value="">Select parameter</option>
-                                                    {parameterOptions.map(opt => (
-                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                    ))}
-                                                </select>
-                                                {uploadErrors.parameterId && <div className="text-red-600 text-xs mt-1">{uploadErrors.parameterId}</div>}
-                                            </div>
-                                            {/* Category Dropdown */}
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Category <span className="text-red-600">*</span></label>
-                                                <select
-                                                    name="category"
-                                                    value={uploadForm.category}
-                                                    onChange={handleUploadFormChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none bg-white shadow-sm transition"
-                                                    required
-                                                    disabled={!uploadForm.parameterId}
-                                                >
-                                                    <option value="">Select category</option>
-                                                    <option value="system">System</option>
-                                                    <option value="implementation">Implementation</option>
-                                                    <option value="outcomes">Outcomes</option>
-                                                </select>
-                                                {uploadErrors.category && <div className="text-red-600 text-xs mt-1">{uploadErrors.category}</div>}
-                                            </div>
-                                            <div className="flex-1 flex flex-col">
-                                                <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Document File <span className="text-red-600">*</span></label>
-                                                <div
-                                                    className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
-                                                    style={{ minHeight: '5rem', maxHeight: '7rem' }}
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                    onDrop={handleDrop}
-                                                    onDragOver={e => e.preventDefault()}
-                                                >
-                                                    {uploadForm.file ? (
-                                                        <div>
-                                                            <div className="font-semibold">{uploadForm.file.name}</div>
-                                                            <div className="text-xs text-gray-500">{uploadForm.file.type} ({(uploadForm.file.size / 1024).toFixed(1)} KB)</div>
-                                                            <button
-                                                                type="button"
-                                                                className="mt-2 text-xs text-red-600 underline"
-                                                                onClick={e => { e.stopPropagation(); setUploadForm(f => ({ ...f, file: null })); }}
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400">Drag & drop or click to upload (PDF, DOCX, PPT, etc.)</span>
-                                                    )}
-                                                    <input
-                                                        ref={fileInputRef}
-                                                        type="file"
-                                                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
-                                                        className="hidden"
-                                                        onChange={handleFileChange}
-                                                    />
-                                                </div>
-                                                {uploadErrors.file && <div className="text-red-600 text-xs mt-1">{uploadErrors.file}</div>}
-                                            </div>
-                                            {/* --- Video File Upload (only for Area 8 or 9) --- */}
-                                            {isArea8or9 && (
-                                                <div className="flex-1 flex flex-col mt-4">
-                                                    <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Video File (optional)</label>
-                                                    <div
-                                                        className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 h-28 text-center cursor-pointer bg-gray-50 hover:bg-gray-100 transition flex items-center justify-center"
-                                                        style={{ minHeight: '5rem', maxHeight: '7rem' }}
-                                                        onClick={() => videoInputRef.current?.click()}
-                                                    >
-                                                        {uploadForm.video ? (
-                                                            <div>
-                                                                <div className="font-semibold">{uploadForm.video.name}</div>
-                                                                <div className="text-xs text-gray-500">{uploadForm.video.type} ({(uploadForm.video.size / 1024).toFixed(1)} KB)</div>
-                                                                <button
-                                                                    type="button"
-                                                                    className="mt-2 text-xs text-red-600 underline"
-                                                                    onClick={e => { e.stopPropagation(); setUploadForm(f => ({ ...f, video: null })); }}
-                                                                >
-                                                                    Remove
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-gray-400">Click to upload a video file (MP4, MOV, AVI, etc.)</span>
-                                                        )}
-                                                        <input
-                                                            ref={videoInputRef}
-                                                            type="file"
-                                                            accept="video/*"
-                                                            className="hidden"
-                                                            onChange={handleVideoChange}
-                                                        />
-                                                    </div>
-                                                    {/* No error display, since not required */}
-                                                </div>
-                                            )}
-                                            {/* --- End Video File Upload --- */}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label className="block text-sm font-semibold mb-2 text-[#7F0404]">Preview</label>
-                                            <div
-                                                className="border rounded-lg bg-white flex items-center justify-center overflow-hidden"
-                                                style={{
-                                                    minHeight: '180px',
-                                                    maxHeight: '400px',
-                                                    width: '100%',
-                                                    maxWidth: '100%',
-                                                    aspectRatio: '8.5/11', // Portrait document aspect ratio
-                                                }}
-                                            >
-                                                {uploadForm.file ? (
-                                                    uploadForm.file.type === "application/pdf" ? (
-                                                        <div 
-                                                            className="w-full h-full overflow-y-auto"
-                                                            style={{
-                                                                scrollbarWidth: 'thin',
-                                                                scrollbarColor: '#C46B02 #f1f5f9'
-                                                            }}
-                                                        >
-                                                            <iframe 
-                                                                src={`${filePreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                                                                className="w-full h-full border-none rounded bg-white" 
-                                                                title="PDF Preview"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                            ></iframe>
-                                                        </div>
-                                                    ) : uploadForm.file.type.startsWith("image/") ? (
-                                                        <div 
-                                                            className="w-full h-full overflow-auto flex items-center justify-center p-4"
-                                                            style={{
-                                                                scrollbarWidth: 'thin',
-                                                                scrollbarColor: '#C46B02 #f1f5f9'
-                                                            }}
-                                                        >
-                                                            <img
-                                                                src={filePreviewUrl}
-                                                                alt="Preview"
-                                                                className="max-h-full max-w-full rounded object-contain"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-500 text-sm">Preview not available for this file type.</div>
-                                                    )
-                                                ) : (
-                                                    <div className="text-gray-400 text-center">No file selected.</div>
-                                                )}
-                                            </div>
-                                            {/* Video preview (if video selected) */}
-                                            {isArea8or9 && uploadForm.video && videoPreviewUrl && (
-                                                <div className="mt-4">
-                                                    <label className="block text-xs font-semibold mb-1 text-[#7F0404]">Video Preview</label>
-                                                    <video
-                                                        src={videoPreviewUrl}
-                                                        controls
-                                                        className="w-full max-h-48 rounded"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {uploadErrors.general && <div className="text-red-600 text-xs mt-4">{uploadErrors.general}</div>}
-                                </form>
-                            </div>
-                            <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-8 pb-6 flex-shrink-0 bg-white">
-                                <button
-                                    type="button"
-                                    className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
-                                    onClick={() => setAddModalOpen(false)}
-                                    disabled={uploading}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 rounded-lg font-bold shadow bg-[#7F0404] text-white hover:bg-[#C46L02] hover:shadow-lg transition-all duration-200"
-                                    disabled={uploading}
-                                    onClick={handleUploadSubmit}
-                                >
-                                    {uploading ? 'Uploading...' : 'Upload'}
-                                </button>
-                            </div>
-                        </div>
-                    </Transition.Child>
-                </Dialog>
-            </Transition>
+            {/* Document Upload Modal */}
+            <DocumentUploadModal
+                isOpen={addModalOpen}
+                onClose={() => setAddModalOpen(false)}
+                sidebar={sidebar}
+                csrfToken={csrfToken}
+                uploadEndpoint="/faculty/documents/upload"
+                onUploadSuccess={handleUploadSuccess}
+            />
 
             <style jsx>{`
                 table { font-size: 1rem; }

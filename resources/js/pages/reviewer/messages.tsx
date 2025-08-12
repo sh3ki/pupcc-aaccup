@@ -1,15 +1,16 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
+import MessagingPanel from '@/components/messaging/MessagingPanel';
+import type { SharedData } from '@/types';
 
 export default function ReviewerMessages() {
+    const { auth } = (usePage().props as unknown as SharedData);
+    const user = auth.user as unknown as { id: number; name?: string; avatar?: string };
     return (
         <>
             <Head title="Reviewer Messages" />
             <DashboardLayout>
-                <section className="w-full max-w-4xl mx-auto text-center">
-                    <h1 className="text-4xl font-bold mb-4 text-[#7F0404]">Messages</h1>
-                    <p className="text-lg text-gray-700 mb-8">This is the messages page for reviewer. (Blank page)</p>
-                </section>
+                <MessagingPanel currentUser={{ id: user.id, name: user.name, avatar: user.avatar }} />
             </DashboardLayout>
         </>
     );

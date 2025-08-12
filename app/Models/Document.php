@@ -13,12 +13,20 @@ class Document extends Model
         'user_id',
         'program_id',
         'area_id',
-        'parameter_id', // added
-        'doc_filename', 
-        'category',        
-        'video_filename',  
+        'parameter_id',
+        'category',
+        'doc_filename',
+        'video_filename',
         'status',
+        'checked_by',
+        'comment',
     ];
+
+    // Accessor for type (file extension from doc_filename)
+    public function getTypeAttribute()
+    {
+        return pathinfo($this->doc_filename, PATHINFO_EXTENSION);
+    }
 
     public function user()
     {
@@ -38,5 +46,11 @@ class Document extends Model
     public function parameter()
     {
         return $this->belongsTo(Parameter::class);
+    }
+
+    // The reviewer who approved/disapproved the document
+    public function checker()
+    {
+        return $this->belongsTo(User::class, 'checked_by');
     }
 }
