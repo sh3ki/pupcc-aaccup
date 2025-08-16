@@ -1,145 +1,198 @@
+import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PagePreview from '@/components/PagePreview';
-import { useState, useEffect, ChangeEvent } from 'react';
+import FileUpload from '@/components/FileUpload';
 
-export default function LayoutHome() {
-    // State for all homepage content
-    const [carousel, setCarousel] = useState([
-        { image: '', title: '', subtitle: '' },
-        { image: '', title: '', subtitle: '' },
-        { image: '', title: '', subtitle: '' },
-        { image: '', title: '', subtitle: '' },
-    ]);
-    const [accreditors, setAccreditors] = useState([
-        { image: '', name: '', position: '' },
-        { image: '', name: '', position: '' },
-        { image: '', name: '', position: '' },
-        { image: '', name: '', position: '' },
-    ]);
-    const [director, setDirector] = useState({
-        image: '', title: '', message: '', name: '', position: ''
-    });
-    const [videos, setVideos] = useState([
-        { youtubeId: '', title: '' },
-        { youtubeId: '', title: '' },
-        { youtubeId: '', title: '' },
-    ]);
-    const [videosSectionTitle, setVideosSectionTitle] = useState('');
-    const [programs, setPrograms] = useState([
-        { image: '', title: '', description: '' },
-        { image: '', title: '', description: '' },
-        { image: '', title: '', description: '' },
-    ]);
-    const [programsSectionTitle, setProgramsSectionTitle] = useState('');
-    const [mulaSayoImage, setMulaSayoImage] = useState('');
+interface CarouselItem {
+    image: string | File;
+    title: string;
+    subtitle: string;
+}
+
+interface AccreditorItem {
+    image: string | File;
+    name: string;
+    position: string;
+}
+
+interface VideoItem {
+    youtube_id: string;
+    title: string;
+    thumbnail?: string;
+}
+
+interface ProgramItem {
+    image: string | File;
+    name: string;
+    description: string;
+}
+
+interface QuickLinkItem {
+    url: string;
+    title: string;
+}
+
+interface DirectorData {
+    image: string | File;
+    name: string;
+    position: string;
+    message: string;
+}
+
+interface LandingContent {
+    carousel_data: CarouselItem[];
+    accreditors_title: string;
+    accreditors_data: AccreditorItem[];
+    director_section_title: string;
+    director_image: string;
+    director_name: string;
+    director_position: string;
+    director_message: string;
+    videos_section_title: string;
+    videos_data: VideoItem[];
+    programs_section_title: string;
+    programs_data: ProgramItem[];
+    quick_links_title: string;
+    quick_links_data: QuickLinkItem[];
+    mula_sayo_title: string;
+    mula_sayo_image: string | File;
+}
+
+interface Props {
+    landingContent: LandingContent;
+}
+
+export default function LayoutHome({ landingContent }: Props) {
+    const [activeSection, setActiveSection] = useState('carousel');
     const [saving, setSaving] = useState(false);
+    const [previewKey, setPreviewKey] = useState(Date.now()); // Used to force refresh preview
+    const [saveSuccess, setSaveSuccess] = useState(false); // Show success indicator
 
-    // Fetch data on mount
-    useEffect(() => {
-        fetch('/api/home')
-            .then(res => res.json())
-            .then(data => {
-                if (!data) return;
-                setCarousel([
-                    { image: data.carousel_image_1 || '', title: data.carousel_title_1 || '', subtitle: data.carousel_subtitle_1 || '' },
-                    { image: data.carousel_image_2 || '', title: data.carousel_title_2 || '', subtitle: data.carousel_subtitle_2 || '' },
-                    { image: data.carousel_image_3 || '', title: data.carousel_title_3 || '', subtitle: data.carousel_subtitle_3 || '' },
-                    { image: data.carousel_image_4 || '', title: data.carousel_title_4 || '', subtitle: data.carousel_subtitle_4 || '' },
-                ]);
-                setAccreditors([
-                    { image: data.accreditor_image_1 || '', name: data.accreditor_name_1 || '', position: data.accreditor_position_1 || '' },
-                    { image: data.accreditor_image_2 || '', name: data.accreditor_name_2 || '', position: data.accreditor_position_2 || '' },
-                    { image: data.accreditor_image_3 || '', name: data.accreditor_name_3 || '', position: data.accreditor_position_3 || '' },
-                    { image: data.accreditor_image_4 || '', name: data.accreditor_name_4 || '', position: data.accreditor_position_4 || '' },
-                ]);
-                setDirector({
-                    image: data.director_image || '',
-                    title: data.director_title || '',
-                    message: data.director_message || '',
-                    name: data.director_name || '',
-                    position: data.director_position || '',
-                });
-                setVideos([
-                    { youtubeId: data.video_youtube_id_1 || '', title: data.video_title_1 || '' },
-                    { youtubeId: data.video_youtube_id_2 || '', title: data.video_title_2 || '' },
-                    { youtubeId: data.video_youtube_id_3 || '', title: data.video_title_3 || '' },
-                ]);
-                setVideosSectionTitle(data.videos_section_title || '');
-                setPrograms([
-                    { image: data.program_image_1 || '', title: data.program_title_1 || '', description: data.program_description_1 || '' },
-                    { image: data.program_image_2 || '', title: data.program_title_2 || '', description: data.program_description_2 || '' },
-                    { image: data.program_image_3 || '', title: data.program_title_3 || '', description: data.program_description_3 || '' },
-                ]);
-                setProgramsSectionTitle(data.programs_section_title || '');
-                setMulaSayoImage(data.mula_sayo_image || '');
-            });
-    }, []);
+    // State for all sections
+    const [carousel, setCarousel] = useState<CarouselItem[]>(landingContent.carousel_data || []);
+    const [accreditorsTitle, setAccreditorsTitle] = useState(landingContent.accreditors_title || '');
+    const [accreditors, setAccreditors] = useState<AccreditorItem[]>(landingContent.accreditors_data || []);
+    const [directorSectionTitle, setDirectorSectionTitle] = useState(landingContent.director_section_title || '');
+    const [director, setDirector] = useState<DirectorData>({
+        image: landingContent.director_image || '',
+        name: landingContent.director_name || '',
+        position: landingContent.director_position || '',
+        message: landingContent.director_message || ''
+    });
+    const [videosSectionTitle, setVideosSectionTitle] = useState(landingContent.videos_section_title || '');
+    const [videos, setVideos] = useState<VideoItem[]>(landingContent.videos_data || []);
+    const [programsSectionTitle, setProgramsSectionTitle] = useState(landingContent.programs_section_title || '');
+    const [programs, setPrograms] = useState<ProgramItem[]>(landingContent.programs_data || []);
+    const [quickLinksTitle, setQuickLinksTitle] = useState(landingContent.quick_links_title || '');
+    const [quickLinks, setQuickLinks] = useState<QuickLinkItem[]>(landingContent.quick_links_data || []);
+    const [mulaSayoTitle, setMulaSayoTitle] = useState(landingContent.mula_sayo_title || '');
+    const [mulaSayoImage, setMulaSayoImage] = useState<string | File>(landingContent.mula_sayo_image || '');
 
-    // File upload handlers
-    const handleFileUpload = (
-        e: ChangeEvent<HTMLInputElement>,
-        callback: (file: File) => void
-    ) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            callback(file);
+    // Carousel handlers
+    const handleCarouselChange = (idx: number, field: keyof CarouselItem, value: string | File | null) => {
+        const updated = [...carousel];
+        if (field === 'image') {
+            updated[idx] = { ...updated[idx], [field]: value || '' };
+        } else {
+            updated[idx] = { ...updated[idx], [field]: value as string };
+        }
+        setCarousel(updated);
+    };
+
+    const addCarouselSlide = () => {
+        setCarousel([...carousel, { image: '', title: '', subtitle: '' }]);
+    };
+
+    const removeCarouselSlide = (idx: number) => {
+        if (carousel.length > 1) {
+            setCarousel(carousel.filter((_, i) => i !== idx));
         }
     };
 
-    // Carousel handlers
-    const handleCarouselChange = (idx: number, field: string, value: string) => {
-        const updated = [...carousel];
-        updated[idx][field] = value;
-        setCarousel(updated);
-    };
-    const handleCarouselImage = (idx: number, e: ChangeEvent<HTMLInputElement>) => {
-        handleFileUpload(e, file => {
-            const updated = [...carousel];
-            updated[idx].image = file;
-            setCarousel(updated);
-        });
-    };
-
-    // Accreditors handlers
-    const handleAccreditorChange = (idx: number, field: string, value: string) => {
+    // Accreditor handlers
+    const handleAccreditorChange = (idx: number, field: keyof AccreditorItem, value: string | File | null) => {
         const updated = [...accreditors];
-        updated[idx][field] = value;
+        if (field === 'image') {
+            updated[idx] = { ...updated[idx], [field]: value || '' };
+        } else {
+            updated[idx] = { ...updated[idx], [field]: value as string };
+        }
         setAccreditors(updated);
     };
-    const handleAccreditorImage = (idx: number, e: ChangeEvent<HTMLInputElement>) => {
-        handleFileUpload(e, file => {
-            const updated = [...accreditors];
-            updated[idx].image = file;
-            setAccreditors(updated);
-        });
+
+    const addAccreditor = () => {
+        setAccreditors([...accreditors, { image: '', name: '', position: '' }]);
+    };
+
+    const removeAccreditor = (idx: number) => {
+        if (accreditors.length > 1) {
+            setAccreditors(accreditors.filter((_, i) => i !== idx));
+        }
     };
 
     // Director handlers
-    const handleDirectorChange = (field: string, value: string) => {
-        setDirector({ ...director, [field]: value });
-    };
-    const handleDirectorImage = (e: ChangeEvent<HTMLInputElement>) => {
-        handleFileUpload(e, file => setDirector({ ...director, image: file }));
+    const handleDirectorChange = (field: keyof DirectorData, value: string | File | null) => {
+        if (field === 'image') {
+            setDirector({ ...director, [field]: value || '' });
+        } else {
+            setDirector({ ...director, [field]: value as string });
+        }
     };
 
-    // Programs handlers
-    const handleProgramChange = (idx: number, field: string, value: string) => {
+    // Video handlers
+    const handleVideoChange = (idx: number, field: keyof VideoItem, value: string) => {
+        const updated = [...videos];
+        updated[idx] = { ...updated[idx], [field]: value };
+        setVideos(updated);
+    };
+
+    const addVideo = () => {
+        setVideos([...videos, { youtube_id: '', title: '', thumbnail: '' }]);
+    };
+
+    const removeVideo = (idx: number) => {
+        if (videos.length > 1) {
+            setVideos(videos.filter((_, i) => i !== idx));
+        }
+    };
+
+    // Program handlers
+    const handleProgramChange = (idx: number, field: keyof ProgramItem, value: string | File | null) => {
         const updated = [...programs];
-        updated[idx][field] = value;
+        if (field === 'image') {
+            updated[idx] = { ...updated[idx], [field]: value || '' };
+        } else {
+            updated[idx] = { ...updated[idx], [field]: value as string };
+        }
         setPrograms(updated);
     };
-    const handleProgramImage = (idx: number, e: ChangeEvent<HTMLInputElement>) => {
-        handleFileUpload(e, file => {
-            const updated = [...programs];
-            updated[idx].image = file;
-            setPrograms(updated);
-        });
+
+    const addProgram = () => {
+        setPrograms([...programs, { image: '', name: '', description: '' }]);
     };
 
-    // Mula Sayo image handler
-    const handleMulaSayoImage = (e: ChangeEvent<HTMLInputElement>) => {
-        handleFileUpload(e, file => setMulaSayoImage(file));
+    const removeProgram = (idx: number) => {
+        if (programs.length > 1) {
+            setPrograms(programs.filter((_, i) => i !== idx));
+        }
+    };
+
+    // Quick Links handlers
+    const handleQuickLinkChange = (idx: number, field: keyof QuickLinkItem, value: string) => {
+        const updated = [...quickLinks];
+        updated[idx] = { ...updated[idx], [field]: value };
+        setQuickLinks(updated);
+    };
+
+    const addQuickLink = () => {
+        setQuickLinks([...quickLinks, { url: '', title: '' }]);
+    };
+
+    const removeQuickLink = (idx: number) => {
+        if (quickLinks.length > 1) {
+            setQuickLinks(quickLinks.filter((_, i) => i !== idx));
+        }
     };
 
     // Save handler
@@ -147,382 +200,595 @@ export default function LayoutHome() {
         setSaving(true);
         const formData = new FormData();
 
-        // Carousel
+        // Carousel data
+        formData.append('carousel_data', JSON.stringify(carousel.map(item => ({
+            title: item.title,
+            subtitle: item.subtitle,
+            image: typeof item.image === 'string' ? item.image : ''
+        }))));
+
         carousel.forEach((item, idx) => {
-            const i = idx + 1;
-            formData.append(`carousel_title_${i}`, item.title);
-            formData.append(`carousel_subtitle_${i}`, item.subtitle);
             if (item.image instanceof File) {
-                formData.append(`carousel_image_${i}`, item.image);
-            } else if (typeof item.image === 'string' && item.image) {
-                formData.append(`carousel_image_${i}`, item.image);
+                formData.append(`carousel_image_${idx}`, item.image);
             }
         });
 
-        // Accreditors
+        // Accreditors data
+        formData.append('accreditors_title', accreditorsTitle);
+        formData.append('accreditors_data', JSON.stringify(accreditors.map(item => ({
+            name: item.name,
+            position: item.position,
+            image: typeof item.image === 'string' ? item.image : ''
+        }))));
+
         accreditors.forEach((item, idx) => {
-            const i = idx + 1;
-            formData.append(`accreditor_name_${i}`, item.name);
-            formData.append(`accreditor_position_${i}`, item.position);
             if (item.image instanceof File) {
-                formData.append(`accreditor_image_${i}`, item.image);
-            } else if (typeof item.image === 'string' && item.image) {
-                formData.append(`accreditor_image_${i}`, item.image);
+                formData.append(`accreditor_image_${idx}`, item.image);
             }
         });
 
-        // Director
-        if (director.image instanceof File) {
-            formData.append('director_image', director.image);
-        } else if (typeof director.image === 'string' && director.image) {
-            formData.append('director_image', director.image);
-        }
-        formData.append('director_title', director.title);
-        formData.append('director_message', director.message);
+        // Director data
+        formData.append('director_section_title', directorSectionTitle);
         formData.append('director_name', director.name);
         formData.append('director_position', director.position);
+        formData.append('director_message', director.message);
+        if (director.image instanceof File) {
+            formData.append('director_image', director.image);
+        }
 
-        // Videos
+        // Videos data
         formData.append('videos_section_title', videosSectionTitle);
-        videos.forEach((item, idx) => {
-            const i = idx + 1;
-            formData.append(`video_youtube_id_${i}`, item.youtubeId);
-            formData.append(`video_title_${i}`, item.title);
-        });
+        formData.append('videos_data', JSON.stringify(videos));
 
-        // Programs
+        // Programs data
         formData.append('programs_section_title', programsSectionTitle);
+        formData.append('programs_data', JSON.stringify(programs.map(item => ({
+            name: item.name,
+            description: item.description,
+            image: typeof item.image === 'string' ? item.image : ''
+        }))));
+
         programs.forEach((item, idx) => {
-            const i = idx + 1;
-            formData.append(`program_title_${i}`, item.title);
-            formData.append(`program_description_${i}`, item.description);
             if (item.image instanceof File) {
-                formData.append(`program_image_${i}`, item.image);
-            } else if (typeof item.image === 'string' && item.image) {
-                formData.append(`program_image_${i}`, item.image);
+                formData.append(`program_image_${idx}`, item.image);
             }
         });
 
-        // Mula Sayo Image
+        // Quick Links data
+        formData.append('quick_links_title', quickLinksTitle);
+        formData.append('quick_links_data', JSON.stringify(quickLinks));
+
+        // Mula Sayo data
+        formData.append('mula_sayo_title', mulaSayoTitle);
         if (mulaSayoImage instanceof File) {
-            formData.append('mula_sayo_image', mulaSayoImage);
-        } else if (typeof mulaSayoImage === 'string' && mulaSayoImage) {
             formData.append('mula_sayo_image', mulaSayoImage);
         }
 
-        router.post('/admin/home', formData, {
+        router.post('/admin/layout/home', formData, {
             forceFormData: true,
             onFinish: () => setSaving(false),
+            onSuccess: () => {
+                // Refresh the preview by updating the key
+                setPreviewKey(Date.now());
+                // Show success indicator
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 3000);
+            },
         });
     };
 
-    // Helper to show preview for both File and string path
-    const getImagePreview = (img: any) => {
-        if (!img) return '';
-        if (img instanceof File) return URL.createObjectURL(img);
-        if (typeof img === 'string' && img.startsWith('uploads/')) return `/storage/${img}`;
-        return img;
-    };
+    const sections = [
+        { id: 'carousel', name: 'Hero Carousel' },
+        { id: 'accreditors', name: 'Accreditors' },
+        { id: 'director', name: 'Director Message' },
+        { id: 'videos', name: 'Campus Videos' },
+        { id: 'programs', name: 'Programs' },
+        { id: 'quicklinks', name: 'Quick Links' },
+        { id: 'mulasayo', name: 'Mula Sayo' }
+    ];
 
     return (
         <>
             <Head title="Layout: Home" />
             <DashboardLayout>
                 <div className="flex w-full h-[calc(100vh-64px-40px)]">
-                    {/* Sidebar */}
-                    <aside className="w-[370px] min-w-[320px] max-w-[400px] bg-white/90 border-r border-gray-200 shadow-lg h-full sticky top-16 self-start flex flex-col">
-                        <div className="flex flex-col h-full">
-                            {/* Sidebar Header */}
-                            <div className="flex items-center gap-3 px-6 pt-6 pb-2">
-                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 text-2xl font-bold shadow-sm">
-                                    <svg width="24" height="24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path d="M8 12h8M12 8v8" strokeWidth="2" strokeLinecap="round"/></svg>
-                                </span>
-                                <h2 className="font-bold text-2xl text-gray-800 tracking-tight">Home Page Editor</h2>
+                    {/* Sidebar - Content Management */}
+                    <aside className="w-1/4 bg-white border-r border-gray-200 h-full sticky top-16 self-start overflow-y-auto">
+                        <div className="p-6">
+                            {/* Header */}
+                            <div className="mb-6">
+                                <h2 className="text-xl font-bold text-gray-800">Home Page Editor</h2>
+                                <p className="text-sm text-gray-600">Manage content and preview changes</p>
                             </div>
-                            <hr className="my-2 border-gray-200" />
-                            {/* Scrollable Content */}
-                            <div className="flex-1 overflow-y-auto px-4 pb-32">
-                                {/* Carousel */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-yellow-500"><svg width="20" height="20" fill="none" stroke="currentColor"><rect x="3" y="5" width="14" height="10" rx="2" strokeWidth="2"/><path d="M3 7l7 5 7-5" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Carousel <span className="text-xs text-gray-400">(4 Images)</span></h3>
+
+                            {/* Section Navigation */}
+                            <div className="mb-6 space-y-1">
+                                {sections.map((section) => (
+                                    <button
+                                        key={section.id}
+                                        onClick={() => setActiveSection(section.id)}
+                                        className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                                            activeSection === section.id
+                                                ? 'bg-gray-100 text-[#7F0404] font-semibold'
+                                                : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <span className="text-[#7F0404]">{section.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Dynamic Content Based on Active Section */}
+                            <div className="space-y-6">
+                                {/* Hero Carousel Section */}
+                                {activeSection === 'carousel' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Hero Carousel</h3>
+                                        <div className="space-y-4">
+                                            {carousel.map((item, index) => (
+                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm font-medium text-gray-700">Slide {index + 1}</span>
+                                                        {carousel.length > 1 && (
+                                                            <button
+                                                                onClick={() => removeCarouselSlide(index)}
+                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <FileUpload
+                                                        label="Slide Image"
+                                                        value={item.image}
+                                                        onChange={(file) => handleCarouselChange(index, 'image', file)}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Title</label>
+                                                            <input
+                                                                type="text"
+                                                                value={item.title}
+                                                                onChange={(e) => handleCarouselChange(index, 'title', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter slide title"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Subtitle</label>
+                                                            <input
+                                                                type="text"
+                                                                value={item.subtitle}
+                                                                onChange={(e) => handleCarouselChange(index, 'subtitle', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter slide subtitle"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={addCarouselSlide}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#C46B02] hover:text-[#C46B02] transition-colors"
+                                            >
+                                                + Add Slide
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="space-y-6">
-                                        {carousel.map((item, idx) => (
-                                            <div key={idx} className="rounded-lg bg-white/80 border border-gray-200 p-3 shadow-sm">
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Carousel Image {idx + 1}</label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={e => handleCarouselImage(idx, e)}
-                                                    className="mb-2 w-full border border-gray-300 rounded file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold"
-                                                />
-                                                {item.image && (
-                                                    <>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Preview</label>
-                                                        <img src={getImagePreview(item.image)} alt={`Carousel ${idx + 1}`} className="mb-2 w-full h-24 object-cover rounded-lg border" />
-                                                    </>
-                                                )}
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Title</label>
+                                )}
+
+                                {/* Accreditors Section */}
+                                {activeSection === 'accreditors' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Accreditors</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="Title"
-                                                    value={item.title}
-                                                    onChange={e => handleCarouselChange(idx, 'title', e.target.value)}
-                                                    className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
-                                                />
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Subtitle</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Subtitle"
-                                                    value={item.subtitle}
-                                                    onChange={e => handleCarouselChange(idx, 'subtitle', e.target.value)}
-                                                    className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
+                                                    value={accreditorsTitle}
+                                                    onChange={(e) => setAccreditorsTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
                                                 />
                                             </div>
-                                        ))}
+
+                                            {accreditors.map((accreditor, index) => (
+                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm font-medium text-gray-700">Accreditor {index + 1}</span>
+                                                        {accreditors.length > 1 && (
+                                                            <button
+                                                                onClick={() => removeAccreditor(index)}
+                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <FileUpload
+                                                        label="Photo"
+                                                        value={accreditor.image}
+                                                        onChange={(file) => handleAccreditorChange(index, 'image', file)}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={2}
+                                                    />
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Name</label>
+                                                            <input
+                                                                type="text"
+                                                                value={accreditor.name}
+                                                                onChange={(e) => handleAccreditorChange(index, 'name', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter accreditor name"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Position</label>
+                                                            <input
+                                                                type="text"
+                                                                value={accreditor.position}
+                                                                onChange={(e) => handleAccreditorChange(index, 'position', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter accreditor position"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={addAccreditor}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#C46B02] hover:text-[#C46B02] transition-colors"
+                                            >
+                                                + Add Accreditor
+                                            </button>
+                                        </div>
                                     </div>
-                                </section>
-                                {/* Accreditors */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-pink-500"><svg width="20" height="20" fill="none" stroke="currentColor"><circle cx="10" cy="10" r="4" strokeWidth="2"/><path d="M16 16v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Accreditors <span className="text-xs text-gray-400">(4)</span></h3>
-                                    </div>
-                                    <div className="space-y-6">
-                                        {accreditors.map((item, idx) => (
-                                            <div key={idx} className="rounded-lg bg-white/80 border border-gray-200 p-3 shadow-sm">
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Accreditor {idx + 1} Image</label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={e => handleAccreditorImage(idx, e)}
-                                                    className="mb-2 w-full border border-gray-300 rounded file:rounded file:border-0 file:bg-pink-50 file:text-pink-700 file:font-semibold"
-                                                />
-                                                {item.image && (
-                                                    <>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Preview</label>
-                                                        <img src={getImagePreview(item.image)} alt={`Accreditor ${idx + 1}`} className="mb-2 w-20 h-20 object-cover rounded-full border mx-auto" />
-                                                    </>
-                                                )}
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Name</label>
+                                )}
+
+                                {/* Director Message Section */}
+                                {activeSection === 'director' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Director Message</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="Name"
-                                                    value={item.name}
-                                                    onChange={e => handleAccreditorChange(idx, 'name', e.target.value)}
-                                                    className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-200"
-                                                />
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Position</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Position"
-                                                    value={item.position}
-                                                    onChange={e => handleAccreditorChange(idx, 'position', e.target.value)}
-                                                    className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-200"
+                                                    value={directorSectionTitle}
+                                                    onChange={(e) => setDirectorSectionTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
                                                 />
                                             </div>
-                                        ))}
-                                    </div>
-                                </section>
-                                {/* Director */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-blue-500"><svg width="20" height="20" fill="none" stroke="currentColor"><circle cx="10" cy="7" r="4" strokeWidth="2"/><path d="M2 18v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Director</h3>
-                                    </div>
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Director Image</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleDirectorImage}
-                                        className="mb-2 w-full border border-gray-300 rounded file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold"
-                                    />
-                                    {director.image && (
-                                        <>
-                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Preview</label>
-                                            <img src={getImagePreview(director.image)} alt="Director" className="mb-2 w-24 h-24 object-cover rounded-full border mx-auto" />
-                                        </>
-                                    )}
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Title</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Title"
-                                        value={director.title}
-                                        onChange={e => handleDirectorChange('title', e.target.value)}
-                                        className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Message</label>
-                                    <textarea
-                                        placeholder="Message"
-                                        value={director.message}
-                                        onChange={e => handleDirectorChange('message', e.target.value)}
-                                        className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Name"
-                                        value={director.name}
-                                        onChange={e => handleDirectorChange('name', e.target.value)}
-                                        className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Position</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Position"
-                                        value={director.position}
-                                        onChange={e => handleDirectorChange('position', e.target.value)}
-                                        className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200"
-                                    />
-                                </section>
-                                {/* Videos */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-red-500"><svg width="20" height="20" fill="none" stroke="currentColor"><rect x="3" y="5" width="14" height="10" rx="2" strokeWidth="2"/><path d="M10 9l5 3-5 3V9z" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Campus Videos <span className="text-xs text-gray-400">(3)</span></h3>
-                                    </div>
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Section Title</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Section Title"
-                                        value={videosSectionTitle}
-                                        onChange={e => setVideosSectionTitle(e.target.value)}
-                                        className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-200"
-                                    />
-                                    <div className="space-y-6">
-                                        {videos.map((item, idx) => (
-                                            <div key={idx} className="rounded-lg bg-white/80 border border-gray-200 p-3 shadow-sm">
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">YouTube Video ID {idx + 1}</label>
+
+                                            <FileUpload
+                                                label="Director Photo"
+                                                value={director.image}
+                                                onChange={(file) => handleDirectorChange('image', file)}
+                                                accept="image/*"
+                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                maxSize={2}
+                                            />
+
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Director Name</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="YouTube Video ID"
-                                                    value={item.youtubeId}
-                                                    onChange={e => {
-                                                        const updated = [...videos];
-                                                        updated[idx].youtubeId = e.target.value;
-                                                        setVideos(updated);
-                                                    }}
-                                                    className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-200"
-                                                />
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Video Title</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Video Title"
-                                                    value={item.title}
-                                                    onChange={e => {
-                                                        const updated = [...videos];
-                                                        updated[idx].title = e.target.value;
-                                                        setVideos(updated);
-                                                    }}
-                                                    className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-200"
+                                                    value={director.name}
+                                                    onChange={(e) => handleDirectorChange('name', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter director name"
                                                 />
                                             </div>
-                                        ))}
-                                    </div>
-                                </section>
-                                {/* Programs */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-green-500"><svg width="20" height="20" fill="none" stroke="currentColor"><rect x="3" y="5" width="14" height="10" rx="2" strokeWidth="2"/><path d="M7 9h6M7 13h6" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Programs <span className="text-xs text-gray-400">(3)</span></h3>
-                                    </div>
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Section Title</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Section Title"
-                                        value={programsSectionTitle}
-                                        onChange={e => setProgramsSectionTitle(e.target.value)}
-                                        className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200"
-                                    />
-                                    <div className="space-y-6">
-                                        {programs.map((item, idx) => (
-                                            <div key={idx} className="rounded-lg bg-white/80 border border-gray-200 p-3 shadow-sm">
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Program {idx + 1} Image</label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={e => handleProgramImage(idx, e)}
-                                                    className="mb-2 w-full border border-gray-300 rounded file:rounded file:border-0 file:bg-green-50 file:text-green-700 file:font-semibold"
-                                                />
-                                                {item.image && (
-                                                    <>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Preview</label>
-                                                        <img src={getImagePreview(item.image)} alt={`Program ${idx + 1}`} className="mb-2 w-full h-20 object-cover rounded-lg border" />
-                                                    </>
-                                                )}
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Title</label>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Position</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="Title"
-                                                    value={item.title}
-                                                    onChange={e => handleProgramChange(idx, 'title', e.target.value)}
-                                                    className="mb-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200"
+                                                    value={director.position}
+                                                    onChange={(e) => handleDirectorChange('position', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter director position"
                                                 />
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Description</label>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Message</label>
                                                 <textarea
-                                                    placeholder="Description"
-                                                    value={item.description}
-                                                    onChange={e => handleProgramChange(idx, 'description', e.target.value)}
-                                                    className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200"
+                                                    value={director.message}
+                                                    onChange={(e) => handleDirectorChange('message', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter director message"
+                                                    rows={4}
                                                 />
                                             </div>
-                                        ))}
+                                        </div>
                                     </div>
-                                </section>
-                                {/* Mula Sayo, Para Sa Bayan */}
-                                <section className="mb-8 bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <span className="text-yellow-600"><svg width="20" height="20" fill="none" stroke="currentColor"><rect x="3" y="5" width="14" height="10" rx="2" strokeWidth="2"/><path d="M7 9h6M7 13h6" strokeWidth="2"/></svg></span>
-                                        <h3 className="font-semibold text-lg text-gray-700">Mula Sayo, Para Sa Bayan Image</h3>
+                                )}
+
+                                {/* Videos Section */}
+                                {activeSection === 'videos' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Campus Videos</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={videosSectionTitle}
+                                                    onChange={(e) => setVideosSectionTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
+                                                />
+                                            </div>
+
+                                            {videos.map((video, index) => (
+                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm font-medium text-gray-700">Video {index + 1}</span>
+                                                        {videos.length > 1 && (
+                                                            <button
+                                                                onClick={() => removeVideo(index)}
+                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">YouTube ID</label>
+                                                            <input
+                                                                type="text"
+                                                                value={video.youtube_id}
+                                                                onChange={(e) => handleVideoChange(index, 'youtube_id', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter YouTube video ID"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Title</label>
+                                                            <input
+                                                                type="text"
+                                                                value={video.title}
+                                                                onChange={(e) => handleVideoChange(index, 'title', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter video title"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={addVideo}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#C46B02] hover:text-[#C46B02] transition-colors"
+                                            >
+                                                + Add Video
+                                            </button>
+                                        </div>
                                     </div>
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Image</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleMulaSayoImage}
-                                        className="mb-2 w-full border border-gray-300 rounded file:rounded file:border-0 file:bg-yellow-50 file:text-yellow-700 file:font-semibold"
-                                    />
-                                    {mulaSayoImage && (
-                                        <>
-                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Preview</label>
-                                            <img src={getImagePreview(mulaSayoImage)} alt="Mula Sayo, Para Sa Bayan" className="w-full h-32 object-cover rounded-lg border mb-2" />
-                                        </>
-                                    )}
-                                </section>
+                                )}
+
+                                {/* Programs Section */}
+                                {activeSection === 'programs' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Programs</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={programsSectionTitle}
+                                                    onChange={(e) => setProgramsSectionTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
+                                                />
+                                            </div>
+
+                                            {programs.map((program, index) => (
+                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm font-medium text-gray-700">Program {index + 1}</span>
+                                                        {programs.length > 1 && (
+                                                            <button
+                                                                onClick={() => removeProgram(index)}
+                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program.image}
+                                                        onChange={(file) => handleProgramChange(index, 'image', file)}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={3}
+                                                    />
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Name</label>
+                                                            <input
+                                                                type="text"
+                                                                value={program.name}
+                                                                onChange={(e) => handleProgramChange(index, 'name', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter program name"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Description</label>
+                                                            <textarea
+                                                                value={program.description}
+                                                                onChange={(e) => handleProgramChange(index, 'description', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter program description"
+                                                                rows={3}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={addProgram}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#C46B02] hover:text-[#C46B02] transition-colors"
+                                            >
+                                                + Add Program
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Quick Links Section */}
+                                {activeSection === 'quicklinks' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Quick Links</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={quickLinksTitle}
+                                                    onChange={(e) => setQuickLinksTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
+                                                />
+                                            </div>
+
+                                            {quickLinks.map((link, index) => (
+                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-sm font-medium text-gray-700">Link {index + 1}</span>
+                                                        {quickLinks.length > 1 && (
+                                                            <button
+                                                                onClick={() => removeQuickLink(index)}
+                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Title</label>
+                                                            <input
+                                                                type="text"
+                                                                value={link.title}
+                                                                onChange={(e) => handleQuickLinkChange(index, 'title', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter link title"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">URL</label>
+                                                            <input
+                                                                type="url"
+                                                                value={link.url}
+                                                                onChange={(e) => handleQuickLinkChange(index, 'url', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                placeholder="Enter link URL"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={addQuickLink}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#C46B02] hover:text-[#C46B02] transition-colors"
+                                            >
+                                                + Add Link
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Mula Sayo Section */}
+                                {activeSection === 'mulasayo' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Mula Sayo Para sa Bayan</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={mulaSayoTitle}
+                                                    onChange={(e) => setMulaSayoTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
+                                                />
+                                            </div>
+
+                                            <FileUpload
+                                                label="Footer Image"
+                                                value={mulaSayoImage}
+                                                onChange={(file) => setMulaSayoImage(file || '')}
+                                                accept="image/*"
+                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                maxSize={5}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
                             {/* Save Button */}
-                            <div className="px-6 py-4 bg-white rounded-b-lg shadow-inner">
+                            <div className="mt-6 pt-4 border-t border-gray-200">
                                 <button
                                     onClick={handleSave}
                                     disabled={saving}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-500 disabled:opacity-50 transition"
+                                    className="w-full bg-[#7F0404] hover:bg-[#a00a0a] disabled:bg-gray-400 text-white font-semibold px-4 py-2 rounded shadow transition-all duration-200 hover:shadow-lg disabled:hover:shadow-sm"
                                 >
-                                    {saving && <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4" strokeLinecap="round"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4zm16 0a8 8 0 01-8 8v-4a4 4 0 004-4h4z"/></svg>}
-                                    {saving ? 'Saving...' : 'Save All Changes'}
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        'Save Changes'
+                                    )}
                                 </button>
                             </div>
                         </div>
                     </aside>
-                    {/* Main Content */}
+
+                    {/* Main Content - Preview */}
                     <section className="flex-1 w-full px-8 py-4 pb-2 text-left flex flex-col h-full">
+                        {/* Preview Header */}
+                        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-800">Home Page Preview</h1>
+                                <p className="text-sm text-gray-600">Live preview of your changes</p>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm">
+                                <div className={`w-2 h-2 rounded-full ${saveSuccess ? 'bg-green-500' : 'bg-green-400'}`}></div>
+                                <span className={saveSuccess ? 'text-green-600 font-medium' : 'text-gray-500'}>
+                                    {saveSuccess ? 'Preview Updated!' : 'Live Preview'}
+                                </span>
+                            </div>
+                        </div>
+
                         {/* Preview Container */}
                         <div className="flex-1 min-h-0 flex justify-center">
-                            <div className="h-full aspect-video">
+                            <div className="h-full w-full max-w-7xl">
                                 <PagePreview 
-                                    pageUrl="/"
-                                    homepageData={{
-                                        carousel,
-                                        accreditors,
-                                        director,
-                                        videos,
-                                        videosSectionTitle,
-                                        programs,
-                                        programsSectionTitle,
-                                        mulaSayoImage
-                                    }}
+                                    pageUrl="/" 
                                     title="Home Page Preview"
+                                    key={previewKey}
                                 />
                             </div>
                         </div>

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 interface PagePreviewProps {
     pageUrl: string;
@@ -8,12 +8,15 @@ interface PagePreviewProps {
 
 export default function PagePreview({ pageUrl, title = "Page Preview", className = "" }: PagePreviewProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        setIsLoading(true); // Reset loading state when component mounts/remounts
         const iframe = iframeRef.current;
         if (!iframe) return;
 
         const handleLoad = () => {
+            setIsLoading(false);
             try {
                 const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (iframeDoc) {
@@ -39,7 +42,7 @@ export default function PagePreview({ pageUrl, title = "Page Preview", className
                     `;
                     iframeDoc.head.appendChild(style);
                 }
-            } catch (error) {
+            } catch {
                 // Cross-origin restrictions - fallback to overlay approach
                 console.log('Cross-origin restrictions apply');
             }
@@ -63,6 +66,14 @@ export default function PagePreview({ pageUrl, title = "Page Preview", className
             
             {/* Preview Content */}
             <div className="relative flex-1 min-h-0">
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-20">
+                        <div className="flex flex-col items-center space-y-3">
+                            <div className="w-8 h-8 border-4 border-[#7F0404] border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-sm text-gray-600">Refreshing preview...</span>
+                        </div>
+                    </div>
+                )}
                 <iframe
                     ref={iframeRef}
                     src={pageUrl}
@@ -75,6 +86,7 @@ export default function PagePreview({ pageUrl, title = "Page Preview", className
                     }}
                     title={title}
                     sandbox="allow-same-origin allow-scripts"
+                    onLoad={() => setIsLoading(false)}
                 />
                 
                 {/* Fallback overlay for navigation area if CSS injection fails */}

@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@inertiajs/react';
 
 const COLORS = {
@@ -13,102 +13,137 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-const aboutContent = {
-    title: "About PUP Calauan",
-    history: `The Polytechnic University of the Philippines - Calauan Campus was established to provide accessible and quality education to the youth of Calauan and nearby towns. Since its founding, PUP Calauan has been committed to academic excellence, community service, and nation-building. The campus continues to grow, offering innovative programs and fostering a culture of learning and inclusivity.`,
-    mission: "To provide quality and inclusive education that empowers students to become competent professionals and responsible citizens.",
-    vision: "A leading polytechnic university recognized for excellence in education, research, and community service.",
-    mulaSayoImage: "/api/placeholder/1600/400",
-    facultyPrograms: [
-        {
-            id: 1,
-            title: "Accreditation Task Force",
-            description: "Leading the accreditation process and ensuring quality standards across all programs.",
-            image: "/api/placeholder/400/300",
-            memberCount: 8,
-            href: "/faculty/accreditation",
-            color: COLORS.primaryMaroon,
-        },
-        {
-            id: 2,
-            title: "BTLED Faculty",
-            description: "Bachelor of Technology and Livelihood Education program faculty and staff.",
-            image: "/api/placeholder/400/300",
-            memberCount: 12,
-            href: "/faculty/btled",
-            color: COLORS.burntOrange,
-        },
-        {
-            id: 3,
-            title: "BSENT Faculty",
-            description: "Bachelor of Science in Entrepreneurship program faculty and staff.",
-            image: "/api/placeholder/400/300",
-            memberCount: 10,
-            href: "/faculty/bsent",
-            color: COLORS.brightYellow,
-        },
-        {
-            id: 4,
-            title: "BSIT Faculty",
-            description: "Bachelor of Science in Information Technology program faculty and staff.",
-            image: "/api/placeholder/400/300",
-            memberCount: 15,
-            href: "/faculty/bsit",
-            color: COLORS.darkMaroon,
-        },
-    ],
-};
-
-// Enhanced scroll animation hook with directional detection (same as welcome page)
-function useScrollAnimation() {
-    const [isVisible, setIsVisible] = useState(false);
-    const [hasAnimated, setHasAnimated] = useState(false);
-    const [scrollDirection, setScrollDirection] = useState('down');
-    const [lastScrollY, setLastScrollY] = useState(0);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleScroll = () => {
-            const currentScrollY = window.scrollY;
-            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
-            setLastScrollY(currentScrollY);
-        };
-
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
-
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
-                    setIsVisible(true);
-                    setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
-                }
-            },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
-        );
-        if (ref.current) observer.observe(ref.current);
-        return () => { if (ref.current) observer.unobserve(ref.current); };
-    }, [hasAnimated]);
-    
-    return [ref, isVisible, scrollDirection] as const;
+interface AboutData {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    story_title: string;
+    story_content: string;
+    mission_title: string;
+    mission_content: string;
+    vision_title: string;
+    vision_content: string;
+    faculty_title: string;
+    faculty_data: Array<{
+        image: string;
+        name: string;
+        description: string;
+    }>;
+    mula_sayo_title: string;
+    mula_sayo_image: string;
 }
 
 export default function About() {
-    const [aboutRef, aboutVisible, aboutScrollDirection] = useScrollAnimation();
-    const [missionRef, missionVisible, missionScrollDirection] = useScrollAnimation();
-    const [visionRef, visionVisible, visionScrollDirection] = useScrollAnimation();
-    const [facultyRef, facultyVisible, facultyScrollDirection] = useScrollAnimation();
+    const [aboutData, setAboutData] = useState<AboutData | null>(null);
+
+    // Fetch about data from API
+    useEffect(() => {
+        fetch('/api/about-content')
+            .then(res => res.json())
+            .then(data => {
+                console.log('About data fetched:', data);
+                setAboutData(data);
+            })
+            .catch(error => {
+                console.error('Error fetching about data:', error);
+                // Fallback to default data matching original design
+                setAboutData({
+                    hero_image: '/api/placeholder/1600/800',
+                    hero_title: 'About PUP Calauan',
+                    hero_subtitle: 'Excellence, Innovation, and Community Service',
+                    story_title: 'Our Story',
+                    story_content: 'The Polytechnic University of the Philippines - Calauan Campus was established to provide accessible and quality education to the youth of Calauan and nearby towns. Since its founding, PUP Calauan has been committed to academic excellence, community service, and nation-building. The campus continues to grow, offering innovative programs and fostering a culture of learning and inclusivity.',
+                    mission_title: 'Our Mission',
+                    mission_content: 'To provide quality and inclusive education that empowers students to become competent professionals and responsible citizens.',
+                    vision_title: 'Our Vision',
+                    vision_content: 'A leading polytechnic university recognized for excellence in education, research, and community service.',
+                    faculty_title: 'Our Faculty',
+                    faculty_data: [
+                        {
+                            image: '/api/placeholder/400/300',
+                            name: 'Accreditation Task Force',
+                            description: 'Leading the accreditation process and ensuring quality standards across all programs.',
+                        },
+                        {
+                            image: '/api/placeholder/400/300',
+                            name: 'BTLED Faculty',
+                            description: 'Bachelor of Technology and Livelihood Education program faculty and staff.',
+                        },
+                        {
+                            image: '/api/placeholder/400/300',
+                            name: 'BSENT Faculty',
+                            description: 'Bachelor of Science in Entrepreneurship program faculty and staff.',
+                        },
+                        {
+                            image: '/api/placeholder/400/300',
+                            name: 'BSIT Faculty',
+                            description: 'Bachelor of Science in Information Technology program faculty and staff.',
+                        },
+                    ],
+                    mula_sayo_title: 'Mula Sayo, Para sa Bayan',
+                    mula_sayo_image: '/api/placeholder/1600/400',
+                });
+            });
+    }, []);
+
+    // Show loading state if data is not yet loaded
+    if (!aboutData) {
+        return (
+            <>
+                <Head title="About" />
+                <div className="min-h-screen bg-white overflow-x-hidden">
+                    <Header currentPage="about" />
+                    <div className="flex items-center justify-center min-h-screen">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500 mx-auto"></div>
+                            <p className="mt-4 text-gray-600">Loading...</p>
+                        </div>
+                    </div>
+                    <Footer />
+                </div>
+            </>
+        );
+    }
+
+    // Convert faculty data to match original structure for links
+    const facultyPrograms = aboutData.faculty_data.map((faculty, index) => ({
+        id: index + 1,
+        title: faculty.name,
+        description: faculty.description,
+        image: faculty.image || '/api/placeholder/400/300',
+        memberCount: [8, 12, 10, 15][index] || 8, // Default member counts
+        href: ['/faculty/accreditation', '/faculty/btled', '/faculty/bsent', '/faculty/bsit'][index] || '/faculty/accreditation',
+        color: [COLORS.primaryMaroon, COLORS.burntOrange, COLORS.brightYellow, COLORS.darkMaroon][index % 4],
+    }));
 
     return (
         <>
-            <Head title="About" />
+            <Head title="About">
+                <style>{`
+                    .text-shadow-lg {
+                        text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+                    }
+                    @keyframes fade-in-up {
+                        from { 
+                            opacity: 0; 
+                            transform: translateY(30px);
+                        }
+                        to { 
+                            opacity: 1; 
+                            transform: translateY(0);
+                        }
+                    }
+                    .animate-fade-in-up {
+                        animation: fade-in-up 0.8s ease-out forwards;
+                    }
+                    .animation-delay-300 {
+                        animation-delay: 0.3s;
+                    }
+                    .hover\\:scale-102:hover {
+                        transform: scale(1.02);
+                    }
+                `}</style>
+            </Head>
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="about" />
 
@@ -117,7 +152,7 @@ export default function About() {
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <div className="absolute inset-0">
                             <img
-                                src="/api/placeholder/1600/800"
+                                src={aboutData.hero_image || '/api/placeholder/1600/800'}
                                 alt="PUP Calauan Campus"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             />
@@ -125,26 +160,16 @@ export default function About() {
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full text-center text-white px-4 max-w-6xl mx-auto">
                             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 sm:mb-8 animate-fade-in-up transform transition-all duration-300 hover:scale-102">
-                                About PUP Calauan
+                                {aboutData.hero_title}
                             </h1>
                             <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl max-w-4xl mx-auto leading-relaxed animate-fade-in-up animation-delay-300 transform transition-all duration-300 hover:scale-102">
-                                Excellence, Innovation, and Community Service
+                                {aboutData.hero_subtitle}
                             </p>
                         </div>
                     </section>
 
-                    {/* About Section - Enhanced with patterns and animations */}
-                    <section
-                        ref={aboutRef}
-                        className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            aboutVisible 
-                                ? 'opacity-100 translate-y-0 translate-x-0' 
-                                : aboutScrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-20 translate-x-10' 
-                                    : 'opacity-0 -translate-y-20 -translate-x-10'
-                        }`}
-                        style={{ backgroundColor: '#f8fafc' }}
-                    >
+                    {/* About Section - Enhanced with patterns */}
+                    <section className="py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 relative overflow-hidden" style={{ backgroundColor: '#f8fafc' }}>
                         {/* Background Pattern */}
                         <div className="absolute inset-0 opacity-5">
                             <div className="absolute inset-0" style={{
@@ -159,10 +184,10 @@ export default function About() {
                         
                         <div className="w-full max-w-6xl mx-auto text-center relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-8 sm:mb-12 transition-all duration-500 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                Our Story
+                                {aboutData.story_title}
                             </h2>
                             <p className="text-lg sm:text-xl lg:text-2xl text-gray-700 leading-relaxed max-w-4xl mx-auto transition-all duration-300 hover:text-gray-900 transform hover:scale-102">
-                                {aboutContent.history}
+                                {aboutData.story_content}
                             </p>
                         </div>
                     </section>
@@ -174,53 +199,35 @@ export default function About() {
                         <div className="w-full max-w-8xl mx-auto">
                             <div className="grid lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16">
                                 {/* Mission */}
-                                <div
-                                    ref={missionRef}
-                                    className={`transition-all duration-1200 ${
-                                        missionVisible 
-                                            ? 'opacity-100 translate-x-0' 
-                                            : missionScrollDirection === 'down' 
-                                                ? 'opacity-0 -translate-x-32' 
-                                                : 'opacity-0 translate-x-32'
-                                    }`}
-                                >
+                                <div className="transition-all duration-300">
                                     <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 lg:p-12 border-l-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 group" style={{ borderLeftColor: COLORS.primaryMaroon }}>
                                         <div className="text-center mb-6">
                                             <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300" style={{ backgroundColor: COLORS.softYellow }}>
                                                 <span className="text-2xl sm:text-3xl">🎯</span>
                                             </div>
                                             <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
-                                                Our Mission
+                                                {aboutData.mission_title}
                                             </h3>
                                         </div>
                                         <p className="text-lg sm:text-xl text-gray-700 leading-relaxed text-center transition-all duration-300 group-hover:text-gray-900">
-                                            {aboutContent.mission}
+                                            {aboutData.mission_content}
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Vision */}
-                                <div
-                                    ref={visionRef}
-                                    className={`transition-all duration-1200 delay-200 ${
-                                        visionVisible 
-                                            ? 'opacity-100 translate-x-0' 
-                                            : visionScrollDirection === 'down' 
-                                                ? 'opacity-0 translate-x-32' 
-                                                : 'opacity-0 -translate-x-32'
-                                    }`}
-                                >
+                                <div className="transition-all duration-300">
                                     <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 lg:p-12 border-l-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 group" style={{ borderLeftColor: COLORS.burntOrange }}>
                                         <div className="text-center mb-6">
                                             <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300" style={{ backgroundColor: COLORS.softYellow }}>
                                                 <span className="text-2xl sm:text-3xl">🌟</span>
                                             </div>
                                             <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.burntOrange }}>
-                                                Our Vision
+                                                {aboutData.vision_title}
                                             </h3>
                                         </div>
                                         <p className="text-lg sm:text-xl text-gray-700 leading-relaxed text-center transition-all duration-300 group-hover:text-gray-900">
-                                            {aboutContent.vision}
+                                            {aboutData.vision_content}
                                         </p>
                                     </div>
                                 </div>
@@ -229,17 +236,7 @@ export default function About() {
                     </section>
 
                     {/* Faculties Section - Enhanced with 4 program cards */}
-                    <section
-                        ref={facultyRef}
-                        className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            facultyVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : facultyScrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-28' 
-                                    : 'opacity-0 -translate-y-28'
-                        }`}
-                        style={{ backgroundColor: 'white' }}
-                    >
+                    <section className="py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 relative overflow-hidden" style={{ backgroundColor: 'white' }}>
                         {/* Geometric Background */}
                         <div className="absolute inset-0 overflow-hidden">
                             <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full opacity-5" style={{ backgroundColor: COLORS.primaryMaroon }}></div>
@@ -248,17 +245,14 @@ export default function About() {
                         
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-center mb-12 sm:mb-16 lg:mb-20 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                Our Faculty
+                                {aboutData.faculty_title}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
-                                {aboutContent.facultyPrograms.map((program, index) => (
+                                {facultyPrograms.map((program) => (
                                     <Link
                                         key={program.id}
                                         href={program.href}
-                                        className={`group block transform transition-all duration-700 hover:scale-105 hover:-translate-y-3 ${
-                                            facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
-                                        style={{ transitionDelay: `${index * 0.15}s` }}
+                                        className="group block transform transition-all duration-700 hover:scale-105 hover:-translate-y-3"
                                     >
                                         <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 group-hover:-translate-y-2 h-full flex flex-col" style={{ borderTopColor: program.color }}>
                                             <div className="relative overflow-hidden">
@@ -296,18 +290,18 @@ export default function About() {
                     </section>
 
                     {/* Mula Sayo, Para Sa Bayan Section */}
-                    <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
+                    <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src={aboutContent.mulaSayoImage}
-                                alt="Akoy iyong-iyo, at Hinding-hindi magiging sa iba"
+                                src={aboutData.mula_sayo_image || '/api/placeholder/1600/400'}
+                                alt="Mula Sayo, Para Sa Bayan"
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Akoy iyong-iyo, at Hinding-hindi magiging sa iba
+                                {aboutData.mula_sayo_title}
                             </h2>
                         </div>
                     </section>
@@ -315,30 +309,6 @@ export default function About() {
 
                 <Footer />
             </div>
-            <style jsx>{`
-                .text-shadow-lg {
-                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
-                }
-                @keyframes fade-in-up {
-                    from { 
-                        opacity: 0; 
-                        transform: translateY(30px);
-                    }
-                    to { 
-                        opacity: 1; 
-                        transform: translateY(0);
-                    }
-                }
-                .animate-fade-in-up {
-                    animation: fade-in-up 0.8s ease-out forwards;
-                }
-                .animation-delay-300 {
-                    animation-delay: 0.3s;
-                }
-                .hover\\:scale-102:hover {
-                    transform: scale(1.02);
-                }
-            `}</style>
         </>
     );
 }

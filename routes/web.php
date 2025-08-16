@@ -8,15 +8,15 @@ use App\Http\Controllers\AdminDocumentsController;
 use App\Http\Controllers\FacultyDocumentsController;
 use App\Http\Controllers\ReviewerDocumentsController;
 use App\Http\Controllers\DocumentUploadController;
+use App\Http\Controllers\Landing\HomeController;
+use App\Http\Controllers\Landing\AboutController;
+use App\Http\Controllers\Landing\AboutAccreditationController;
 use App\Models\User;
-
-//Welcome page
-use App\Http\Controllers\HomeController;
 
 // Public routes
 Route::get('/', fn() => Inertia::render('landing/welcome'))->name('home');
 Route::get('/about', fn() => Inertia::render('landing/about'))->name('about');
-Route::get('/faculty/accreditation', fn() => Inertia::render('landing/about/accreditation'))->name('faculty.accreditation');
+Route::get('/faculty/accreditation', [AboutAccreditationController::class, 'show'])->name('faculty.accreditation');
 Route::get('/faculty/btled', fn() => Inertia::render('landing/about/btled'))->name('faculty.btled');
 Route::get('/faculty/bsent', fn() => Inertia::render('landing/about/bsent'))->name('faculty.bsent');
 Route::get('/faculty/bsit', fn() => Inertia::render('landing/about/bsit'))->name('faculty.bsit');
@@ -60,9 +60,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     
     Route::prefix('admin/layout')->group(function () {
-        Route::get('/home', fn() => inertia('admin/layout/Home'))->name('admin.layout.home');
-        Route::get('/about', fn() => inertia('admin/layout/About'))->name('admin.layout.about');
-        Route::get('/about/accreditation', fn() => inertia('admin/layout/AboutAccreditation'))->name('admin.layout.about.accreditation');
+        Route::get('/home', [HomeController::class, 'index'])->name('admin.layout.home');
+        Route::post('/home', [HomeController::class, 'update'])->name('admin.layout.home.update');
+        Route::get('/about', [AboutController::class, 'index'])->name('admin.layout.about');
+        Route::post('/about', [AboutController::class, 'update'])->name('admin.layout.about.update');
+        Route::get('/about/accreditation', [AboutAccreditationController::class, 'index'])->name('admin.layout.about.accreditation');
+        Route::post('/about/accreditation', [AboutAccreditationController::class, 'update'])->name('admin.layout.about.accreditation.update');
+        Route::post('/about/accreditation', [AboutAccreditationController::class, 'update'])->name('admin.layout.about.accreditation.update');
         Route::get('/about/btled', fn() => inertia('admin/layout/AboutBTLED'))->name('admin.layout.about.btled');
         Route::get('/about/bsent', fn() => inertia('admin/layout/AboutBSENT'))->name('admin.layout.about.bsent');
         Route::get('/about/bsit', fn() => inertia('admin/layout/AboutBSIT'))->name('admin.layout.about.bsit');
@@ -120,7 +124,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
    
     // Unified messages route redirects to role-based page
     Route::get('/messages', function() {
-        $user = auth()->user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         $role = $user?->role ?? 'faculty';
         return match($role) {
             'admin' => Inertia::render('messages/index'),
@@ -142,9 +146,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 });
 
-    // Home
-    Route::get('/api/home', [HomeController::class, 'show']);
-    Route::post('/admin/home', [HomeController::class, 'update']);
+    // Landing Content API
+    Route::get('/api/landing-content', [HomeController::class, 'getContent'])->name('api.landing.content');
+    Route::get('/api/about-content', [AboutController::class, 'getContent'])->name('api.about.content');
+    Route::get('/api/accreditation-content', [AboutAccreditationController::class, 'getContent'])->name('api.accreditation.content');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
