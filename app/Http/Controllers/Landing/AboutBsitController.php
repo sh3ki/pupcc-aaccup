@@ -12,7 +12,7 @@ use Inertia\Inertia;
 class AboutBsitController extends Controller
 {
     /**
-     * Display the admin layout BSIT page
+     * Display the admin layout BSIT Faculty Page
      */
     public function index()
     {
@@ -132,7 +132,7 @@ class AboutBsitController extends Controller
     }
 
     /**
-     * Display the landing BSIT page with dynamic content
+     * Display the landing BSIT Faculty Page with dynamic content
      */
     public function show()
     {

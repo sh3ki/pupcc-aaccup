@@ -1,7 +1,6 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Link } from '@inertiajs/react';
 import { useRef, useEffect, useState } from 'react';
 
 const COLORS = {
@@ -13,43 +12,42 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-const program = {
-    name: 'Bachelor of Science in Information Technology (BSIT)',
-    heroImage: '/api/placeholder/1600/600',
-    overview: 'The BSIT program provides a comprehensive education in software development, networking, and system administration, with hands-on laboratory experience.',
-    objectives: [
-        'Equip students with advanced IT knowledge and skills.',
-        'Develop problem-solving and analytical thinking in computing.',
-        'Promote research and innovation in information technology.',
-        'Prepare graduates for industry certifications and employment.',
-        'Foster ethical responsibility and leadership in IT practice.',
-    ],
-    avpYoutubeId: 'dQw4w9WgXcQ',
-    activities: [
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-    ],
-    graduates: [
-        {
-            name: 'Engr. John IT Specialist',
-            video: '/api/placeholder/400/250',
-        },
-    ],
-    accreditationAreas: [
-        { id: 1, title: 'Area I: Vision, Mission, Goals and Objectives', image: '/api/placeholder/300/200' },
-        { id: 2, title: 'Area II: Faculty', image: '/api/placeholder/300/200' },
-        { id: 3, title: 'Area III: Curriculum and Instruction', image: '/api/placeholder/300/200' },
-        { id: 4, title: 'Area IV: Support to Students', image: '/api/placeholder/300/200' },
-        { id: 5, title: 'Area V: Research', image: '/api/placeholder/300/200' },
-        { id: 6, title: 'Area VI: Extension and Community Involvement', image: '/api/placeholder/300/200' },
-        { id: 7, title: 'Area VII: Library', image: '/api/placeholder/300/200' },
-        { id: 8, title: 'Area VIII: Physical Plant and Facilities', image: '/api/placeholder/300/200' },
-        { id: 9, title: 'Area IX: Laboratories', image: '/api/placeholder/300/200' },
-        { id: 10, title: 'Area X: Administration', image: '/api/placeholder/300/200' },
-    ],
-};
+interface GraduateItem {
+    name: string;
+    video: string;
+    video_type: 'youtube' | 'upload';
+}
+
+interface AccreditationArea {
+    title: string;
+    image: string;
+}
+
+interface BsitContent {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    overview_section_title: string;
+    program_description: string;
+    program_image: string;
+    objectives_section_title: string;
+    objectives_data: string[];
+    avp_section_title: string;
+    program_video: string;
+    program_video_type: 'youtube' | 'upload';
+    action_section_title: string;
+    action_images: string[];
+    graduates_section_title: string;
+    graduates_data: GraduateItem[];
+    accreditation_section_title: string;
+    accreditation_areas: AccreditationArea[];
+    mula_sayo_title: string;
+    mula_sayo_image: string;
+}
+
+interface Props {
+    bsitContent: BsitContent;
+}
 
 // Scroll animation hook
 function useScrollAnimation() {
@@ -58,6 +56,7 @@ function useScrollAnimation() {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        const currentRef = ref.current;
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting && !hasAnimated) {
@@ -72,13 +71,13 @@ function useScrollAnimation() {
             },
             { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
         );
-        if (ref.current) observer.observe(ref.current);
-        return () => { if (ref.current) observer.unobserve(ref.current); };
+        if (currentRef) observer.observe(currentRef);
+        return () => { if (currentRef) observer.unobserve(currentRef); };
     }, [hasAnimated]);
     return [ref, isVisible] as const;
 }
 
-export default function BSITProgramPage() {
+export default function BSITProgramPage({ bsitContent }: Props) {
     const [overviewRef, overviewVisible] = useScrollAnimation();
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
@@ -93,16 +92,21 @@ export default function BSITProgramPage() {
                     {/* Hero */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <img
-                            src={program.heroImage}
-                            alt={program.name}
+                            src={bsitContent.hero_image || '/api/placeholder/1600/600'}
+                            alt={bsitContent.hero_title}
                             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             style={{ minHeight: 400, maxHeight: 700 }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
                             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-white animate-fade-in-up mb-4 drop-shadow-lg">
-                                {program.name}
+                                {bsitContent.hero_title}
                             </h1>
+                            {bsitContent.hero_subtitle && (
+                                <p className="text-lg sm:text-xl text-white/90 max-w-3xl px-4 drop-shadow-lg">
+                                    {bsitContent.hero_subtitle}
+                                </p>
+                            )}
                         </div>
                     </section>
 
@@ -126,12 +130,17 @@ export default function BSITProgramPage() {
                         <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
                             <div className="flex-1">
                                 <h2 className="text-4xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                    Program Overview
+                                    {bsitContent.overview_section_title}
                                 </h2>
-                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{program.overview}</p>
+                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{bsitContent.program_description}</p>
                             </div>
                             <div className="flex-1">
-                                <img src="/api/placeholder/500/400" alt="BSIT Overview" className="rounded-2xl shadow-lg w-full object-cover" style={{ minHeight: 260, maxHeight: 400 }} />
+                                <img 
+                                    src={bsitContent.program_image || '/api/placeholder/500/400'} 
+                                    alt="BSIT Overview" 
+                                    className="rounded-2xl shadow-lg w-full object-cover" 
+                                    style={{ minHeight: 260, maxHeight: 400 }} 
+                                />
                             </div>
                         </div>
                     </section>
@@ -145,12 +154,16 @@ export default function BSITProgramPage() {
                     >
                         <div className="w-full max-w-4xl mx-auto">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program Objectives
+                                {bsitContent.objectives_section_title}
                             </h2>
                             <ol className="list-decimal ml-6 space-y-3 text-lg text-gray-800">
-                                {program.objectives.map((obj, idx) => (
-                                    <li key={idx}>{obj}</li>
-                                ))}
+                                {bsitContent.objectives_data && bsitContent.objectives_data.length > 0 ? (
+                                    bsitContent.objectives_data.map((obj, idx) => (
+                                        <li key={idx}>{obj}</li>
+                                    ))
+                                ) : (
+                                    <li>No objectives available</li>
+                                )}
                             </ol>
                         </div>
                     </section>
@@ -159,17 +172,27 @@ export default function BSITProgramPage() {
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
                         <div className="w-full max-w-5xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program AVP
+                                {bsitContent.avp_section_title}
                             </h2>
                             <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto mb-4" style={{ maxWidth: 800, height: 450 }}>
-                                <iframe
-                                    src={`https://www.youtube.com/embed/${program.avpYoutubeId}`}
-                                    title="Program AVP"
-                                    frameBorder={0}
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                    className="w-full h-full"
-                                ></iframe>
+                                {bsitContent.program_video_type === 'youtube' ? (
+                                    <iframe
+                                        src={`https://www.youtube.com/embed/${bsitContent.program_video}`}
+                                        title="Program AVP"
+                                        frameBorder={0}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        className="w-full h-full"
+                                    ></iframe>
+                                ) : (
+                                    <video
+                                        src={bsitContent.program_video}
+                                        controls
+                                        className="w-full h-full"
+                                    >
+                                        Your browser does not support the video tag.
+                                    </video>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -177,15 +200,26 @@ export default function BSITProgramPage() {
                     {/* Program in Action */}
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12" style={{ backgroundColor: '#f8fafc' }}>
                         <div className="w-full max-w-6xl mx-auto">
-                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program in Action
+                            <h2 className="text-3xl text-center font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {bsitContent.action_section_title}
                             </h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {program.activities.map((img, idx) => (
-                                    <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
-                                        <img src={img} alt={`Activity ${idx + 1}`} className="w-full h-36 object-cover" style={{ minHeight: 144, maxHeight: 144 }} />
+                                {bsitContent.action_images && bsitContent.action_images.length > 0 ? (
+                                    bsitContent.action_images.map((img: string, idx: number) => (
+                                        <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
+                                            <img 
+                                                src={img || '/api/placeholder/400/300'} 
+                                                alt={`Activity ${idx + 1}`} 
+                                                className="w-full h-36 object-cover" 
+                                                style={{ minHeight: 200, maxHeight: 200 }} 
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-2 md:col-span-4 text-center text-gray-500">
+                                        No action images available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -194,17 +228,40 @@ export default function BSITProgramPage() {
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
                         <div className="w-full max-w-4xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Notable Graduates
+                                {bsitContent.graduates_section_title}
                             </h2>
                             <div className="flex flex-col items-center gap-6">
-                                {program.graduates.map((grad, idx) => (
-                                    <div key={idx} className="w-full flex flex-col items-center">
-                                        <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
-                                            <img src={grad.video} alt={grad.name} className="w-full h-full object-cover" />
+                                {bsitContent.graduates_data && bsitContent.graduates_data.length > 0 ? (
+                                    bsitContent.graduates_data.map((grad: GraduateItem, idx: number) => (
+                                        <div key={idx} className="w-full flex flex-col items-center">
+                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
+                                                {grad.video_type === 'youtube' ? (
+                                                    <iframe
+                                                        src={`https://www.youtube.com/embed/${grad.video}`}
+                                                        title={grad.name}
+                                                        frameBorder={0}
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                        allowFullScreen
+                                                        className="w-full h-full"
+                                                    ></iframe>
+                                                ) : (
+                                                    <video
+                                                        src={typeof grad.video === 'string' ? grad.video : ''}
+                                                        controls
+                                                        className="w-full h-full object-cover"
+                                                    >
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                )}
+                                            </div>
+                                            <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
                                         </div>
-                                        <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500">
+                                        No graduates available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -219,22 +276,33 @@ export default function BSITProgramPage() {
                     >
                         <div className="w-full max-w-7xl mx-auto">
                             <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: COLORS.primaryMaroon }}>
-                                Accreditation Areas
+                                {bsitContent.accreditation_section_title}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                {program.accreditationAreas.map((area, idx) => (
-                                    <div key={area.id} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                        style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                        <img src={area.image} alt={area.title} className="w-full h-28 object-cover" style={{ minHeight: 112, maxHeight: 112 }} />
-                                        <div className="p-4 flex flex-col items-center">
-                                            <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
-                                            <button className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                style={{ backgroundColor: COLORS.primaryMaroon }}>
-                                                View Area
-                                            </button>
+                                {bsitContent.accreditation_areas && bsitContent.accreditation_areas.length > 0 ? (
+                                    bsitContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
+                                        <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                            style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                            <img 
+                                                src={area.image || '/api/placeholder/300/200'} 
+                                                alt={area.title} 
+                                                className="w-full h-28 object-cover" 
+                                                style={{ minHeight: 112, maxHeight: 112 }} 
+                                            />
+                                            <div className="p-4 flex flex-col items-center">
+                                                <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
+                                                <button className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                                    style={{ backgroundColor: COLORS.primaryMaroon }}>
+                                                    View Area
+                                                </button>
+                                            </div>
                                         </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
+                                        No accreditation areas available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -243,15 +311,15 @@ export default function BSITProgramPage() {
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src="/api/placeholder/1600/400"
-                                alt="Mula Sayo, Para Sa Bayan"
+                                src={bsitContent.mula_sayo_image || '/api/placeholder/1600/400'}
+                                alt={bsitContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                {bsitContent.mula_sayo_title}
                             </h2>
                         </div>
                     </section>

@@ -1,7 +1,8 @@
 import { Head } from '@inertiajs/react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import PdfViewer from '@/components/PdfViewer';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -11,6 +12,36 @@ const COLORS = {
     softYellow: '#FDDE54',
     almostWhite: '#FEFEFE',
 };
+
+// Helper functions moved outside component to avoid re-creation
+const getFileExtension = (url: string) => {
+    if (!url) return '';
+    return url.split('.').pop()?.toLowerCase() || '';
+};
+
+const isPDF = (url: string) => {
+    const extension = getFileExtension(url);
+    return extension === 'pdf';
+};
+
+const isImage = (url: string) => {
+    const extension = getFileExtension(url);
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension);
+};
+
+interface CertificateContent {
+    hero_image?: string;
+    hero_title: string;
+    hero_subtitle: string;
+    section_title: string;
+    certificate_document?: string;
+    footer_section_title: string;
+    footer_image?: string;
+}
+
+interface Props {
+    certificateContent: CertificateContent;
+}
 
 function useScrollAnimation() {
     const [isVisible, setIsVisible] = useState(false);
@@ -45,21 +76,145 @@ function useScrollAnimation() {
             },
             { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
         );
-        if (ref.current) observer.observe(ref.current);
-        return () => { if (ref.current) observer.unobserve(ref.current); };
+        
+        const currentRef = ref.current;
+        if (currentRef) observer.observe(currentRef);
+        
+        return () => { 
+            if (currentRef) observer.unobserve(currentRef); 
+        };
     }, [hasAnimated]);
     
     return [ref, isVisible, scrollDirection] as const;
 }
 
-export default function Certificate() {
-    // Placeholder: In production, fetch from admin panel
-    const certificateUrl = "/api/placeholder/900x1200?text=Certificate+of+Authenticity";
+export default function Certificate({ certificateContent }: Props) {
+    // Use proper placeholder URLs that actually work
+    const certificateUrl = certificateContent.certificate_document || "https://via.placeholder.com/900x1200/f3f4f6/6b7280?text=Certificate+Preview";
+    
+    // Hero Section Data
+    const heroImageUrl = certificateContent.hero_image || "https://via.placeholder.com/1600x500/7f0404/ffffff?text=Certificate+Hero+Image";
+    
+    // Footer Section Data  
+    const footerImageUrl = certificateContent.footer_image || "https://via.placeholder.com/1600x400/7f0404/ffffff?text=Footer+Background";
+
+    // PDF state - initialize once and persist
+    const [pdfLoaded, setPdfLoaded] = useState(false);
+    const [currentPage] = useState(1);
+    const setTotalPages = useState(1)[1];
+    const [zoom] = useState(0.9);
+    const [rotate] = useState(0);
+
+    // Initialize PDF loading once on component mount
+    useEffect(() => {
+        if (certificateContent.certificate_document && isPDF(certificateContent.certificate_document) && !pdfLoaded) {
+            setPdfLoaded(true);
+        }
+    }, [certificateContent.certificate_document, pdfLoaded]);
+
+    // Certificate Display Component - moved outside of animation effects
+    const CertificateDisplay = useCallback(() => {
+        // Check if we have a real certificate (not placeholder)
+        const hasRealCertificate = certificateContent.certificate_document && 
+                                  !certificateContent.certificate_document.includes('placeholder');
+        
+        if (!hasRealCertificate) {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                    <div className="text-center">
+                        <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-gray-500 font-medium">No certificate uploaded</p>
+                        <p className="text-gray-400 text-sm">Upload a certificate via the admin panel</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (isPDF(certificateContent.certificate_document || '') && pdfLoaded) {
+            return (
+                <div className="w-full">
+                    {/* PDF Display using PdfViewer component - only render when pdfLoaded is true */}
+                    <div className="w-full max-w-4xl mx-auto rounded-xl border border-gray-200 overflow-hidden" style={{ height: '800px' }}>
+                        <PdfViewer
+                            url={certificateContent.certificate_document || ''}
+                            currentPage={currentPage}
+                            onTotalPagesChange={setTotalPages}
+                            zoom={zoom}
+                            rotate={rotate}
+                            className="w-full h-full"
+                        />
+                    </div>
+                    
+                    {/* Fallback link if PDF viewer doesn't work */}
+                    <div className="mt-4 text-center">
+                        <a
+                            href={certificateContent.certificate_document}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded-lg hover:bg-[#5a0303] transition-colors"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download PDF
+                        </a>
+                    </div>
+                </div>
+            );
+        } else if (isPDF(certificateContent.certificate_document || '') && !pdfLoaded) {
+            // Show loading state for PDF
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                    <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-[#7F0404] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-gray-500 font-medium">Loading PDF...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (isImage(certificateContent.certificate_document || '')) {
+            return (
+                <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center rounded-xl border border-gray-200 overflow-hidden" style={{ minHeight: '400px' }}>
+                    <img
+                        src={certificateContent.certificate_document}
+                        alt="Certificate"
+                        className="max-h-full max-w-full object-contain rounded-xl shadow-lg"
+                        style={{ maxHeight: '800px', width: 'auto' }}
+                    />
+                </div>
+            );
+        }
+
+        // For other file types (DOCX, etc.)
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                <div className="text-center">
+                    <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-gray-600 font-medium">Document Available</p>
+                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(certificateUrl).toUpperCase()} file</p>
+                    <a
+                        href={certificateUrl}
+                        download
+                        className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded hover:bg-[#4D1414] transition-colors"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download Certificate
+                    </a>
+                </div>
+            </div>
+        );
+    }, [certificateContent.certificate_document, pdfLoaded, currentPage, setTotalPages, zoom, rotate, certificateUrl]);
     
     // Animation hooks for different sections
-    const [heroRef, heroVisible, heroScrollDirection] = useScrollAnimation();
-    const [certificateRef, certificateVisible, certificateScrollDirection] = useScrollAnimation();
-    const [sloganRef, sloganVisible, sloganScrollDirection] = useScrollAnimation();
+    const [heroRef, heroVisible] = useScrollAnimation();
+    const [certificateRef, certificateVisible] = useScrollAnimation();
 
     return (
         <>
@@ -78,7 +233,7 @@ export default function Certificate() {
                         }`}
                     >
                         <img
-                            src="/api/placeholder/1600/500?text=Certificate+of+Authenticity"
+                            src={heroImageUrl}
                             alt="Certificate Hero"
                             className={`w-full h-full object-cover transition-transform duration-1000 ${
                                 heroVisible ? 'scale-100' : 'scale-95'
@@ -92,14 +247,14 @@ export default function Certificate() {
                                     ? 'opacity-100 transform translate-y-0' 
                                     : 'opacity-0 transform translate-y-12'
                             }`}>
-                                Certificate of Authenticity
+                                {certificateContent.hero_title}
                             </h1>
                             <p className={`text-xl sm:text-2xl md:text-3xl text-white/90 max-w-2xl mx-auto transition-all duration-1000 delay-500 ${
                                 heroVisible 
                                     ? 'opacity-100 transform translate-y-0' 
                                     : 'opacity-0 transform translate-y-12'
                             }`}>
-                                Official proof of authenticity for PUP Calauan documentation
+                                {certificateContent.hero_subtitle}
                             </p>
                         </div>
                     </section>
@@ -125,28 +280,16 @@ export default function Certificate() {
                                             ? 'opacity-100 transform translate-y-0' 
                                             : 'opacity-0 transform translate-y-8'
                                     }`} style={{ color: COLORS.primaryMaroon }}>
-                                        Certificate Preview
+                                        {certificateContent.section_title}
                                     </h2>
-                                    {/* Consistent certificate image size and style */}
-                                    <div className={`w-full flex justify-center items-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200 overflow-hidden transition-all duration-1000 delay-600 ${
+                                    {/* Certificate Display with PDF Support */}
+                                    <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
                                         certificateVisible 
                                             ? 'opacity-100 transform translate-y-0 scale-100' 
                                             : 'opacity-0 transform translate-y-8 scale-95'
                                     }`}>
-                                        <img
-                                            src={certificateUrl}
-                                            alt="Certificate of Authenticity"
-                                            className="max-h-[600px] sm:max-h-[700px] w-auto mx-auto rounded-2xl shadow-lg object-contain"
-                                            style={{ maxWidth: '100%' }}
-                                        />
+                                        <CertificateDisplay />
                                     </div>
-                                    <p className={`mt-6 text-sm text-gray-500 text-center transition-all duration-1000 delay-800 ${
-                                        certificateVisible 
-                                            ? 'opacity-100 transform translate-y-0' 
-                                            : 'opacity-0 transform translate-y-4'
-                                    }`}>
-                                        (This is a placeholder. The certificate can be updated via the admin panel.)
-                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -154,38 +297,25 @@ export default function Certificate() {
                 </main>
 
                 {/* Mula Sayo, Para Sa Bayan Section */}
-                <section 
-                    ref={sloganRef}
-                    className={`relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1000 ${
-                        sloganVisible 
-                            ? 'opacity-100 transform translate-y-0' 
-                            : 'opacity-0 transform translate-y-12'
-                    }`}
-                >
+                <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
                     <div className="absolute inset-0 w-full h-full">
                         <img
-                            src="/api/placeholder/1600/400"
-                            alt="Mula Sayo, Ikaw Lang ay Dapat sa Akin "
-                            className={`w-full h-full object-cover object-center opacity-70 transition-transform duration-1000 ${
-                                sloganVisible ? 'scale-100' : 'scale-105'
-                            }`}
+                            src={footerImageUrl}
+                            alt={certificateContent.footer_section_title}
+                            className="w-full h-full object-cover object-center opacity-70"
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                     </div>
                     <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                        <h2 className={`text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 transition-all duration-1000 delay-300 ${
-                            sloganVisible 
-                                ? 'opacity-100 transform translate-y-0' 
-                                : 'opacity-0 transform translate-y-8'
-                        }`}>
-                            Mula Sayo, Para Sa Bayan 
+                        <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
+                            {certificateContent.footer_section_title}
                         </h2>
                     </div>
                 </section>
 
                 <Footer />
             </div>
-            <style jsx>{`
+            <style>{`
                 @keyframes fade-in-up {
                     from { opacity: 0; transform: translateY(30px);}
                     to { opacity: 1; transform: translateY(0);}

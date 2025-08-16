@@ -3,32 +3,32 @@
 namespace App\Http\Controllers\Landing;
 
 use App\Http\Controllers\Controller;
-use App\Models\Landing\AboutBtled;
+use App\Models\Landing\Exhibit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
-class AboutBtledController extends Controller
+class ExhibitController extends Controller
 {
     /**
-     * Display the admin layout BTLED Faculty Page
+     * Display the admin layout Exhibit Page
      */
     public function index()
     {
-        $content = AboutBtled::getContent();
+        $content = Exhibit::getContent();
         
-        return Inertia::render('admin/layout/AboutBTLED', [
-            'btledContent' => $content
+        return Inertia::render('admin/layout/Exhibit', [
+            'exhibitContent' => $content
         ]);
     }
 
     /**
-     * Get BTLED content for API
+     * Get Exhibit content for API
      */
     public function getContent()
     {
-        $content = AboutBtled::getContent();
+        $content = Exhibit::getContent();
         
         // Transform image paths for frontend
         $transformedContent = $content->toArray();
@@ -38,9 +38,9 @@ class AboutBtledController extends Controller
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
-        // Transform faculty images
-        if ($transformedContent['faculty_data']) {
-            foreach ($transformedContent['faculty_data'] as &$item) {
+        // Transform exhibit images
+        if ($transformedContent['exhibit_data']) {
+            foreach ($transformedContent['exhibit_data'] as &$item) {
                 if ($item['image'] && !str_starts_with($item['image'], 'http')) {
                     $item['image'] = Storage::url($item['image']);
                 }
@@ -56,12 +56,12 @@ class AboutBtledController extends Controller
     }
 
     /**
-     * Update BTLED content
+     * Update Exhibit content
      */
     public function update(Request $request)
     {
         try {
-            $content = AboutBtled::getContent();
+            $content = Exhibit::getContent();
             
             $data = [];
             
@@ -77,35 +77,38 @@ class AboutBtledController extends Controller
             // Handle hero image upload
             if ($request->hasFile('hero_image')) {
                 $file = $request->file('hero_image');
-                $path = $file->store('landing/btled/hero', 'public');
+                $path = $file->store('landing/exhibit/hero', 'public');
                 $data['hero_image'] = $path;
             }
             
-            // Handle faculty section
-            if ($request->has('faculty_section_title')) {
-                $data['faculty_section_title'] = $request->input('faculty_section_title');
+            // Handle exhibit section
+            if ($request->has('exhibit_section_title')) {
+                $data['exhibit_section_title'] = $request->input('exhibit_section_title');
             }
             
-            // Handle faculty data
-            if ($request->has('faculty_data')) {
-                $facultyData = [];
-                $facultyItems = json_decode($request->input('faculty_data'), true) ?? [];
-                foreach ($facultyItems as $index => $item) {
-                    $facultyItem = [
-                        'name' => $item['name'] ?? '',
+            // Handle exhibit data
+            if ($request->has('exhibit_data')) {
+                $exhibitData = [];
+                $exhibitItems = json_decode($request->input('exhibit_data'), true) ?? [];
+                
+                foreach ($exhibitItems as $index => $item) {
+                    $exhibitItem = [
+                        'title' => $item['title'] ?? '',
+                        'subtitle' => $item['subtitle'] ?? '',
                         'image' => $item['image'] ?? ''
                     ];
                     
-                    // Handle file upload for faculty image
-                    if ($request->hasFile("faculty_image_{$index}")) {
-                        $file = $request->file("faculty_image_{$index}");
-                        $path = $file->store('landing/btled/faculty', 'public');
-                        $facultyItem['image'] = $path;
+                    // Handle individual exhibit image uploads
+                    if ($request->hasFile("exhibit_image_{$index}")) {
+                        $file = $request->file("exhibit_image_{$index}");
+                        $path = $file->store('landing/exhibit/items', 'public');
+                        $exhibitItem['image'] = $path;
                     }
                     
-                    $facultyData[] = $facultyItem;
+                    $exhibitData[] = $exhibitItem;
                 }
-                $data['faculty_data'] = $facultyData;
+                
+                $data['exhibit_data'] = $exhibitData;
             }
             
             // Handle mula sayo section
@@ -116,7 +119,7 @@ class AboutBtledController extends Controller
             // Handle mula sayo image upload
             if ($request->hasFile('mula_sayo_image')) {
                 $file = $request->file('mula_sayo_image');
-                $path = $file->store('landing/btled/mula_sayo', 'public');
+                $path = $file->store('landing/exhibit/mula_sayo', 'public');
                 $data['mula_sayo_image'] = $path;
             }
             
@@ -125,18 +128,18 @@ class AboutBtledController extends Controller
             return back()->with('success', 'Content updated successfully');
             
         } catch (\Exception $e) {
-            Log::error('Failed to update BTLED content: ' . $e->getMessage());
+            Log::error('Failed to update Exhibit content: ' . $e->getMessage());
             
             return back()->withErrors(['error' => 'Failed to update content: ' . $e->getMessage()]);
         }
     }
 
     /**
-     * Display the landing BTLED Faculty Page with dynamic content
+     * Display the landing Exhibit Page with dynamic content
      */
     public function show()
     {
-        $content = AboutBtled::getContent();
+        $content = Exhibit::getContent();
         
         // Transform image paths for frontend
         $transformedContent = $content->toArray();
@@ -146,9 +149,9 @@ class AboutBtledController extends Controller
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
-        // Transform faculty images
-        if ($transformedContent['faculty_data']) {
-            foreach ($transformedContent['faculty_data'] as &$item) {
+        // Transform exhibit images
+        if ($transformedContent['exhibit_data']) {
+            foreach ($transformedContent['exhibit_data'] as &$item) {
                 if ($item['image'] && !str_starts_with($item['image'], 'http')) {
                     $item['image'] = Storage::url($item['image']);
                 }
@@ -160,8 +163,8 @@ class AboutBtledController extends Controller
             $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
         }
         
-        return Inertia::render('landing/about/btled', [
-            'btledContent' => $transformedContent
+        return Inertia::render('landing/exhibit', [
+            'exhibitContent' => $transformedContent
         ]);
     }
 }

@@ -14,59 +14,24 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-// This data should be fetched from admin panel in production
-const bsentMembers = [
-    {
-        id: 1,
-        name: "Prof. Carla Mendoza",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 2,
-        name: "Prof. Leo Garcia",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 3,
-        name: "Dr. Patricia Lopez",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 4,
-        name: "Prof. Ricardo Perez",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 5,
-        name: "Prof. Isabella Cruz",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 6,
-        name: "Dr. Fernando Reyes",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 7,
-        name: "Prof. Sophia Delgado",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 8,
-        name: "Prof. Gabriel Torres",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 9,
-        name: "Prof. Alejandra Vega",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 10,
-        name: "Prof. Andres Flores",
-        image: "/api/placeholder/300/400",
-    }
-];
+interface FacultyItem {
+    image: string;
+    name: string;
+}
+
+interface BsentContent {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    faculty_section_title: string;
+    faculty_data: FacultyItem[];
+    mula_sayo_title: string;
+    mula_sayo_image: string;
+}
+
+interface Props {
+    bsentContent: BsentContent;
+}
 
 // Enhanced scroll animation hook
 function useScrollAnimation() {
@@ -96,7 +61,7 @@ function useScrollAnimation() {
     return [ref, isVisible] as const;
 }
 
-export default function BSENTFaculty() {
+export default function BSENTFaculty({ bsentContent }: Props) {
     const [facultyRef, facultyVisible] = useScrollAnimation();
 
     return (
@@ -110,7 +75,7 @@ export default function BSENTFaculty() {
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <div className="absolute inset-0">
                             <img
-                                src="/api/placeholder/1600/800"
+                                src={bsentContent.hero_image || "/api/placeholder/1600/800"}
                                 alt="BSENT Faculty"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             />
@@ -125,10 +90,10 @@ export default function BSENTFaculty() {
                                 <span className="text-sm font-medium">Back to About</span>
                             </Link>
                             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 sm:mb-8 animate-fade-in-up transform transition-all duration-300 hover:scale-102">
-                                BSENT Faculty
+                                {bsentContent.hero_title || 'BSENT Faculty'}
                             </h1>
                             <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl max-w-4xl mx-auto leading-relaxed animate-fade-in-up animation-delay-300 transform transition-all duration-300 hover:scale-102">
-                                Bachelor of Science in Entrepreneurship
+                                {bsentContent.hero_subtitle || 'Bachelor of Science in Entrepreneurship'}
                             </p>
                         </div>
                     </section>
@@ -153,12 +118,12 @@ export default function BSENTFaculty() {
                         
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-12 sm:mb-16 lg:mb-20 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                Faculty Members
+                                {bsentContent.faculty_section_title || 'Faculty Members'}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 lg:gap-10">
-                                {bsentMembers.map((member, index) => (
+                                {bsentContent.faculty_data?.map((member, index) => (
                                     <div
-                                        key={member.id}
+                                        key={index}
                                         className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
                                             facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
                                         }`}
@@ -167,7 +132,7 @@ export default function BSENTFaculty() {
                                         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border-t-4 hover:shadow-xl transition-all duration-500 group h-full flex flex-col" style={{ borderTopColor: COLORS.primaryMaroon }}>
                                             <div className="relative mb-4 sm:mb-6 group/image">
                                                 <img
-                                                    src={member.image}
+                                                    src={member.image || "/api/placeholder/300/400"}
                                                     alt={member.name}
                                                     className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto rounded-full shadow-lg border-4 group-hover/image:shadow-xl transition-all duration-300 group-hover/image:scale-105"
                                                     style={{ borderColor: COLORS.primaryMaroon }}
@@ -181,7 +146,7 @@ export default function BSENTFaculty() {
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                )) || []}
                             </div>
                         </div>
                     </section>
@@ -190,7 +155,7 @@ export default function BSENTFaculty() {
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src="/api/placeholder/1600/400"
+                                src={bsentContent.mula_sayo_image || "/api/placeholder/1600/400"}
                                 alt="Mula Sayo, Para Sa Bayan"
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
@@ -198,7 +163,7 @@ export default function BSENTFaculty() {
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                {bsentContent.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
                             </h2>
                         </div>
                     </section>

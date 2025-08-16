@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PagePreview from '@/components/PagePreview';
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
 import FileUpload from '@/components/FileUpload';
 
 interface FacultyItem {
@@ -76,40 +77,42 @@ export default function LayoutAbout({ aboutContent }: Props) {
     const handleSave = () => {
         setSaving(true);
         const formData = new FormData();
-
+        
         // Hero data
         formData.append('hero_title', heroTitle);
         formData.append('hero_subtitle', heroSubtitle);
         if (heroImage instanceof File) {
             formData.append('hero_image', heroImage);
         }
-
+        
         // Story data
         formData.append('story_title', storyTitle);
         formData.append('story_content', storyContent);
-
+        
         // Mission data
         formData.append('mission_title', missionTitle);
         formData.append('mission_content', missionContent);
-
+        
         // Vision data
         formData.append('vision_title', visionTitle);
         formData.append('vision_content', visionContent);
-
+        
         // Faculty data
         formData.append('faculty_title', facultyTitle);
-        formData.append('faculty_data', JSON.stringify(faculty.map(item => ({
+        const facultyForSubmit = faculty.map(item => ({
             name: item.name,
             description: item.description,
             image: typeof item.image === 'string' ? item.image : ''
-        }))));
-
-        faculty.forEach((item, idx) => {
+        }));
+        formData.append('faculty_data', JSON.stringify(facultyForSubmit));
+        
+        // Handle faculty images
+        faculty.forEach((item, index) => {
             if (item.image instanceof File) {
-                formData.append(`faculty_image_${idx}`, item.image);
+                formData.append(`faculty_image_${index}`, item.image);
             }
         });
-
+        
         // Mula Sayo data
         formData.append('mula_sayo_title', mulaSayoTitle);
         if (mulaSayoImage instanceof File) {
@@ -184,26 +187,24 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                                 allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
                                                 maxSize={5}
                                             />
-                                            
+
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Hero Title</label>
                                                 <input
                                                     type="text"
                                                     value={heroTitle}
                                                     onChange={(e) => setHeroTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter hero title"
+                                                    placeholder="About PUP Calauan"
                                                 />
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Hero Subtitle</label>
                                                 <input
                                                     type="text"
                                                     value={heroSubtitle}
                                                     onChange={(e) => setHeroSubtitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter hero subtitle"
+                                                    placeholder="Excellence in Education and Community Service"
                                                 />
                                             </div>
                                         </div>
@@ -216,23 +217,21 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Our Story</h3>
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
                                                     value={storyTitle}
                                                     onChange={(e) => setStoryTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter section title"
+                                                    placeholder="Our Story"
                                                 />
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Story Content</label>
                                                 <textarea
                                                     value={storyContent}
                                                     onChange={(e) => setStoryContent(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter story content"
+                                                    placeholder="Tell the story of PUP Calauan..."
                                                     rows={6}
                                                 />
                                             </div>
@@ -246,23 +245,21 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Mission</h3>
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
                                                     value={missionTitle}
                                                     onChange={(e) => setMissionTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter section title"
+                                                    placeholder="Our Mission"
                                                 />
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Mission Statement</label>
                                                 <textarea
                                                     value={missionContent}
                                                     onChange={(e) => setMissionContent(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter mission statement"
+                                                    placeholder="Enter the mission statement..."
                                                     rows={4}
                                                 />
                                             </div>
@@ -276,23 +273,21 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Vision</h3>
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
                                                     value={visionTitle}
                                                     onChange={(e) => setVisionTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter section title"
+                                                    placeholder="Our Vision"
                                                 />
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Vision Statement</label>
                                                 <textarea
                                                     value={visionContent}
                                                     onChange={(e) => setVisionContent(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter vision statement"
+                                                    placeholder="Enter the vision statement..."
                                                     rows={4}
                                                 />
                                             </div>
@@ -306,60 +301,54 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Faculty</h3>
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
                                                     value={facultyTitle}
                                                     onChange={(e) => setFacultyTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter section title"
+                                                    placeholder="Our Faculty"
                                                 />
                                             </div>
 
                                             {faculty.map((item, index) => (
-                                                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                                                <div key={index} className="bg-gray-50 p-4 rounded-lg border">
                                                     <div className="flex justify-between items-center mb-3">
-                                                        <span className="text-sm font-medium text-gray-700">Faculty {index + 1}</span>
+                                                        <span className="text-sm font-medium text-gray-700">Faculty #{index + 1}</span>
                                                         {faculty.length > 1 && (
                                                             <button
                                                                 onClick={() => removeFaculty(index)}
-                                                                className="text-red-600 hover:text-red-800 text-xs"
+                                                                className="text-red-500 hover:text-red-700 text-sm"
                                                             >
                                                                 Remove
                                                             </button>
                                                         )}
                                                     </div>
-                                                    
-                                                    <FileUpload
-                                                        label="Faculty Image"
-                                                        value={item.image}
-                                                        onChange={(file) => handleFacultyChange(index, 'image', file)}
-                                                        accept="image/*"
-                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                        maxSize={3}
-                                                    />
-                                                    
+
                                                     <div className="space-y-3">
-                                                        <div>
-                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Faculty Name</label>
-                                                            <input
-                                                                type="text"
-                                                                value={item.name}
-                                                                onChange={(e) => handleFacultyChange(index, 'name', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                                placeholder="Enter faculty name"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Description</label>
-                                                            <textarea
-                                                                value={item.description}
-                                                                onChange={(e) => handleFacultyChange(index, 'description', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                                placeholder="Enter faculty description"
-                                                                rows={3}
-                                                            />
-                                                        </div>
+                                                        <FileUpload
+                                                            label="Faculty Image"
+                                                            value={item.image}
+                                                            onChange={(file) => handleFacultyChange(index, 'image', file)}
+                                                            accept="image/*"
+                                                            allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                            maxSize={2}
+                                                        />
+
+                                                        <input
+                                                            type="text"
+                                                            value={item.name}
+                                                            onChange={(e) => handleFacultyChange(index, 'name', e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Faculty Name"
+                                                        />
+
+                                                        <textarea
+                                                            value={item.description}
+                                                            onChange={(e) => handleFacultyChange(index, 'description', e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Faculty description..."
+                                                            rows={3}
+                                                        />
                                                     </div>
                                                 </div>
                                             ))}
@@ -379,18 +368,17 @@ export default function LayoutAbout({ aboutContent }: Props) {
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Mula Sayo Para sa Bayan</h3>
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
                                                     type="text"
                                                     value={mulaSayoTitle}
                                                     onChange={(e) => setMulaSayoTitle(e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                    placeholder="Enter section title"
+                                                    placeholder="Mula Sayo, Para sa Bayan"
                                                 />
                                             </div>
 
                                             <FileUpload
-                                                label="Footer Image"
+                                                label="Background Image"
                                                 value={mulaSayoImage}
                                                 onChange={(file) => setMulaSayoImage(file || '')}
                                                 accept="image/*"

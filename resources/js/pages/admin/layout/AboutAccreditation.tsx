@@ -118,7 +118,7 @@ export default function AboutAccreditation({ accreditationContent }: Props) {
     const sections = [
         { id: 'hero', name: 'Hero Section' },
         { id: 'faculty', name: 'Faculty Members' },
-        { id: 'mulasayo', name: 'Mula Sayo Section' }
+        { id: 'mulasayo', name: 'Mula Sayo' }
     ];
 
     return (

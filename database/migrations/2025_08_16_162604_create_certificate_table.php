@@ -13,6 +13,20 @@ return new class extends Migration
     {
         Schema::create('certificate', function (Blueprint $table) {
             $table->id();
+            
+            // Hero Section
+            $table->string('hero_image')->nullable();
+            $table->string('hero_title')->default('Certificate of Authenticity');
+            $table->string('hero_subtitle')->default('Official proof of authenticity for PUP Calauan documentation');
+            
+            // Certificate Section
+            $table->string('section_title')->default('Certificate Preview');
+            $table->string('certificate_document')->nullable(); // Can be image, docx, or pdf
+            
+            // Mula Sayo Para Sa Bayan Section
+            $table->string('footer_section_title')->default('Mula Sayo, Para Sa Bayan');
+            $table->string('footer_image')->nullable();
+            
             $table->timestamps();
         });
     }

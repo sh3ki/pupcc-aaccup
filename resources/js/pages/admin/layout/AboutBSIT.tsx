@@ -118,7 +118,7 @@ export default function AboutBsit({ bsitContent }: Props) {
     const sections = [
         { id: 'hero', name: 'Hero Section' },
         { id: 'faculty', name: 'Faculty Members' },
-        { id: 'mulasayo', name: 'Mula Sayo Section' }
+        { id: 'mulasayo', name: 'Mula Sayo' }
     ];
 
     return (
@@ -131,7 +131,7 @@ export default function AboutBsit({ bsitContent }: Props) {
                         <div className="p-6">
                             {/* Header */}
                             <div className="mb-6">
-                                <h2 className="text-xl font-bold text-gray-800">BSIT Page Editor</h2>
+                                <h2 className="text-xl font-bold text-gray-800">BSIT Faculty Page Editor</h2>
                                 <p className="text-sm text-gray-600">Manage content and preview changes</p>
                             </div>
 
@@ -309,7 +309,7 @@ export default function AboutBsit({ bsitContent }: Props) {
                         {/* Preview Header */}
                         <div className="flex justify-between items-center mb-4 flex-shrink-0">
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-800">BSIT Page Preview</h1>
+                                <h1 className="text-2xl font-bold text-gray-800">BSIT Faculty Page Preview</h1>
                                 <p className="text-sm text-gray-600">Live preview of your changes</p>
                             </div>
                             <div className="flex items-center space-x-2 text-sm">
@@ -325,7 +325,7 @@ export default function AboutBsit({ bsitContent }: Props) {
                             <div className="h-full w-full max-w-7xl">
                                 <PagePreview 
                                     pageUrl="/faculty/bsit" 
-                                    title="BSIT Page Preview"
+                                    title="BSIT Faculty Page Preview"
                                     key={previewKey}
                                 />
                             </div>

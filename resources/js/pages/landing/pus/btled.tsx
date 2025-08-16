@@ -1,7 +1,6 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Link } from '@inertiajs/react';
 import { useRef, useEffect, useState } from 'react';
 
 const COLORS = {
@@ -13,43 +12,42 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-const program = {
-    name: 'Bachelor of Technology and Livelihood Education (BTLED)',
-    heroImage: '/api/placeholder/1600/600',
-    overview: 'The BTLED program develops competent teachers in technology and livelihood education, combining practical and theoretical skills to prepare graduates for the modern classroom.',
-    objectives: [
-        'Develop professional teachers with strong pedagogical and technical skills.',
-        'Promote innovative teaching strategies in technology and livelihood education.',
-        'Foster lifelong learning and adaptability among graduates.',
-        'Encourage community involvement and extension services.',
-        'Prepare graduates for licensure and advanced studies.',
-    ],
-    avpYoutubeId: 'dQw4w9WgXcQ',
-    activities: [
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-        '/api/placeholder/400/300',
-    ],
-    graduates: [
-        {
-            name: 'Prof. Maria Dela Cruz',
-            video: '/api/placeholder/400/250',
-        },
-    ],
-    accreditationAreas: [
-        { id: 1, title: 'Area I: Vision, Mission, Goals and Objectives', image: '/api/placeholder/300/200' },
-        { id: 2, title: 'Area II: Faculty', image: '/api/placeholder/300/200' },
-        { id: 3, title: 'Area III: Curriculum and Instruction', image: '/api/placeholder/300/200' },
-        { id: 4, title: 'Area IV: Support to Students', image: '/api/placeholder/300/200' },
-        { id: 5, title: 'Area V: Research', image: '/api/placeholder/300/200' },
-        { id: 6, title: 'Area VI: Extension and Community Involvement', image: '/api/placeholder/300/200' },
-        { id: 7, title: 'Area VII: Library', image: '/api/placeholder/300/200' },
-        { id: 8, title: 'Area VIII: Physical Plant and Facilities', image: '/api/placeholder/300/200' },
-        { id: 9, title: 'Area IX: Laboratories', image: '/api/placeholder/300/200' },
-        { id: 10, title: 'Area X: Administration', image: '/api/placeholder/300/200' },
-    ],
-};
+interface GraduateItem {
+    name: string;
+    video: string;
+    video_type: 'youtube' | 'upload';
+}
+
+interface AccreditationArea {
+    title: string;
+    image: string;
+}
+
+interface BtledContent {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    overview_section_title: string;
+    program_description: string;
+    program_image: string;
+    objectives_section_title: string;
+    objectives_data: string[];
+    avp_section_title: string;
+    program_video: string;
+    program_video_type: 'youtube' | 'upload';
+    action_section_title: string;
+    action_images: string[];
+    graduates_section_title: string;
+    graduates_data: GraduateItem[];
+    accreditation_section_title: string;
+    accreditation_areas: AccreditationArea[];
+    mula_sayo_title: string;
+    mula_sayo_image: string;
+}
+
+interface Props {
+    btledContent: BtledContent;
+}
 
 // Scroll animation hook
 function useScrollAnimation() {
@@ -58,6 +56,7 @@ function useScrollAnimation() {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        const currentRef = ref.current;
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting && !hasAnimated) {
@@ -72,13 +71,13 @@ function useScrollAnimation() {
             },
             { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
         );
-        if (ref.current) observer.observe(ref.current);
-        return () => { if (ref.current) observer.unobserve(ref.current); };
+        if (currentRef) observer.observe(currentRef);
+        return () => { if (currentRef) observer.unobserve(currentRef); };
     }, [hasAnimated]);
     return [ref, isVisible] as const;
 }
 
-export default function BTLEDProgramPage() {
+export default function BTLEDProgramPage({ btledContent }: Props) {
     const [overviewRef, overviewVisible] = useScrollAnimation();
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
@@ -93,16 +92,21 @@ export default function BTLEDProgramPage() {
                     {/* Hero */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <img
-                            src={program.heroImage}
-                            alt={program.name}
+                            src={btledContent.hero_image || '/api/placeholder/1600/600'}
+                            alt={btledContent.hero_title}
                             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             style={{ minHeight: 400, maxHeight: 700 }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
                             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-white animate-fade-in-up mb-4 drop-shadow-lg">
-                                {program.name}
+                                {btledContent.hero_title}
                             </h1>
+                            {btledContent.hero_subtitle && (
+                                <p className="text-lg sm:text-xl text-white/90 max-w-3xl px-4 drop-shadow-lg">
+                                    {btledContent.hero_subtitle}
+                                </p>
+                            )}
                         </div>
                     </section>
 
@@ -126,12 +130,17 @@ export default function BTLEDProgramPage() {
                         <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
                             <div className="flex-1">
                                 <h2 className="text-4xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                    Program Overview
+                                    {btledContent.overview_section_title}
                                 </h2>
-                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{program.overview}</p>
+                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{btledContent.program_description}</p>
                             </div>
                             <div className="flex-1">
-                                <img src="/api/placeholder/500/400" alt="BTLED Overview" className="rounded-2xl shadow-lg w-full object-cover" style={{ minHeight: 260, maxHeight: 400 }} />
+                                <img 
+                                    src={btledContent.program_image || '/api/placeholder/500/400'} 
+                                    alt="BTLED Overview" 
+                                    className="rounded-2xl shadow-lg w-full object-cover" 
+                                    style={{ minHeight: 260, maxHeight: 400 }} 
+                                />
                             </div>
                         </div>
                     </section>
@@ -145,12 +154,16 @@ export default function BTLEDProgramPage() {
                     >
                         <div className="w-full max-w-4xl mx-auto">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program Objectives
+                                {btledContent.objectives_section_title}
                             </h2>
                             <ol className="list-decimal ml-6 space-y-3 text-lg text-gray-800">
-                                {program.objectives.map((obj, idx) => (
-                                    <li key={idx}>{obj}</li>
-                                ))}
+                                {btledContent.objectives_data && btledContent.objectives_data.length > 0 ? (
+                                    btledContent.objectives_data.map((obj, idx) => (
+                                        <li key={idx}>{obj}</li>
+                                    ))
+                                ) : (
+                                    <li>No objectives available</li>
+                                )}
                             </ol>
                         </div>
                     </section>
@@ -159,17 +172,27 @@ export default function BTLEDProgramPage() {
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
                         <div className="w-full max-w-5xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program AVP
+                                {btledContent.avp_section_title}
                             </h2>
                             <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto mb-4" style={{ maxWidth: 800, height: 450 }}>
-                                <iframe
-                                    src={`https://www.youtube.com/embed/${program.avpYoutubeId}`}
-                                    title="Program AVP"
-                                    frameBorder={0}
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                    className="w-full h-full"
-                                ></iframe>
+                                {btledContent.program_video_type === 'youtube' ? (
+                                    <iframe
+                                        src={`https://www.youtube.com/embed/${btledContent.program_video}`}
+                                        title="Program AVP"
+                                        frameBorder={0}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        className="w-full h-full"
+                                    ></iframe>
+                                ) : (
+                                    <video
+                                        src={btledContent.program_video}
+                                        controls
+                                        className="w-full h-full"
+                                    >
+                                        Your browser does not support the video tag.
+                                    </video>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -177,15 +200,26 @@ export default function BTLEDProgramPage() {
                     {/* Program in Action */}
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12" style={{ backgroundColor: '#f8fafc' }}>
                         <div className="w-full max-w-6xl mx-auto">
-                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Program in Action
+                            <h2 className="text-3xl text-center font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {btledContent.action_section_title}
                             </h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {program.activities.map((img, idx) => (
-                                    <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
-                                        <img src={img} alt={`Activity ${idx + 1}`} className="w-full h-36 object-cover" style={{ minHeight: 144, maxHeight: 144 }} />
+                                {btledContent.action_images && btledContent.action_images.length > 0 ? (
+                                    btledContent.action_images.map((img: string, idx: number) => (
+                                        <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
+                                            <img 
+                                                src={img || '/api/placeholder/400/300'} 
+                                                alt={`Activity ${idx + 1}`} 
+                                                className="w-full h-36 object-cover" 
+                                                style={{ minHeight: 200, maxHeight: 200 }} 
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-2 md:col-span-4 text-center text-gray-500">
+                                        No action images available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -194,17 +228,40 @@ export default function BTLEDProgramPage() {
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
                         <div className="w-full max-w-4xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                Notable Graduates
+                                {btledContent.graduates_section_title}
                             </h2>
                             <div className="flex flex-col items-center gap-6">
-                                {program.graduates.map((grad, idx) => (
-                                    <div key={idx} className="w-full flex flex-col items-center">
-                                        <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
-                                            <img src={grad.video} alt={grad.name} className="w-full h-full object-cover" />
+                                {btledContent.graduates_data && btledContent.graduates_data.length > 0 ? (
+                                    btledContent.graduates_data.map((grad: GraduateItem, idx: number) => (
+                                        <div key={idx} className="w-full flex flex-col items-center">
+                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
+                                                {grad.video_type === 'youtube' ? (
+                                                    <iframe
+                                                        src={`https://www.youtube.com/embed/${grad.video}`}
+                                                        title={grad.name}
+                                                        frameBorder={0}
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                        allowFullScreen
+                                                        className="w-full h-full"
+                                                    ></iframe>
+                                                ) : (
+                                                    <video
+                                                        src={typeof grad.video === 'string' ? grad.video : ''}
+                                                        controls
+                                                        className="w-full h-full object-cover"
+                                                    >
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                )}
+                                            </div>
+                                            <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
                                         </div>
-                                        <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500">
+                                        No graduates available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -219,22 +276,33 @@ export default function BTLEDProgramPage() {
                     >
                         <div className="w-full max-w-7xl mx-auto">
                             <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: COLORS.primaryMaroon }}>
-                                Accreditation Areas
+                                {btledContent.accreditation_section_title}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                {program.accreditationAreas.map((area, idx) => (
-                                    <div key={area.id} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                        style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                        <img src={area.image} alt={area.title} className="w-full h-28 object-cover" style={{ minHeight: 112, maxHeight: 112 }} />
-                                        <div className="p-4 flex flex-col items-center">
-                                            <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
-                                            <button className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                style={{ backgroundColor: COLORS.primaryMaroon }}>
-                                                View Area
-                                            </button>
+                                {btledContent.accreditation_areas && btledContent.accreditation_areas.length > 0 ? (
+                                    btledContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
+                                        <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                            style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                            <img 
+                                                src={area.image || '/api/placeholder/300/200'} 
+                                                alt={area.title} 
+                                                className="w-full h-28 object-cover" 
+                                                style={{ minHeight: 112, maxHeight: 112 }} 
+                                            />
+                                            <div className="p-4 flex flex-col items-center">
+                                                <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
+                                                <button className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                                    style={{ backgroundColor: COLORS.primaryMaroon }}>
+                                                    View Area
+                                                </button>
+                                            </div>
                                         </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
+                                        No accreditation areas available
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </section>
@@ -243,33 +311,21 @@ export default function BTLEDProgramPage() {
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src="/api/placeholder/1600/400"
-                                alt="Mula Sayo, Para Sa Bayan"
+                                src={btledContent.mula_sayo_image || '/api/placeholder/1600/400'}
+                                alt={btledContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                {btledContent.mula_sayo_title}
                             </h2>
                         </div>
                     </section>
                 </main>
                 <Footer />
             </div>
-            <style jsx>{`
-                .text-shadow-lg {
-                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
-                }
-                @keyframes fade-in-up {
-                    from { opacity: 0; transform: translateY(30px);}
-                    to { opacity: 1; transform: translateY(0);}
-                }
-                .animate-fade-in-up {
-                    animation: fade-in-up 0.8s ease-out forwards;
-                }
-            `}</style>
         </>
     );
 }

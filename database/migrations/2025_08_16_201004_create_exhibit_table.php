@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('about_bsent_content', function (Blueprint $table) {
+        Schema::create('exhibit', function (Blueprint $table) {
             $table->id();
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default('BSENT Faculty');
-            $table->string('hero_subtitle', 500)->default('Bachelor of Science in Entrepreneurship');
-            $table->string('faculty_section_title')->default('Faculty Members');
-            $table->json('faculty_data')->nullable();
+            $table->string('hero_title')->default('Exhibit');
+            $table->string('hero_subtitle')->default('Comprehensive exhibit of university resources and documentation for academic excellence.');
+            $table->string('exhibit_section_title')->default('University Exhibit Resources');
+            $table->json('exhibit_data')->nullable();
             $table->string('mula_sayo_title')->default('Mula Sayo, Para Sa Bayan');
             $table->string('mula_sayo_image')->nullable();
             $table->timestamps();
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('about_bsent_content');
+        Schema::dropIfExists('exhibit');
     }
 };

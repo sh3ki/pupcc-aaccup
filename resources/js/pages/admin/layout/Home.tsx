@@ -734,7 +734,7 @@ export default function LayoutHome({ landingContent }: Props) {
                                             </div>
 
                                             <FileUpload
-                                                label="Footer Image"
+                                                label="Background Image"
                                                 value={mulaSayoImage}
                                                 onChange={(file) => setMulaSayoImage(file || '')}
                                                 accept="image/*"

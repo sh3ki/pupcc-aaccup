@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { ref, onChildAdded, onValue, push, serverTimestamp, update, get } from 'firebase/database';
 import { initFirebase } from '@/lib/firebase';
 import MessageList, { type MessageItem } from './MessageList';
@@ -32,6 +32,27 @@ export default function MessagingPanel({ currentUser, initialConversationId }: {
     const [conversations, setConversations] = useState<Record<string, ConversationMeta & { lastMessage?: string }>>({});
     const [openDirect, setOpenDirect] = useState(false);
     const [openGroup, setOpenGroup] = useState(false);
+    const [userCache, setUserCache] = useState<Record<number, { name: string; email?: string }>>({});
+
+    // Fetch user information for display names
+    const fetchUserInfo = useCallback(async (userId: number) => {
+        if (userCache[userId]) return userCache[userId];
+        
+        try {
+            const response = await fetch(`/api/users/search?q=`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const users = await response.json();
+            const userInfo = users.find((u: { id: number; name: string; email?: string }) => u.id === userId);
+            if (userInfo) {
+                setUserCache(prev => ({ ...prev, [userId]: { name: userInfo.name, email: userInfo.email } }));
+                return { name: userInfo.name, email: userInfo.email };
+            }
+        } catch (error) {
+            console.error('Error fetching user info:', error);
+        }
+        return null;
+    }, [userCache]);
 
     // Load conversations list for this user
     useEffect(() => {
@@ -48,6 +69,18 @@ export default function MessagingPanel({ currentUser, initialConversationId }: {
         return () => off();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [db, user?.id]);
+
+    // Pre-fetch user information for private conversations
+    useEffect(() => {
+        Object.values(conversations).forEach((conv) => {
+            if (conv.type === 'private' && conv.members && user?.id) {
+                const otherUserId = conv.members.find(id => id !== user.id);
+                if (otherUserId && !userCache[otherUserId]) {
+                    fetchUserInfo(otherUserId);
+                }
+            }
+        });
+    }, [conversations, user?.id, userCache, fetchUserInfo]);
 
     // Subscribe to messages in the selected conversation
     useEffect(() => {
@@ -120,13 +153,29 @@ export default function MessagingPanel({ currentUser, initialConversationId }: {
         await update(ref(db), updates);
     };
 
-    const uiConversations: ConversationSummary[] = useMemo(() => Object.values(conversations).map((c) => ({
-        id: c.id,
-        type: c.type,
-        title: c.title,
-        lastMessage: c.lastMessage,
-        updatedAt: c.updatedAt,
-    })), [conversations]);
+    const uiConversations: ConversationSummary[] = useMemo(() => Object.values(conversations).map((c) => {
+        let displayTitle = c.title;
+        
+        // For private conversations, show the other person's name instead of current user's name
+        if (c.type === 'private' && c.members && user?.id) {
+            const otherUserId = c.members.find(id => id !== user.id);
+            if (otherUserId && userCache[otherUserId]) {
+                displayTitle = userCache[otherUserId].name;
+            } else if (otherUserId) {
+                // Fetch user info if not in cache
+                fetchUserInfo(otherUserId);
+                displayTitle = 'Loading...';
+            }
+        }
+        
+        return {
+            id: c.id,
+            type: c.type,
+            title: displayTitle,
+            lastMessage: c.lastMessage,
+            updatedAt: c.updatedAt,
+        };
+    }), [conversations, user?.id, userCache, fetchUserInfo]);
 
     // Create or get a private conversation between current user and another user ID
     const ensurePrivateConversation = async (otherUserId: number, title?: string) => {
@@ -144,15 +193,20 @@ export default function MessagingPanel({ currentUser, initialConversationId }: {
         const meta: ConversationMeta = {
             id: convId,
             type: 'private',
-            title: title || 'Direct Message',
+            title: 'Direct Message', // Base title for the conversation
             members: [user.id, otherUserId],
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
+        
+        // Create different titles for each user - each sees the other person's name
+        const metaForCurrentUser = { ...meta, title: title || 'Direct Message' }; // Current user sees the other person's name
+        const metaForOtherUser = { ...meta, title: user.name || 'Direct Message' }; // Other user sees current user's name
+        
         const updates: Record<string, unknown> = {};
         updates[`conversations/${convId}`] = meta;
-        updates[`userConversations/${user.id}/${convId}`] = { ...meta };
-        updates[`userConversations/${otherUserId}/${convId}`] = { ...meta };
+        updates[`userConversations/${user.id}/${convId}`] = metaForCurrentUser;
+        updates[`userConversations/${otherUserId}/${convId}`] = metaForOtherUser;
         updates[`privatePairs/${pairKey}`] = { id: convId };
         await update(ref(db), updates);
         setConversationId(convId);
@@ -208,7 +262,21 @@ export default function MessagingPanel({ currentUser, initialConversationId }: {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="text-lg font-semibold text-gray-800">
-                                        {conversationId ? conversations[conversationId]?.title || 'Conversation' : 'Select a conversation'}
+                                        {conversationId ? (() => {
+                                            const conv = conversations[conversationId];
+                                            if (!conv) return 'Conversation';
+                                            
+                                            // For private conversations, show the other person's name
+                                            if (conv.type === 'private' && conv.members && user?.id) {
+                                                const otherUserId = conv.members.find(id => id !== user.id);
+                                                if (otherUserId && userCache[otherUserId]) {
+                                                    return userCache[otherUserId].name;
+                                                }
+                                                return 'Loading...';
+                                            }
+                                            
+                                            return conv.title;
+                                        })() : 'Select a conversation'}
                                     </h2>
                                     {conversationId && (
                                         <p className="text-sm text-gray-500">

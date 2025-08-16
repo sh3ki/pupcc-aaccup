@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -11,20 +12,55 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-const exhibitItems = [
-    { name: "Citizen's Charter", image: "/api/placeholder/400/250", description: "View the Citizen's Charter." },
-    { name: "Student Handbook", image: "/api/placeholder/400/250", description: "Access the Student Handbook." },
-    { name: "University Code", image: "/api/placeholder/400/250", description: "Read the University Code." },
-    { name: "University Policies & Guidelines", image: "/api/placeholder/400/250", description: "Policies and guidelines for the university." },
-    { name: "OBE Syllabi", image: "/api/placeholder/400/250", description: "Outcomes-Based Education syllabi." },
-    { name: "Instructional Materials", image: "/api/placeholder/400/250", description: "Instructional materials for faculty and students." },
-    { name: "Faculty Manual", image: "/api/placeholder/400/250", description: "Manual for faculty members." },
-    { name: "Administrative Manual", image: "/api/placeholder/400/250", description: "Manual for administrative staff." },
-    { name: "CHED Memorandum Order", image: "/api/placeholder/400/250", description: "CHED orders and memoranda." },
-    { name: "Licensure", image: "/api/placeholder/400/250", description: "Licensure exam information and results." },
-];
+interface ExhibitItem {
+    image: string;
+    title: string;
+    subtitle: string;
+}
 
-export default function ExhibitPage() {
+interface ExhibitContent {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    exhibit_section_title: string;
+    exhibit_data: ExhibitItem[];
+    mula_sayo_title: string;
+    mula_sayo_image: string;
+}
+
+interface Props {
+    exhibitContent: ExhibitContent;
+}
+
+// Scroll animation hook
+function useScrollAnimation() {
+    const [isVisible, setIsVisible] = useState(false);
+    const [hasAnimated, setHasAnimated] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !hasAnimated) {
+                    setIsVisible(true);
+                    setHasAnimated(true);
+                } else if (!entry.isIntersecting && hasAnimated) {
+                    setTimeout(() => {
+                        setIsVisible(false);
+                        setHasAnimated(false);
+                    }, 100);
+                }
+            },
+            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+        );
+        if (ref.current) observer.observe(ref.current);
+        return () => { if (ref.current) observer.unobserve(ref.current); };
+    }, [hasAnimated]);
+    return [ref, isVisible] as const;
+}
+
+export default function ExhibitPage({ exhibitContent }: Props) {
+    const [cardsRef, cardsVisible] = useScrollAnimation();
     return (
         <>
             <Head title="Exhibit" />
@@ -35,7 +71,7 @@ export default function ExhibitPage() {
                     {/* Hero/Banner */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <img
-                            src="/api/placeholder/1600/600"
+                            src={exhibitContent.hero_image || "/api/placeholder/1600/600"}
                             alt="Exhibit Banner"
                             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             style={{ minHeight: 400, maxHeight: 700 }}
@@ -43,17 +79,22 @@ export default function ExhibitPage() {
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
                             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-white animate-fade-in-up mb-4 drop-shadow-lg">
-                                Exhibit
+                                {exhibitContent.hero_title || 'Exhibit'}
                             </h1>
-                            <p className="text-xl sm:text-2xl md:text-3xl text-white/90 animate-fade-in-up animation-delay-300 max-w-2xl mx-auto">
-                                Explore important university documents and resources
-                            </p>
+                            {exhibitContent.hero_subtitle && (
+                                <p className="text-xl sm:text-2xl md:text-3xl text-white/90 animate-fade-in-up animation-delay-300 max-w-2xl mx-auto">
+                                    {exhibitContent.hero_subtitle}
+                                </p>
+                            )}
                         </div>
                     </section>
 
                     {/* Exhibit Cards */}
                     <section
-                        className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden"
+                        ref={cardsRef}
+                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
+                            cardsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                        }`}
                         style={{
                             background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
                         }}
@@ -67,12 +108,12 @@ export default function ExhibitPage() {
                         </div>
                         <div className="w-full max-w-7xl mx-auto relative z-10">
                             <h2 className="text-4xl sm:text-5xl font-bold text-center mb-16" style={{ color: COLORS.primaryMaroon }}>
-                                University Exhibit Resources
+                                {exhibitContent.exhibit_section_title || 'University Exhibit Resources'}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
-                                {exhibitItems.map((item, idx) => (
+                                {exhibitContent.exhibit_data && exhibitContent.exhibit_data.map((item, idx) => (
                                     <div
-                                        key={item.name}
+                                        key={`${item.title}-${idx}`}
                                         className="group bg-white rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2"
                                         style={{
                                             borderTopColor: COLORS.primaryMaroon,
@@ -81,18 +122,18 @@ export default function ExhibitPage() {
                                     >
                                         <div className="relative overflow-hidden">
                                             <img
-                                                src={item.image}
-                                                alt={item.name}
+                                                src={item.image || "/api/placeholder/400/250"}
+                                                alt={item.title}
                                                 className="w-full h-[200px] object-cover transition-transform duration-500 group-hover:scale-110"
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                         </div>
                                         <div className="p-6 flex flex-col h-full">
                                             <h3 className="text-xl font-bold mb-2 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
-                                                {item.name}
+                                                {item.title}
                                             </h3>
                                             <p className="text-base text-gray-700 mb-4 flex-1 transition-all duration-300 group-hover:text-gray-900">
-                                                {item.description}
+                                                {item.subtitle}
                                             </p>
                                             <button
                                                 className="mt-auto px-5 py-2 rounded-lg font-bold text-white transition-all duration-300 group-hover:scale-105"
@@ -112,7 +153,7 @@ export default function ExhibitPage() {
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src="/api/placeholder/1600/400"
+                                src={exhibitContent.mula_sayo_image || "/api/placeholder/1600/400"}
                                 alt="Mula Sayo, Para Sa Bayan"
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
@@ -120,14 +161,14 @@ export default function ExhibitPage() {
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                {exhibitContent.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
                             </h2>
                         </div>
                     </section>
                 </main>
                 <Footer />
             </div>
-            <style jsx>{`
+            <style>{`
                 .text-shadow-lg {
                     text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
                 }
