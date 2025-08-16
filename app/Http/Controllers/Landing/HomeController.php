@@ -12,6 +12,18 @@ use Inertia\Inertia;
 class HomeController extends Controller
 {
     /**
+     * Display the public home page
+     */
+    public function show()
+    {
+        $content = Home::getContent();
+        
+        return Inertia::render('landing/welcome', [
+            'landingContent' => $content
+        ]);
+    }
+
+    /**
      * Display the admin layout home page
      */
     public function index()

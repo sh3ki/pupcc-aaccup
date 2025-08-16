@@ -14,84 +14,25 @@ const COLORS = {
     almostWhite: '#FEFEFE',
 };
 
-// This data should be fetched from admin panel in production
-const bsitMembers = [
-    {
-        id: 1,
-        name: "Prof. Jenny Lim",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 2,
-        name: "Prof. Eric Tan",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 3,
-        name: "Dr. Alexandra Chen",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 4,
-        name: "Prof. Daniel Kim",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 5,
-        name: "Prof. Melissa Wong",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 6,
-        name: "Dr. Kevin Martinez",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 7,
-        name: "Prof. Amanda Rodriguez",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 8,
-        name: "Prof. Brian Thompson",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 9,
-        name: "Prof. Rachel Park",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 10,
-        name: "Prof. Steven Lee",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 11,
-        name: "Prof. Nicole Johnson",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 12,
-        name: "Prof. Christopher Davis",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 13,
-        name: "Prof. Jessica Brown",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 14,
-        name: "Prof. Ryan Wilson",
-        image: "/api/placeholder/300/400",
-    },
-    {
-        id: 15,
-        name: "Prof. Michelle Garcia",
-        image: "/api/placeholder/300/400",
-    }
-];
+interface FacultyMember {
+    id?: number;
+    name: string;
+    image: string;
+}
+
+interface BsitContent {
+    hero_image: string;
+    hero_title: string;
+    hero_subtitle: string;
+    faculty_section_title: string;
+    faculty_data: FacultyMember[];
+    mula_sayo_title: string;
+    mula_sayo_image: string;
+}
+
+interface Props {
+    bsitContent: BsitContent;
+}
 
 // Enhanced scroll animation hook
 function useScrollAnimation() {
@@ -114,14 +55,19 @@ function useScrollAnimation() {
             },
             { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
         );
-        if (ref.current) observer.observe(ref.current);
-        return () => { if (ref.current) observer.unobserve(ref.current); };
+        
+        const currentRef = ref.current;
+        if (currentRef) observer.observe(currentRef);
+        
+        return () => { 
+            if (currentRef) observer.unobserve(currentRef); 
+        };
     }, [hasAnimated]);
     
     return [ref, isVisible] as const;
 }
 
-export default function BSITFaculty() {
+export default function BSITFaculty({ bsitContent }: Props) {
     const [facultyRef, facultyVisible] = useScrollAnimation();
 
     return (
@@ -135,7 +81,7 @@ export default function BSITFaculty() {
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <div className="absolute inset-0">
                             <img
-                                src="/api/placeholder/1600/800"
+                                src={bsitContent.hero_image || "/api/placeholder/1600/800"}
                                 alt="BSIT Faculty"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             />
@@ -149,11 +95,11 @@ export default function BSITFaculty() {
                                 <ArrowLeft className="w-5 h-5 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
                                 <span className="text-sm font-medium">Back to About</span>
                             </Link>
-                            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 sm:mb-8 animate-fade-in-up transform transition-all duration-300 hover:scale-102">
-                                BSIT Faculty
+                            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 sm:mb-8 animate-fade-in-up transform transition-all duration-300 hover:scale-102 text-shadow-lg">
+                                {bsitContent.hero_title}
                             </h1>
-                            <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl max-w-4xl mx-auto leading-relaxed animate-fade-in-up animation-delay-300 transform transition-all duration-300 hover:scale-102">
-                                Bachelor of Science in Information Technology
+                            <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl max-w-4xl mx-auto leading-relaxed animate-fade-in-up animation-delay-300 transform transition-all duration-300 hover:scale-102 text-shadow-lg">
+                                {bsitContent.hero_subtitle}
                             </p>
                         </div>
                     </section>
@@ -178,12 +124,12 @@ export default function BSITFaculty() {
                         
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-12 sm:mb-16 lg:mb-20 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                Faculty Members
+                                {bsitContent.faculty_section_title}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 lg:gap-10">
-                                {bsitMembers.map((member, index) => (
+                                {bsitContent.faculty_data?.map((member, index) => (
                                     <div
-                                        key={member.id}
+                                        key={index}
                                         className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
                                             facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
                                         }`}
@@ -192,7 +138,7 @@ export default function BSITFaculty() {
                                         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border-t-4 hover:shadow-xl transition-all duration-500 group h-full flex flex-col" style={{ borderTopColor: COLORS.primaryMaroon }}>
                                             <div className="relative mb-4 sm:mb-6 group/image">
                                                 <img
-                                                    src={member.image}
+                                                    src={member.image || "/api/placeholder/300/400"}
                                                     alt={member.name}
                                                     className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto rounded-full shadow-lg border-4 group-hover/image:shadow-xl transition-all duration-300 group-hover/image:scale-105"
                                                     style={{ borderColor: COLORS.primaryMaroon }}
@@ -215,7 +161,7 @@ export default function BSITFaculty() {
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src="/api/placeholder/1600/400"
+                                src={bsitContent.mula_sayo_image || "/api/placeholder/1600/400"}
                                 alt="Mula Sayo, Para Sa Bayan"
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
@@ -223,7 +169,7 @@ export default function BSITFaculty() {
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                Mula Sayo, Para Sa Bayan
+                                {bsitContent.mula_sayo_title}
                             </h2>
                         </div>
                     </section>
@@ -231,7 +177,7 @@ export default function BSITFaculty() {
 
                 <Footer />
             </div>
-            <style jsx>{`
+            <style>{`
                 .text-shadow-lg {
                     text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
                 }

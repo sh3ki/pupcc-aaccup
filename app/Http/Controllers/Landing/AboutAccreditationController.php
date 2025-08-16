@@ -122,19 +122,12 @@ class AboutAccreditationController extends Controller
             
             $content->update($data);
             
-            return response()->json([
-                'success' => true,
-                'message' => 'Content updated successfully',
-                'data' => $content->fresh()
-            ]);
+            return back()->with('success', 'Content updated successfully');
             
         } catch (\Exception $e) {
             Log::error('Failed to update accreditation content: ' . $e->getMessage());
             
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update content: ' . $e->getMessage()
-            ], 500);
+            return back()->withErrors(['error' => 'Failed to update content: ' . $e->getMessage()]);
         }
     }
 

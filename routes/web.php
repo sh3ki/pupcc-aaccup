@@ -11,15 +11,17 @@ use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\Landing\HomeController;
 use App\Http\Controllers\Landing\AboutController;
 use App\Http\Controllers\Landing\AboutAccreditationController;
+use App\Http\Controllers\Landing\AboutBtledController;
+use App\Http\Controllers\Landing\AboutBsitController;
 use App\Models\User;
 
 // Public routes
-Route::get('/', fn() => Inertia::render('landing/welcome'))->name('home');
-Route::get('/about', fn() => Inertia::render('landing/about'))->name('about');
+Route::get('/', [HomeController::class, 'show'])->name('home');
+Route::get('/about', [AboutController::class, 'show'])->name('about');
 Route::get('/faculty/accreditation', [AboutAccreditationController::class, 'show'])->name('faculty.accreditation');
-Route::get('/faculty/btled', fn() => Inertia::render('landing/about/btled'))->name('faculty.btled');
+Route::get('/faculty/btled', [AboutBtledController::class, 'show'])->name('faculty.btled');
 Route::get('/faculty/bsent', fn() => Inertia::render('landing/about/bsent'))->name('faculty.bsent');
-Route::get('/faculty/bsit', fn() => Inertia::render('landing/about/bsit'))->name('faculty.bsit');
+Route::get('/faculty/bsit', [AboutBsitController::class, 'show'])->name('faculty.bsit');
 Route::get('/certificate', fn() => Inertia::render('landing/certificate'))->name('certificate');
 Route::get('/exhibit', fn() => inertia('landing/exhibit'))->name('exhibit');
 Route::get('/programs', fn() => Inertia::render('landing/programs'))->name('programs');
@@ -66,10 +68,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/about', [AboutController::class, 'update'])->name('admin.layout.about.update');
         Route::get('/about/accreditation', [AboutAccreditationController::class, 'index'])->name('admin.layout.about.accreditation');
         Route::post('/about/accreditation', [AboutAccreditationController::class, 'update'])->name('admin.layout.about.accreditation.update');
-        Route::post('/about/accreditation', [AboutAccreditationController::class, 'update'])->name('admin.layout.about.accreditation.update');
-        Route::get('/about/btled', fn() => inertia('admin/layout/AboutBTLED'))->name('admin.layout.about.btled');
+        Route::get('/about/btled', [AboutBtledController::class, 'index'])->name('admin.layout.about.btled');
+        Route::post('/about/btled', [AboutBtledController::class, 'update'])->name('admin.layout.about.btled.update');
         Route::get('/about/bsent', fn() => inertia('admin/layout/AboutBSENT'))->name('admin.layout.about.bsent');
-        Route::get('/about/bsit', fn() => inertia('admin/layout/AboutBSIT'))->name('admin.layout.about.bsit');
+        Route::get('/about/bsit', [AboutBsitController::class, 'index'])->name('admin.layout.about.bsit');
+        Route::post('/about/bsit', [AboutBsitController::class, 'update'])->name('admin.layout.about.bsit.update');
         Route::get('/certificate', fn() => inertia('admin/layout/Certificate'))->name('admin.layout.certificate');
         Route::get('/programs', fn() => inertia('admin/layout/Programs'))->name('admin.layout.programs');
         Route::get('/programs/btled', fn() => inertia('admin/layout/ProgramsBTLED'))->name('admin.layout.programs.btled');
@@ -150,6 +153,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/api/landing-content', [HomeController::class, 'getContent'])->name('api.landing.content');
     Route::get('/api/about-content', [AboutController::class, 'getContent'])->name('api.about.content');
     Route::get('/api/accreditation-content', [AboutAccreditationController::class, 'getContent'])->name('api.accreditation.content');
+    Route::get('/api/btled-content', [AboutBtledController::class, 'getContent'])->name('api.btled.content');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
