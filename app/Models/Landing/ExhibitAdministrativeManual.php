@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Models\Landing;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class ExhibitAdministrativeManual extends Model
+{
+    use HasFactory;
+
+    protected $table = 'exhibit_administrative_manual';
+
+    protected $fillable = [
+        'hero_image',
+        'hero_title',
+        'hero_subtitle',
+        'section_title',
+        'manual_document',
+        'footer_section_title',
+        'footer_image',
+    ];
+
+    protected $casts = [
+        'hero_subtitle' => 'string',
+    ];
+
+    /**
+     * Get the first (and typically only) exhibit administrative manual record
+     */
+    public static function getContent()
+    {
+        $manual = static::first();
+        
+        if (!$manual) {
+            // Create default manual if none exists
+            $manual = static::create([
+                'hero_title' => 'Administrative Manual',
+                'hero_subtitle' => 'Official administrative procedures and guidelines for PUP Calauan staff',
+                'section_title' => 'Administrative Manual Preview',
+                'footer_section_title' => 'Mula Sayo, Para Sa Bayan',
+                'hero_image' => null,
+                'manual_document' => null,
+                'footer_image' => null,
+            ]);
+        }
+
+        return $manual;
+    }
+
+    /**
+     * Update the manual content
+     */
+    public static function updateContent(array $data)
+    {
+        $manual = static::first();
+        
+        if (!$manual) {
+            return static::create($data);
+        }
+        
+        $manual->update($data);
+        return $manual;
+    }
+}

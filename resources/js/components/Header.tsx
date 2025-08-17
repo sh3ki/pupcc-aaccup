@@ -92,16 +92,16 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
 
     // Exhibit dropdown items
     const exhibitDropdownItems: DropdownItem[] = [
-        { name: "Citizen's Charter", href: "#", description: "" },
-        { name: "Student Handbook", href: "#", description: "" },
-        { name: "University Code", href: "#", description: "" },
-        { name: "University Policies & Guidelines", href: "#", description: "" },
-        { name: "OBE Syllabi", href: "#", description: "" },
-        { name: "Instructional Materials", href: "#", description: "" },
-        { name: "Faculty Manual", href: "#", description: "" },
-        { name: "Administrative Manual", href: "#", description: "" },
-        { name: "CHED Memorandum Order", href: "#", description: "" },
-        { name: "Licensure", href: "#", description: "" },
+        { name: "Citizen's Charter", href: "/exhibit/citizens-charter", description: "" },
+        { name: "Student Handbook", href: "/exhibit/student-handbook", description: "" },
+        { name: "University Code", href: "/exhibit/university-code", description: "" },
+        { name: "University Policies & Guidelines", href: "/exhibit/university-policies", description: "" },
+        { name: "OBE Syllabi", href: "/exhibit/obe-syllabi", description: "" },
+        { name: "Instructional Materials", href: "/exhibit/instructional-materials", description: "" },
+        { name: "Faculty Manual", href: "/exhibit/faculty-manual", description: "" },
+        { name: "Administrative Manual", href: "/exhibit/administrative-manual", description: "" },
+        { name: "CHED Memorandum Order", href: "/exhibit/ched-memorandum-order", description: "" },
+        { name: "Licensure", href: "/exhibit/licensure", description: "" },
     ];
 
     // Check if any faculty page is active

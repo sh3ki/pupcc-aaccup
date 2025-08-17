@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Models\User;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\AdminDocumentsController;
@@ -20,7 +21,16 @@ use App\Http\Controllers\Landing\ProgramsBtledController;
 use App\Http\Controllers\Landing\ProgramsBsentController;
 use App\Http\Controllers\Landing\ProgramsBsitController;
 use App\Http\Controllers\Landing\ExhibitController;
-use App\Models\User;
+use App\Http\Controllers\Landing\ExhibitCitizensCharterController;
+use App\Http\Controllers\Landing\ExhibitStudentHandbookController;
+use App\Http\Controllers\Landing\ExhibitUniversityCodeController;
+use App\Http\Controllers\Landing\ExhibitUniversityPoliciesController;
+use App\Http\Controllers\Landing\ExhibitObeSyllabiController;
+use App\Http\Controllers\Landing\ExhibitInstructionalMaterialsController;
+use App\Http\Controllers\Landing\ExhibitFacultyManualController;
+use App\Http\Controllers\Landing\ExhibitAdministrativeManualController;
+use App\Http\Controllers\Landing\ExhibitChedMemorandumOrderController;
+use App\Http\Controllers\Landing\ExhibitLicensureController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'show'])->name('home');
@@ -35,10 +45,17 @@ Route::get('/programs', [ProgramsUnderSurveyController::class, 'show'])->name('p
 Route::get('/programs/btled', [ProgramsBtledController::class, 'show'])->name('programs.btled');
 Route::get('/programs/bsent', [ProgramsBsentController::class, 'show'])->name('programs.bsent');
 Route::get('/programs/bsit', [ProgramsBsitController::class, 'show'])->name('programs.bsit');
+Route::get('/exhibit/citizens-charter', [ExhibitCitizensCharterController::class, 'show'])->name('exhibit.citizens-charter');
+Route::get('/exhibit/student-handbook', [ExhibitStudentHandbookController::class, 'show'])->name('exhibit.student-handbook');
+Route::get('/exhibit/university-code', [ExhibitUniversityCodeController::class, 'show'])->name('exhibit.university-code');
+Route::get('/exhibit/university-policies', [ExhibitUniversityPoliciesController::class, 'show'])->name('exhibit.university-policies');
+Route::get('/exhibit/obe-syllabi', [ExhibitObeSyllabiController::class, 'show'])->name('exhibit.obe-syllabi');
+Route::get('/exhibit/instructional-materials', [ExhibitInstructionalMaterialsController::class, 'show'])->name('exhibit.instructional-materials');
+Route::get('/exhibit/faculty-manual', [ExhibitFacultyManualController::class, 'show'])->name('exhibit.faculty-manual');
+Route::get('/exhibit/administrative-manual', [ExhibitAdministrativeManualController::class, 'show'])->name('exhibit.administrative-manual');
+Route::get('/exhibit/ched-memorandum-order', [ExhibitChedMemorandumOrderController::class, 'show'])->name('exhibit.ched-memorandum-order');
+Route::get('/exhibit/licensure', [ExhibitLicensureController::class, 'show'])->name('exhibit.licensure');
 
-// API routes for dynamic content
-Route::get('/api/landing-content', [HomeController::class, 'getContent']);
-Route::get('/api/about-content', [AboutController::class, 'getContent']);
 
 
 
@@ -97,16 +114,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/programs/bsit', [ProgramsBsitController::class, 'update'])->name('admin.layout.programs.bsit.update');
         Route::get('/exhibit', [ExhibitController::class, 'index'])->name('admin.layout.exhibit');
         Route::post('/exhibit', [ExhibitController::class, 'update'])->name('admin.layout.exhibit.update');
-        Route::get('/exhibit/citizens-charter', fn() => inertia('admin/layout/ExhibitCitizensCharter'))->name('admin.layout.exhibit.citizens_charter');
-        Route::get('/exhibit/student-handbook', fn() => inertia('admin/layout/ExhibitStudentHandbook'))->name('admin.layout.exhibit.student_handbook');
-        Route::get('/exhibit/university-code', fn() => inertia('admin/layout/ExhibitUniversityCode'))->name('admin.layout.exhibit.university_code');
-        Route::get('/exhibit/university-policies', fn() => inertia('admin/layout/ExhibitUniversityPolicies'))->name('admin.layout.exhibit.university_policies');
-        Route::get('/exhibit/obe-syllabi', fn() => inertia('admin/layout/ExhibitObeSyllabi'))->name('admin.layout.exhibit.obe_syllabi');
-        Route::get('/exhibit/instructional-materials', fn() => inertia('admin/layout/ExhibitInstructionalMaterials'))->name('admin.layout.exhibit.instructional_materials');
-        Route::get('/exhibit/faculty-manual', fn() => inertia('admin/layout/ExhibitFacultyManual'))->name('admin.layout.exhibit.faculty_manual');
-        Route::get('/exhibit/administrative-manual', fn() => inertia('admin/layout/ExhibitAdministrativeManual'))->name('admin.layout.exhibit.administrative_manual');
-        Route::get('/exhibit/ched-memorandum-order', fn() => inertia('admin/layout/ExhibitChedMemorandumOrder'))->name('admin.layout.exhibit.ched_memorandum_order');
-        Route::get('/exhibit/licensure', fn() => inertia('admin/layout/ExhibitLicensure'))->name('admin.layout.exhibit.licensure');
+        Route::get('/exhibit/citizens-charter', [ExhibitCitizensCharterController::class, 'index'])->name('admin.layout.exhibit.citizens-charter');
+        Route::post('/exhibit/citizens-charter', [ExhibitCitizensCharterController::class, 'update'])->name('admin.layout.exhibit.citizens-charter.update');
+        Route::get('/exhibit/student-handbook', [ExhibitStudentHandbookController::class, 'index'])->name('admin.layout.exhibit.student_handbook');
+        Route::post('/exhibit/student-handbook', [ExhibitStudentHandbookController::class, 'update'])->name('admin.layout.exhibit.student_handbook.update');
+        Route::get('/exhibit/university-code', [ExhibitUniversityCodeController::class, 'index'])->name('admin.layout.exhibit.university_code');
+        Route::post('/exhibit/university-code', [ExhibitUniversityCodeController::class, 'update'])->name('admin.layout.exhibit.university_code.update');
+        Route::get('/exhibit/university-policies', [ExhibitUniversityPoliciesController::class, 'index'])->name('admin.layout.exhibit.university_policies');
+        Route::post('/exhibit/university-policies', [ExhibitUniversityPoliciesController::class, 'update'])->name('admin.layout.exhibit.university_policies.update');
+        Route::get('/exhibit/obe-syllabi', [ExhibitObeSyllabiController::class, 'index'])->name('admin.layout.exhibit.obe_syllabi');
+        Route::post('/exhibit/obe-syllabi', [ExhibitObeSyllabiController::class, 'update'])->name('admin.layout.exhibit.obe_syllabi.update');
+        Route::get('/exhibit/instructional-materials', [ExhibitInstructionalMaterialsController::class, 'index'])->name('admin.layout.exhibit.instructional_materials');
+        Route::post('/exhibit/instructional-materials', [ExhibitInstructionalMaterialsController::class, 'update'])->name('admin.layout.exhibit.instructional_materials.update');
+        Route::get('/exhibit/faculty-manual', [ExhibitFacultyManualController::class, 'index'])->name('admin.layout.exhibit.faculty_manual');
+        Route::post('/exhibit/faculty-manual', [ExhibitFacultyManualController::class, 'update'])->name('admin.layout.exhibit.faculty_manual.update');
+        Route::get('/exhibit/administrative-manual', [ExhibitAdministrativeManualController::class, 'index'])->name('admin.layout.exhibit.administrative_manual');
+        Route::post('/exhibit/administrative-manual', [ExhibitAdministrativeManualController::class, 'update'])->name('admin.layout.exhibit.administrative_manual.update');
+        Route::get('/exhibit/ched-memorandum-order', [ExhibitChedMemorandumOrderController::class, 'index'])->name('admin.layout.exhibit.ched_memorandum_order');
+        Route::post('/exhibit/ched-memorandum-order', [ExhibitChedMemorandumOrderController::class, 'update'])->name('admin.layout.exhibit.ched_memorandum_order.update');
+        Route::get('/exhibit/licensure', [ExhibitLicensureController::class, 'index'])->name('admin.layout.exhibit.licensure');
+        Route::post('/exhibit/licensure', [ExhibitLicensureController::class, 'update'])->name('admin.layout.exhibit.licensure.update');
     });
     
     //Reviewer routes
