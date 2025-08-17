@@ -66,9 +66,9 @@ return new class extends Migration
             'director_name' => 'Dr. Campus Director',
             'director_position' => 'Campus Director',
             'videos_data' => json_encode([
-                ['youtube_id' => 'dQw4w9WgXcQ', 'title' => 'Campus Overview', 'thumbnail' => ''],
-                ['youtube_id' => 'dQw4w9WgXcQ', 'title' => 'Student Life', 'thumbnail' => ''],
-                ['youtube_id' => 'dQw4w9WgXcQ', 'title' => 'Academic Excellence', 'thumbnail' => '']
+                ['title' => 'Campus Overview', 'video' => 'dQw4w9WgXcQ', 'video_type' => 'youtube', 'thumbnail' => ''],
+                ['title' => 'Student Life', 'video' => 'dQw4w9WgXcQ', 'video_type' => 'youtube', 'thumbnail' => ''],
+                ['title' => 'Academic Excellence', 'video' => 'dQw4w9WgXcQ', 'video_type' => 'youtube', 'thumbnail' => '']
             ]),
             'programs_data' => json_encode([
                 ['image' => '', 'name' => 'Bachelor of Technology and Livelihood Education', 'description' => 'A program designed to develop competent teachers in technology and livelihood education.'],

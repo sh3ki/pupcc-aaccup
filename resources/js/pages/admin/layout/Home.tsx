@@ -17,8 +17,9 @@ interface AccreditorItem {
 }
 
 interface VideoItem {
-    youtube_id: string;
     title: string;
+    video: string | File;
+    video_type: 'youtube' | 'upload';
     thumbnail?: string;
 }
 
@@ -141,14 +142,18 @@ export default function LayoutHome({ landingContent }: Props) {
     };
 
     // Video handlers
-    const handleVideoChange = (idx: number, field: keyof VideoItem, value: string) => {
+    const handleVideoChange = (idx: number, field: keyof VideoItem, value: string | File | null) => {
         const updated = [...videos];
-        updated[idx] = { ...updated[idx], [field]: value };
+        if (field === 'video' && value instanceof File) {
+            updated[idx] = { ...updated[idx], [field]: value, video_type: 'upload' };
+        } else {
+            updated[idx] = { ...updated[idx], [field]: value as string };
+        }
         setVideos(updated);
     };
 
     const addVideo = () => {
-        setVideos([...videos, { youtube_id: '', title: '', thumbnail: '' }]);
+        setVideos([...videos, { title: '', video: '', video_type: 'youtube', thumbnail: '' }]);
     };
 
     const removeVideo = (idx: number) => {
@@ -238,7 +243,18 @@ export default function LayoutHome({ landingContent }: Props) {
 
         // Videos data
         formData.append('videos_section_title', videosSectionTitle);
-        formData.append('videos_data', JSON.stringify(videos));
+        formData.append('videos_data', JSON.stringify(videos.map(item => ({
+            title: item.title,
+            video: typeof item.video === 'string' ? item.video : '',
+            video_type: item.video_type,
+            thumbnail: item.thumbnail || ''
+        }))));
+
+        videos.forEach((item, idx) => {
+            if (item.video instanceof File) {
+                formData.append(`video_file_${idx}`, item.video);
+            }
+        });
 
         // Programs data
         formData.append('programs_section_title', programsSectionTitle);
@@ -548,16 +564,6 @@ export default function LayoutHome({ landingContent }: Props) {
                                                     
                                                     <div className="space-y-3">
                                                         <div>
-                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">YouTube ID</label>
-                                                            <input
-                                                                type="text"
-                                                                value={video.youtube_id}
-                                                                onChange={(e) => handleVideoChange(index, 'youtube_id', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
-                                                                placeholder="Enter YouTube video ID"
-                                                            />
-                                                        </div>
-                                                        <div>
                                                             <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Title</label>
                                                             <input
                                                                 type="text"
@@ -567,6 +573,58 @@ export default function LayoutHome({ landingContent }: Props) {
                                                                 placeholder="Enter video title"
                                                             />
                                                         </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Video Type</label>
+                                                            <div className="flex space-x-4">
+                                                                <label className="flex items-center">
+                                                                    <input
+                                                                        type="radio"
+                                                                        value="youtube"
+                                                                        checked={video.video_type === 'youtube'}
+                                                                        onChange={(e) => handleVideoChange(index, 'video_type', e.target.value)}
+                                                                        className="mr-2"
+                                                                    />
+                                                                    YouTube Link
+                                                                </label>
+                                                                <label className="flex items-center">
+                                                                    <input
+                                                                        type="radio"
+                                                                        value="upload"
+                                                                        checked={video.video_type === 'upload'}
+                                                                        onChange={(e) => handleVideoChange(index, 'video_type', e.target.value)}
+                                                                        className="mr-2"
+                                                                    />
+                                                                    Upload Video
+                                                                </label>
+                                                            </div>
+                                                        </div>
+
+                                                        {video.video_type === 'youtube' ? (
+                                                            <div>
+                                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">YouTube Video ID</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={typeof video.video === 'string' ? video.video : ''}
+                                                                    onChange={(e) => handleVideoChange(index, 'video', e.target.value)}
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                    placeholder="Enter YouTube video ID (e.g., dQw4w9WgXcQ)"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <div>
+                                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Upload Video File</label>
+                                                                <input
+                                                                    type="file"
+                                                                    accept="video/*"
+                                                                    onChange={(e) => handleVideoChange(index, 'video', e.target.files?.[0] || null)}
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                                />
+                                                                {typeof video.video === 'string' && video.video && (
+                                                                    <p className="text-xs text-gray-500 mt-1">Current: {video.video}</p>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}

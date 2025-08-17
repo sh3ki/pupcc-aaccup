@@ -68,6 +68,15 @@ class HomeController extends Controller
             $transformedContent['director_image'] = Storage::url($transformedContent['director_image']);
         }
         
+        // Transform video files
+        if ($transformedContent['videos_data']) {
+            foreach ($transformedContent['videos_data'] as &$item) {
+                if (isset($item['video']) && $item['video'] && isset($item['video_type']) && $item['video_type'] === 'upload' && !str_starts_with($item['video'], 'http')) {
+                    $item['video'] = Storage::url($item['video']);
+                }
+            }
+        }
+        
         // Transform program images
         if ($transformedContent['programs_data']) {
             foreach ($transformedContent['programs_data'] as &$item) {
@@ -164,7 +173,27 @@ class HomeController extends Controller
         
         // Handle videos data
         if ($request->has('videos_data')) {
-            $data['videos_data'] = json_decode($request->input('videos_data'), true) ?? [];
+            $videosData = [];
+            $videoItems = json_decode($request->input('videos_data'), true) ?? [];
+            foreach ($videoItems as $index => $item) {
+                $videoItem = [
+                    'title' => $item['title'] ?? '',
+                    'video' => $item['video'] ?? '',
+                    'video_type' => $item['video_type'] ?? 'youtube',
+                    'thumbnail' => $item['thumbnail'] ?? ''
+                ];
+                
+                // Handle file upload for video
+                if ($request->hasFile("video_file_{$index}")) {
+                    $file = $request->file("video_file_{$index}");
+                    $path = $file->store('landing/videos', 'public');
+                    $videoItem['video'] = $path;
+                    $videoItem['video_type'] = 'upload';
+                }
+                
+                $videosData[] = $videoItem;
+            }
+            $data['videos_data'] = $videosData;
         }
         if ($request->has('videos_section_title')) {
             $data['videos_section_title'] = $request->input('videos_section_title');

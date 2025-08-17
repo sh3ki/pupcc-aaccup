@@ -33,8 +33,9 @@ interface LandingData {
     director_message: string;
     videos_section_title: string;
     videos_data: Array<{
-        youtube_id: string;
         title: string;
+        video: string;
+        video_type: 'youtube' | 'upload';
         thumbnail?: string;
     }>;
     programs_section_title: string;
@@ -95,9 +96,9 @@ export default function Welcome() {
                     director_message: 'Welcome to PUP Calauan Campus. We are committed to providing quality education and fostering excellence in our students.',
                     videos_section_title: 'Campus Videos',
                     videos_data: [
-                        { youtube_id: 'dQw4w9WgXcQ', title: 'Campus Overview' },
-                        { youtube_id: 'dQw4w9WgXcQ', title: 'Student Life' },
-                        { youtube_id: 'dQw4w9WgXcQ', title: 'Academic Excellence' },
+                        { title: 'Campus Overview', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
+                        { title: 'Student Life', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
+                        { title: 'Academic Excellence', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
                     ],
                     programs_section_title: 'Programs under Survey',
                     programs_data: [
@@ -198,7 +199,7 @@ export default function Welcome() {
     useEffect(() => {
         const timer = setInterval(() => {
             goToSlide(slideIndex + 1);
-        }, 4000);
+        }, 2000);
         return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [slideIndex]);
@@ -206,18 +207,29 @@ export default function Welcome() {
     // Handle transition end for seamless loop
     useEffect(() => {
         const handleTransitionEnd = () => {
-            setIsSliding(false);
+            if (!sliderRef.current) return;
+            
+            // Only handle the jump if we're at the clone slides
             if (slideIndex === sliderImages.length - 1) {
-                // Jump instantly to first real slide
+                // At the last clone, jump to first real slide without transition
+                sliderRef.current.style.transition = 'none';
                 setSlideIndex(1);
-            }
-            if (slideIndex === 0) {
-                // Jump instantly to last real slide
+                // Force reflow then re-enable transition
+                void sliderRef.current.offsetHeight;
+                sliderRef.current.style.transition = '';
+            } else if (slideIndex === 0) {
+                // At the first clone, jump to last real slide without transition
+                sliderRef.current.style.transition = 'none';
                 setSlideIndex(sliderImages.length - 2);
+                // Force reflow then re-enable transition
+                void sliderRef.current.offsetHeight;
+                sliderRef.current.style.transition = '';
             }
+            setIsSliding(false);
         };
+        
         const slider = sliderRef.current;
-        if (slider) {
+        if (slider && sliderImages.length > 0) {
             slider.addEventListener('transitionend', handleTransitionEnd);
         }
         return () => {
@@ -440,14 +452,32 @@ export default function Welcome() {
                                             videoVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
                                         }`}
                                         style={{ transitionDelay: `${index * 0.2}s` }}
-                                        onClick={() => window.open(`https://www.youtube.com/watch?v=${video.youtube_id}`, '_blank')}
+                                        onClick={() => {
+                                            if (video.video_type === 'youtube') {
+                                                window.open(`https://www.youtube.com/watch?v=${video.video}`, '_blank');
+                                            } else {
+                                                // For uploaded videos, open the video file directly
+                                                window.open(video.video, '_blank');
+                                            }
+                                        }}
                                     >
                                         <div className="relative rounded-2xl overflow-hidden shadow-lg group-hover:shadow-2xl transition-all duration-500">
-                                            <img
-                                                src={video.thumbnail || `https://img.youtube.com/vi/${video.youtube_id}/maxresdefault.jpg`}
-                                                alt={video.title}
-                                                className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
-                                            />
+                                            {video.video_type === 'youtube' ? (
+                                                <img
+                                                    src={video.thumbnail || `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`}
+                                                    alt={video.title}
+                                                    className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
+                                                />
+                                            ) : (
+                                                <video
+                                                    className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
+                                                    poster={video.thumbnail}
+                                                    preload="metadata"
+                                                >
+                                                    <source src={video.video} type="video/mp4" />
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                            )}
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex items-center justify-center group-hover:from-black/50 group-hover:via-black/25 transition-all duration-300">
                                                 <div 
                                                     className="w-16 h-16 sm:w-18 sm:h-18 lg:w-20 lg:h-20 rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-all duration-300 shadow-lg"
@@ -606,7 +636,7 @@ export default function Welcome() {
                 <Footer />
             </div>
 
-            <style jsx>{`
+            <style>{`
                 @keyframes fade-in-up {
                     from {
                         opacity: 0;
