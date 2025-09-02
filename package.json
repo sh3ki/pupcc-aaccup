@@ -4,7 +4,8 @@
     "scripts": {
         "build": "npm run copy-pdf-worker && vite build",
         "build:ssr": "npm run copy-pdf-worker && vite build && vite build --ssr",
-        "copy-pdf-worker": "powershell -Command \"New-Item -ItemType Directory -Force -Path 'public/js' >$null; Copy-Item 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs' 'public/js/pdf.worker.mjs'\"",
+        "copy-pdf-worker": "mkdir -p public/js && cp node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs public/js/pdf.worker.mjs",
+        "copy-pdf-worker:win": "powershell -Command \"New-Item -ItemType Directory -Force -Path 'public/js' >$null; Copy-Item 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs' 'public/js/pdf.worker.mjs'\"",
         "dev": "vite",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
