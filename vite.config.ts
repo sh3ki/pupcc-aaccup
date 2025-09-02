@@ -22,7 +22,19 @@ export default defineConfig({
             'ziggy-js': resolve(__dirname, 'vendor/tightenco/ziggy'),
         },
     },
-     server: {
+    optimizeDeps: {
+        include: ['pdfjs-dist'],
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'pdfjs-dist': ['pdfjs-dist'],
+                },
+            },
+        },
+    },
+    server: {
         host: true, 
         port: 5173,
         cors: true,

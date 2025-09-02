@@ -4,6 +4,7 @@
 /public/build
 /public/hot
 /public/storage
+/public/js/pdf.worker.mjs
 /storage/*.key
 /storage/pail
 /vendor

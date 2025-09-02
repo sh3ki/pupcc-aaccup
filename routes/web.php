@@ -43,8 +43,11 @@ Route::get('/certificate', [CertificateController::class, 'show'])->name('certif
 Route::get('/exhibit', [ExhibitController::class, 'show'])->name('exhibit');
 Route::get('/programs', [ProgramsUnderSurveyController::class, 'show'])->name('programs');
 Route::get('/programs/btled', [ProgramsBtledController::class, 'show'])->name('programs.btled');
+Route::get('/programs/btled/documents', [ProgramsBtledController::class, 'getApprovedDocuments'])->name('programs.btled.documents');
 Route::get('/programs/bsent', [ProgramsBsentController::class, 'show'])->name('programs.bsent');
+Route::get('/programs/bsent/documents', [ProgramsBsentController::class, 'getApprovedDocuments'])->name('programs.bsent.documents');
 Route::get('/programs/bsit', [ProgramsBsitController::class, 'show'])->name('programs.bsit');
+Route::get('/programs/bsit/documents', [ProgramsBsitController::class, 'getApprovedDocuments'])->name('programs.bsit.documents');
 Route::get('/exhibit/citizens-charter', [ExhibitCitizensCharterController::class, 'show'])->name('exhibit.citizens-charter');
 Route::get('/exhibit/student-handbook', [ExhibitStudentHandbookController::class, 'show'])->name('exhibit.student-handbook');
 Route::get('/exhibit/university-code', [ExhibitUniversityCodeController::class, 'show'])->name('exhibit.university-code');

@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfjsWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker?url';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc;
+// Set up PDF.js worker with multiple fallback options
+if (typeof window !== 'undefined') {
+    // Primary: Use the copied worker file in public directory
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.mjs';
+}
 
 interface PdfViewerProps {
     url: string;
@@ -27,7 +29,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pageCanvases, setPageCanvases] = useState<HTMLCanvasElement[]>([]);
-    const currentPageRef = useRef<HTMLDivElement>(null);
 
     // Load PDF document
     useEffect(() => {
@@ -35,30 +36,49 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         setLoading(true);
         setError(null);
 
-        pdfjsLib.getDocument(url).promise
-            .then((pdf) => {
-                if (!mounted) return;
-                setPdfDoc(pdf);
-                onTotalPagesChange(pdf.numPages);
-                
-                // Create canvas elements for all pages
-                const canvases: HTMLCanvasElement[] = [];
-                for (let i = 0; i < pdf.numPages; i++) {
-                    const canvas = document.createElement('canvas');
-                    canvas.style.display = 'block';
-                    canvas.style.margin = '0 auto 10px auto';
-                    canvas.style.maxWidth = '100%';
-                    canvas.style.height = 'auto';
-                    canvases.push(canvas);
+        const loadPdfWithFallback = async () => {
+            const workerSources = [
+                '/js/pdf.worker.mjs', // Local copied worker
+                `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`, // CDN fallback
+                `https://mozilla.github.io/pdf.js/build/pdf.worker.js` // Mozilla CDN fallback
+            ];
+
+            for (let i = 0; i < workerSources.length; i++) {
+                try {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSources[i];
+                    const pdf = await pdfjsLib.getDocument(url).promise;
+                    
+                    if (!mounted) return;
+                    setPdfDoc(pdf);
+                    onTotalPagesChange(pdf.numPages);
+                    
+                    // Create canvas elements for all pages
+                    const canvases: HTMLCanvasElement[] = [];
+                    for (let j = 0; j < pdf.numPages; j++) {
+                        const canvas = document.createElement('canvas');
+                        canvas.style.display = 'block';
+                        canvas.style.margin = '0 auto 10px auto';
+                        canvas.style.maxWidth = '100%';
+                        canvas.style.height = 'auto';
+                        canvases.push(canvas);
+                    }
+                    setPageCanvases(canvases);
+                    setLoading(false);
+                    return; // Success, exit the loop
+                } catch (err) {
+                    console.warn(`Failed to load PDF with worker ${i + 1}:`, err);
+                    if (i === workerSources.length - 1) {
+                        // Last attempt failed
+                        if (!mounted) return;
+                        setError('Failed to load PDF: ' + (err as Error).message);
+                        setLoading(false);
+                    }
+                    // Continue to next worker source
                 }
-                setPageCanvases(canvases);
-                setLoading(false);
-            })
-            .catch((err) => {
-                if (!mounted) return;
-                setError('Failed to load PDF: ' + err.message);
-                setLoading(false);
-            });
+            }
+        };
+
+        loadPdfWithFallback();
 
         return () => {
             mounted = false;
@@ -72,7 +92,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         try {
             const container = containerRef.current;
             const containerWidth = container.clientWidth;
-            const containerHeight = container.clientHeight;
             
             // Clear container
             container.innerHTML = '';

@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Landing;
 
 use App\Http\Controllers\Controller;
 use App\Models\Landing\ProgramsBsit;
+use App\Models\Program;
+use App\Models\Area;
+use App\Models\Parameter;
+use App\Models\Document;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -335,7 +339,329 @@ class ProgramsBsitController extends Controller
         }
         
         return Inertia::render('landing/pus/bsit', [
-            'bsitContent' => $transformedContent
+            'bsitContent' => $transformedContent,
+            'sidebar' => [$this->getBsitDocumentsSidebar()], // Wrap in array to match admin structure
+            'accreditationAreas' => $this->getBsitAreas(),
+        ]);
+    }
+
+    /**
+     * Get BSIT program areas with parameters and document counts
+     */
+    private function getBsitAreas()
+    {
+        // Get BSIT program
+        $bsitProgram = Program::where('code', 'BSIT')
+            ->orWhere('name', 'like', '%BSIT%')
+            ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
+            ->first();
+
+        if (!$bsitProgram) {
+            return [];
+        }
+
+        // Get areas for BSIT program
+        $areas = Area::where('program_id', $bsitProgram->id)->get();
+
+        // Get approved document counts for these areas
+        $approvedDocs = Document::where('status', 'approved')
+            ->where('program_id', $bsitProgram->id)
+            ->get(['id', 'area_id', 'parameter_id', 'category']);
+
+        $areaApprovedCounts = [];
+        $parameterApprovedCounts = [];
+        $parameterCategoryApprovedCounts = [];
+
+        foreach ($approvedDocs as $doc) {
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaApprovedCounts[$doc->area_id])) $areaApprovedCounts[$doc->area_id] = 0;
+                $areaApprovedCounts[$doc->area_id]++;
+            }
+
+            // Parameter count
+            if ($doc->parameter_id) {
+                if (!isset($parameterApprovedCounts[$doc->parameter_id])) $parameterApprovedCounts[$doc->parameter_id] = 0;
+                $parameterApprovedCounts[$doc->parameter_id]++;
+                
+                // Category count
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id])) {
+                    $parameterCategoryApprovedCounts[$doc->parameter_id] = [];
+                }
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category])) {
+                    $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category] = 0;
+                }
+                $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Transform areas with parameters
+        return $areas->map(function ($area) use ($bsitProgram, $areaApprovedCounts, $parameterApprovedCounts, $parameterCategoryApprovedCounts) {
+            // Get parameters for this area
+            $parameters = Parameter::where('program_id', $bsitProgram->id)
+                ->where('area_id', $area->id)
+                ->get(['id', 'name', 'code'])
+                ->map(function ($param) use ($parameterApprovedCounts, $parameterCategoryApprovedCounts) {
+                    $paramId = $param->id;
+                    $categories = ['system', 'implementation', 'outcomes'];
+                    $categoryCounts = [];
+                    foreach ($categories as $cat) {
+                        $categoryCounts[$cat] = $parameterCategoryApprovedCounts[$paramId][$cat] ?? 0;
+                    }
+                    
+                    return [
+                        'id' => $param->id,
+                        'name' => $param->name,
+                        'code' => $param->code,
+                        'approved_count' => $parameterApprovedCounts[$paramId] ?? 0,
+                        'category_approved_counts' => $categoryCounts,
+                    ];
+                })
+                ->toArray();
+
+            return [
+                'id' => $area->id,
+                'title' => $area->name, // Keep 'title' for consistency with current frontend
+                'name' => $area->name,
+                'code' => $area->code,
+                'image' => '/api/placeholder/300/200', // Default image
+                'parameters' => $parameters,
+                'approved_count' => $areaApprovedCounts[$area->id] ?? 0,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get BSIT documents sidebar data (same structure as AdminDocumentsController)
+     */
+    private function getBsitDocumentsSidebar()
+    {
+        // Get BSIT program
+        $bsitProgram = Program::where('code', 'BSIT')
+            ->orWhere('name', 'like', '%BSIT%')
+            ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
+            ->first();
+
+        if (!$bsitProgram) {
+            return null;
+        }
+
+        // Get areas for BSIT program
+        $areas = Area::where('program_id', $bsitProgram->id)->get();
+
+        // Get approved document counts
+        $approvedDocs = Document::where('status', 'approved')
+            ->where('program_id', $bsitProgram->id)
+            ->get(['id', 'area_id', 'parameter_id', 'category']);
+
+        $areaApprovedCounts = [];
+        $parameterApprovedCounts = [];
+        $parameterCategoryApprovedCounts = [];
+
+        foreach ($approvedDocs as $doc) {
+            if ($doc->area_id) {
+                if (!isset($areaApprovedCounts[$doc->area_id])) $areaApprovedCounts[$doc->area_id] = 0;
+                $areaApprovedCounts[$doc->area_id]++;
+            }
+
+            if ($doc->parameter_id) {
+                if (!isset($parameterApprovedCounts[$doc->parameter_id])) $parameterApprovedCounts[$doc->parameter_id] = 0;
+                $parameterApprovedCounts[$doc->parameter_id]++;
+                
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id])) {
+                    $parameterCategoryApprovedCounts[$doc->parameter_id] = [];
+                }
+                if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category])) {
+                    $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category] = 0;
+                }
+                $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Build the same structure as AdminDocumentsController
+        $transformedAreas = [];
+        foreach ($areas as $area) {
+            $parameters = Parameter::where('program_id', $bsitProgram->id)
+                ->where('area_id', $area->id)
+                ->get(['id', 'name', 'code'])
+                ->map(function ($param) use ($parameterApprovedCounts, $parameterCategoryApprovedCounts) {
+                    $paramId = $param->id;
+                    $categories = ['system', 'implementation', 'outcomes'];
+                    $categoryCounts = [];
+                    foreach ($categories as $cat) {
+                        $categoryCounts[$cat] = $parameterCategoryApprovedCounts[$paramId][$cat] ?? 0;
+                    }
+                    
+                    return [
+                        'id' => $param->id,
+                        'name' => $param->name,
+                        'code' => $param->code,
+                        'approved_count' => $parameterApprovedCounts[$paramId] ?? 0,
+                        'category_approved_counts' => $categoryCounts,
+                    ];
+                })
+                ->toArray();
+
+            $transformedAreas[] = [
+                'id' => $area->id,
+                'name' => $area->name,
+                'code' => $area->code,
+                'parameters' => $parameters,
+                'approved_count' => $areaApprovedCounts[$area->id] ?? 0,
+            ];
+        }
+
+        return [
+            'id' => $bsitProgram->id,
+            'name' => $bsitProgram->name,
+            'code' => $bsitProgram->code,
+            'areas' => $transformedAreas,
+            'approved_count' => array_sum($areaApprovedCounts), // Total approved count for program
+        ];
+    }
+
+    /**
+     * Get approved documents for BSIT (API endpoint)
+     */
+    public function getApprovedDocuments(Request $request)
+    {
+        $type = $request->get('type', 'documents');
+
+        // Get BSIT program
+        $bsitProgram = Program::where('code', 'BSIT')
+            ->orWhere('name', 'like', '%BSIT%')
+            ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
+            ->first();
+
+        if (!$bsitProgram) {
+            return response()->json(['success' => false, 'message' => 'BSIT program not found']);
+        }
+
+        if ($type === 'areas') {
+            return $this->getAreasForApi($bsitProgram);
+        } elseif ($type === 'parameters') {
+            return $this->getParametersForApi($request, $bsitProgram);
+        } else {
+            return $this->getDocumentsForApi($request, $bsitProgram);
+        }
+    }
+
+    private function getAreasForApi($bsitProgram)
+    {
+        $areas = Area::where('program_id', $bsitProgram->id)
+            ->with(['parameters' => function ($query) use ($bsitProgram) {
+                $query->where('program_id', $bsitProgram->id);
+            }])
+            ->get();
+
+        // Calculate approved counts for each area
+        $areasWithCounts = $areas->map(function ($area) use ($bsitProgram) {
+            $approvedCount = Document::where('program_id', $bsitProgram->id)
+                ->where('area_id', $area->id)
+                ->where('status', 'approved')
+                ->count();
+
+            return [
+                'id' => $area->id,
+                'title' => $area->name,
+                'name' => $area->name,
+                'code' => $area->code,
+                'image' => '/api/placeholder/400/200', // Default placeholder
+                'approved_count' => $approvedCount,
+                'parameters' => []
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'areas' => $areasWithCounts
+        ]);
+    }
+
+    private function getParametersForApi($request, $bsitProgram)
+    {
+        $request->validate([
+            'area_id' => 'required|exists:areas,id',
+        ]);
+
+        $parameters = Parameter::where('program_id', $bsitProgram->id)
+            ->where('area_id', $request->area_id)
+            ->get();
+
+        // Calculate approved counts for each parameter and category
+        $parametersWithCounts = $parameters->map(function ($param) use ($bsitProgram) {
+            $approvedCount = Document::where('program_id', $bsitProgram->id)
+                ->where('parameter_id', $param->id)
+                ->where('status', 'approved')
+                ->count();
+
+            // Count by category
+            $categoryApprovedCounts = [];
+            foreach (['system', 'implementation', 'outcomes'] as $category) {
+                $categoryApprovedCounts[$category] = Document::where('program_id', $bsitProgram->id)
+                    ->where('parameter_id', $param->id)
+                    ->where('category', $category)
+                    ->where('status', 'approved')
+                    ->count();
+            }
+
+            return [
+                'id' => $param->id,
+                'name' => $param->name,
+                'code' => $param->code,
+                'approved_count' => $approvedCount,
+                'category_approved_counts' => $categoryApprovedCounts
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'parameters' => $parametersWithCounts
+        ]);
+    }
+
+    private function getDocumentsForApi($request, $bsitProgram)
+    {
+        $request->validate([
+            'area_id' => 'required|exists:areas,id',
+            'parameter_id' => 'nullable|exists:parameters,id',
+            'category' => 'nullable|in:system,implementation,outcomes',
+        ]);
+
+        $query = Document::with(['user:id,name', 'checker:id,name'])
+            ->where('status', 'approved')
+            ->where('program_id', $bsitProgram->id)
+            ->where('area_id', $request->area_id);
+
+        if ($request->parameter_id) {
+            $query->where('parameter_id', $request->parameter_id);
+        }
+
+        if ($request->category) {
+            $query->where('category', $request->category);
+        }
+
+        $documents = $query->orderBy('updated_at', 'desc')->get();
+
+        $transformedDocuments = $documents->map(function ($doc) {
+            return [
+                'id' => $doc->id,
+                'filename' => $doc->doc_filename,
+                'url' => Storage::url("documents/{$doc->doc_filename}"),
+                'uploaded_at' => $doc->created_at->format('Y-m-d H:i:s'),
+                'user_name' => $doc->user->name ?? 'Unknown',
+                'approved_by' => $doc->checker->name ?? null,
+                'approved_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                'updated_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                'parameter_id' => $doc->parameter_id,
+                'category' => $doc->category,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'documents' => $transformedDocuments
         ]);
     }
 }
+
