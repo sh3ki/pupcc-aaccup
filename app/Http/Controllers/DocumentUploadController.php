@@ -19,8 +19,8 @@ class DocumentUploadController extends Controller
             'area_id' => 'required|exists:areas,id',
             'parameter_id' => 'required|exists:parameters,id',
             'category' => 'required|in:system,implementation,outcomes',
-            'file' => 'required|file|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png|max:20480',
-            'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm|max:51200',
+            'file' => 'required|file|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png',
+            'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm',
         ]);
 
         $user = $request->user();

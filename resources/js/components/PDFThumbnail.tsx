@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfjsWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker?url';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc;
+// Set up PDF.js worker with multiple fallback options
+if (typeof window !== 'undefined') {
+    // For production environments, use CDN workers which are more reliable
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+        // Use local .js worker for production (better compatibility than .mjs)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
+    } else {
+        // Use local worker for development
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.mjs';
+    }
+}
 
 interface PDFThumbnailProps {
     url: string;
