@@ -2,11 +2,11 @@ import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useRef, useEffect, useState, useMemo } from 'react';
+import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
 import PDFThumbnail from '@/components/PDFThumbnail';
-import { DocumentNavigation } from '@/components/DocumentNavigation';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -49,11 +49,11 @@ type Program = {
 };
 
 interface AccreditationArea {
-    id?: number;
     title: string;
+    image: string;
+    id?: number;
     name?: string;
     code?: string;
-    image: string;
     parameters?: Parameter[];
     approved_count?: number;
 }
@@ -120,9 +120,8 @@ function useScrollAnimation() {
                     }, 100);
                 }
             },
-            { threshold: 0.1, rootMargin: '50px' }
+            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
         );
-
         if (currentRef) observer.observe(currentRef);
         return () => { if (currentRef) observer.unobserve(currentRef); };
     }, [hasAnimated]);
@@ -134,7 +133,7 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
 
-    // Document Management State
+    // Document Management State - exactly like BTLED
     const [documentMode, setDocumentMode] = useState(false);
     const [selected, setSelected] = useState<{ 
         areaId?: number; 
@@ -142,17 +141,14 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
         category?: string 
     }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
-    const [paramExpanded, setParamExpanded] = useState<{ [paramId: number]: boolean }>({});
     
     // Document states
     const [approvedDocs, setApprovedDocs] = useState<DocumentItem[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
-    const [search, setSearch] = useState('');
     const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
     
     // Store fetched data - use sidebar data if available, fallback to accreditationAreas
-    const [fetchedParameters, setFetchedParameters] = useState<Parameter[]>([]);
     const [fetchedAreas, setFetchedAreas] = useState<Area[]>([]);
 
     // PDF Navigation state
@@ -195,8 +191,8 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
         }
         // Finally fall back to accreditationAreas, convert to Area type
         if (accreditationAreas && accreditationAreas.length > 0) {
-            return accreditationAreas.map((area, idx) => ({
-                id: area.id || (idx + 1),
+            return accreditationAreas.map(area => ({
+                id: area.id || 0,
                 name: area.name || area.title,
                 code: area.code,
                 parameters: area.parameters,
@@ -209,119 +205,77 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
-    const toggleAreaExpand = (areaId: number) => {
-        setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
-    };
+    // Remove the parameter fetching logic - use sidebar data directly like admin
+    // No separate parameter fetching needed
 
-    // Fetch parameters when area is selected
+    // Fetch approved documents - EXACTLY like admin panel
     useEffect(() => {
-        if (selected.areaId && !selected.parameterId) {
-            const currentArea = availableAreas.find(a => a.id === selected.areaId);
-            
-            // Only fetch if parameters are not already available
-            if (!currentArea?.parameters || currentArea.parameters.length === 0) {
-                setLoadingDocs(true);
-                
-                // Fetch parameters from backend
-                fetch(`/programs/bsent/documents?type=parameters&area_id=${selected.areaId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        setFetchedParameters(data.parameters || []);
-                        setFetchedAreas(prev => {
-                            const existing = prev.find(a => a.id === selected.areaId);
-                            if (existing) {
-                                return prev.map(a => a.id === selected.areaId ? { ...a, parameters: data.parameters || [] } : a);
-                            } else {
-                                const areaFromProps = accreditationAreas?.find(a => a.id === selected.areaId);
-                                if (areaFromProps) {
-                                    const areaIndex = accreditationAreas?.findIndex(a => a.id === selected.areaId) || 0;
-                                    const newArea: Area = {
-                                        id: areaFromProps.id || (areaIndex + 1),
-                                        name: areaFromProps.name || areaFromProps.title,
-                                        code: areaFromProps.code,
-                                        parameters: data.parameters || [],
-                                        approved_count: areaFromProps.approved_count
-                                    };
-                                    return [...prev, newArea];
-                                }
-                                return prev;
-                            }
-                        });
-                        setLoadingDocs(false);
-                    })
-                    .catch(error => {
-                        console.error('Error fetching parameters:', error);
-                        setLoadingDocs(false);
-                    });
-            }
-        }
-    }, [selected.areaId, selected.parameterId, availableAreas, accreditationAreas]);
-
-    // Fetch approved documents
-    useEffect(() => {
+        // Only fetch when all three are selected: area, parameter, and category
         if (selected.areaId && selected.parameterId && selected.category) {
             setLoadingDocs(true);
             
-            // Fetch documents from backend
-            fetch(`/programs/bsent/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`)
+            // Use same URL pattern as admin: /programs/bsent/documents with query params
+            fetch(`/programs/bsent/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
                 .then(response => response.json())
                 .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
+                    if (data.success) {
+                        setApprovedDocs(data.documents || []);
+                        setViewerIndex(0);
+                    } else {
+                        setApprovedDocs([]);
+                    }
                     setLoadingDocs(false);
+                    setViewingDocIndex(null); // Reset document viewing
                 })
                 .catch(error => {
                     console.error('Error fetching documents:', error);
-                    setLoadingDocs(false);
-                });
-            
-        } else if (selected.areaId && selected.parameterId) {
-            // Fetch all docs for the parameter to get category counts
-            setLoadingDocs(true);
-            fetch(`/programs/bsent/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}`)
-                .then(response => response.json())
-                .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
-                    setLoadingDocs(false);
-                })
-                .catch(error => {
-                    console.error('Error fetching parameter documents:', error);
+                    setApprovedDocs([]);
                     setLoadingDocs(false);
                 });
         } else {
+            // Clear documents when navigation changes
             setApprovedDocs([]);
             setViewerIndex(0);
         }
     }, [selected.areaId, selected.parameterId, selected.category]);
 
-    // Initial fetch of areas when component loads
+    // Sync bsentProgram areas to state when sidebar data loads - like admin
     useEffect(() => {
-        if (!bsentProgram?.areas && (!accreditationAreas || accreditationAreas.length === 0)) {
-            fetch('/programs/bsent/documents?type=areas')
-                .then(response => response.json())
-                .then(data => {
-                    setFetchedAreas(data.areas || []);
-                })
-                .catch(error => {
-                    console.error('Error fetching areas:', error);
-                });
+        if (bsentProgram?.areas && bsentProgram.areas.length > 0) {
+            setFetchedAreas(bsentProgram.areas);
+        } else if (accreditationAreas && accreditationAreas.length > 0) {
+            setFetchedAreas(
+                accreditationAreas.map(area => ({
+                    id: area.id || 0,
+                    name: area.name || area.title,
+                    code: area.code,
+                    parameters: area.parameters || [],
+                    approved_count: area.approved_count || 0,
+                }))
+            );
         }
     }, [bsentProgram?.areas, accreditationAreas]);
 
-    // Filtered docs for preview
+    // Filtered docs for preview - exactly like admin
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
-        if (search) {
-            docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
+        // Filter by current parameter and category if both are selected
+        if (selected.parameterId && selected.category) {
+            docs = docs.filter(doc =>
+                doc.parameter_id === selected.parameterId &&
+                doc.category === selected.category
+            );
         }
         return docs;
-    }, [approvedDocs, search]);
+    }, [approvedDocs, selected.parameterId, selected.category]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
 
-    // Navigation functions
+    // Navigation functions - like admin
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
         const doc = filteredDocs[idx];
@@ -331,6 +285,16 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
             setViewingDocIndex(realIdx);
         }
     };
+
+    // Reset viewingDocIndex when navigation changes - like admin
+    useEffect(() => {
+        setViewingDocIndex(null);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setRotate(0);
+        setZoom(0.9);
+        setFitMode(null);
+    }, [selected.areaId, selected.parameterId, selected.category]);
 
     // Document viewer handlers
     const handleDownload = () => {
@@ -386,14 +350,9 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
         setFitMode(null);
     }, [selected.areaId, selected.parameterId, selected.category]);
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (filteredDocs.length > 0) goTo(0);
-    };
-
     return (
         <>
-            <Head title="BSENT Program" />
+            <Head title="Bachelor of Science in Entrepreneurship (BSENT) - PUP Calapan Campus" />
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="bsent-program" />
 
@@ -401,17 +360,17 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                     {/* Hero */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <img
-                            src={bsentContent?.hero_image || '/api/placeholder/1600/600'}
-                            alt={bsentContent?.hero_title || 'BSENT Program'}
+                            src={bsentContent.hero_image || '/api/placeholder/1600/600'}
+                            alt={bsentContent.hero_title}
                             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             style={{ minHeight: 400, maxHeight: 700 }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
                             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-white animate-fade-in-up mb-4 drop-shadow-lg">
-                                {bsentContent?.hero_title || 'Bachelor of Science in Entrepreneurship'}
+                                {bsentContent.hero_title}
                             </h1>
-                            {bsentContent?.hero_subtitle && (
+                            {bsentContent.hero_subtitle && (
                                 <p className="text-lg sm:text-xl text-white/90 max-w-3xl px-4 drop-shadow-lg">
                                     {bsentContent.hero_subtitle}
                                 </p>
@@ -419,41 +378,198 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                         </div>
                     </section>
 
-                    {/* Areas of Accreditation Section */}
-                    <section 
+                    {/* Overview */}
+                    <section
+                        ref={overviewRef}
+                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
+                            overviewVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                        }`}
+                        style={{ 
+                            background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
+                        }}
+                    >
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 opacity-5 pointer-events-none">
+                            <div className="absolute inset-0" style={{
+                                backgroundImage: `radial-gradient(circle at 25% 25%, ${COLORS.primaryMaroon} 2px, transparent 2px)`,
+                                backgroundSize: '50px 50px'
+                            }}></div>
+                        </div>
+                        <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
+                            <div className="flex-1">
+                                <h2 className="text-4xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                    {bsentContent.overview_section_title}
+                                </h2>
+                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{bsentContent.program_description}</p>
+                            </div>
+                            <div className="flex-1">
+                                <img 
+                                    src={bsentContent.program_image || '/api/placeholder/500/400'} 
+                                    alt="BSENT Overview" 
+                                    className="rounded-2xl shadow-lg w-full object-cover" 
+                                    style={{ minHeight: 260, maxHeight: 400 }} 
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Objectives */}
+                    <section
+                        ref={objectivesRef}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${
+                            objectivesVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                        }`}
+                    >
+                        <div className="w-full max-w-4xl mx-auto">
+                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {bsentContent.objectives_section_title}
+                            </h2>
+                            <ol className="list-decimal ml-6 space-y-3 text-lg text-gray-800">
+                                {bsentContent.objectives_data && bsentContent.objectives_data.length > 0 ? (
+                                    bsentContent.objectives_data.map((obj: string, idx: number) => (
+                                        <li key={idx}>{obj}</li>
+                                    ))
+                                ) : (
+                                    <li>No objectives available</li>
+                                )}
+                            </ol>
+                        </div>
+                    </section>
+
+                    {/* AVP Section */}
+                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
+                        <div className="w-full max-w-5xl mx-auto text-center">
+                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {bsentContent.avp_section_title}
+                            </h2>
+                            <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto mb-4" style={{ maxWidth: 800, height: 450 }}>
+                                {bsentContent.program_video_type === 'youtube' ? (
+                                    <iframe
+                                        src={`https://www.youtube.com/embed/${bsentContent.program_video}`}
+                                        title="Program AVP"
+                                        frameBorder={0}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        className="w-full h-full"
+                                    ></iframe>
+                                ) : (
+                                    <video
+                                        src={bsentContent.program_video}
+                                        controls
+                                        className="w-full h-full"
+                                    >
+                                        Your browser does not support the video tag.
+                                    </video>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Program in Action */}
+                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12" style={{ backgroundColor: '#f8fafc' }}>
+                        <div className="w-full max-w-6xl mx-auto">
+                            <h2 className="text-3xl text-center font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {bsentContent.action_section_title}
+                            </h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {bsentContent.action_images && bsentContent.action_images.length > 0 ? (
+                                    bsentContent.action_images.map((img: string, idx: number) => (
+                                        <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
+                                            <img 
+                                                src={img || '/api/placeholder/400/300'} 
+                                                alt={`Activity ${idx + 1}`} 
+                                                className="w-full h-36 object-cover" 
+                                                style={{ minHeight: 200, maxHeight: 200 }} 
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-2 md:col-span-4 text-center text-gray-500">
+                                        No action images available
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Notable Graduates */}
+                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
+                        <div className="w-full max-w-4xl mx-auto text-center">
+                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                                {bsentContent.graduates_section_title}
+                            </h2>
+                            <div className="flex flex-col items-center gap-6">
+                                {bsentContent.graduates_data && bsentContent.graduates_data.length > 0 ? (
+                                    bsentContent.graduates_data.map((grad: GraduateItem, idx: number) => (
+                                        <div key={idx} className="w-full flex flex-col items-center">
+                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
+                                                {grad.video_type === 'youtube' ? (
+                                                    <iframe
+                                                        src={`https://www.youtube.com/embed/${grad.video}`}
+                                                        title={grad.name}
+                                                        frameBorder={0}
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                        allowFullScreen
+                                                        className="w-full h-full"
+                                                    ></iframe>
+                                                ) : (
+                                                    <video
+                                                        src={typeof grad.video === 'string' ? grad.video : ''}
+                                                        controls
+                                                        className="w-full h-full object-cover"
+                                                    >
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                )}
+                                            </div>
+                                            <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500">
+                                        No graduates available
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Accreditation Areas */}
+                    <section
                         ref={areasRef}
-                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${
                             areasVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
                         }`}
                         style={{ backgroundColor: '#f8fafc' }}
                     >
                         <div className="w-full max-w-7xl mx-auto">
                             <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: COLORS.primaryMaroon }}>
-                                {bsentContent?.accreditation_section_title || 'Areas of Accreditation'}
+                                {bsentContent.accreditation_section_title}
                             </h2>
                             
                             {/* Show regular area cards when not in document mode */}
                             {!documentMode && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                    {bsentContent?.accreditation_areas && bsentContent.accreditation_areas.length > 0 ? (
-                                        bsentContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
-                                            <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                    {availableAreas && availableAreas.length > 0 ? (
+                                        availableAreas.map((area: Area, idx: number) => (
+                                            <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
                                                 style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
                                                 <img 
-                                                    src={area.image || '/api/placeholder/300/200'} 
-                                                    alt={area.title} 
+                                                    src="/api/placeholder/300/200"
+                                                    alt={area.name} 
                                                     className="w-full h-28 object-cover" 
                                                     style={{ minHeight: 112, maxHeight: 112 }} 
                                                 />
                                                 <div className="p-4 flex flex-col items-center">
-                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
+                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.name}</h3>
+                                                  
                                                     <button 
                                                         className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
                                                         style={{ backgroundColor: COLORS.primaryMaroon }}
                                                         onClick={() => {
                                                             setDocumentMode(true);
-                                                            setSelected({ areaId: area.id || (idx + 1) });
-                                                            setAreaExpanded(prev => ({ ...prev, [area.id || (idx + 1)]: true }));
+                                                            setSelected({ areaId: area.id });
+                                                            setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
                                                         }}
                                                     >
                                                         View Parameters
@@ -593,14 +709,13 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
-                                                                    <div className="flex items-center text-xs font-medium group" style={{ color: COLORS.primaryMaroon }}>
-                                                                        <span>View Categories</span>
-                                                                        <svg className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
-                                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Categories
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -658,14 +773,13 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
-                                                                    <div className="flex items-center text-xs font-medium group" style={{ color: COLORS.primaryMaroon }}>
-                                                                        <span>View Documents</span>
-                                                                        <svg className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
-                                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Documents
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -866,33 +980,21 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                     <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src={bsentContent?.mula_sayo_image || '/api/placeholder/1600/400'}
-                                alt={bsentContent?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
+                                src={bsentContent.mula_sayo_image || '/api/placeholder/1600/400'}
+                                alt={bsentContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                {bsentContent?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
+                                {bsentContent.mula_sayo_title}
                             </h2>
                         </div>
                     </section>
                 </main>
                 <Footer />
             </div>
-            <style jsx>{`
-                .text-shadow-lg {
-                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
-                }
-                @keyframes fade-in-up {
-                    from { opacity: 0; transform: translateY(30px);}
-                    to { opacity: 1; transform: translateY(0);}
-                }
-                .animate-fade-in-up {
-                    animation: fade-in-up 0.8s ease-out forwards;
-                }
-            `}</style>
         </>
     );
 }

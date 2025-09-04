@@ -2,7 +2,32 @@
     # Ensure ES modules are served with the correct MIME type
     AddType application/javascript .mjs
     AddType application/javascript .js
+    AddType text/javascript .mjs
+    AddType text/javascript .js
+    
+    # Add additional MIME types for better compatibility
+    AddType application/wasm .wasm
 </IfModule>
+
+# Add proper headers for PDF.js worker files
+<FilesMatch "\.(mjs|js|wasm)$">
+    <IfModule mod_headers.c>
+        Header set Access-Control-Allow-Origin "*"
+        Header set Cross-Origin-Resource-Policy "cross-origin"
+        Header set Cross-Origin-Embedder-Policy "require-corp"
+        Header set Cache-Control "public, max-age=31536000"
+        # Ensure proper content type for JavaScript modules
+        Header set Content-Type "application/javascript"
+    </IfModule>
+</FilesMatch>
+
+# Specific handling for .mjs files
+<FilesMatch "\.mjs$">
+    <IfModule mod_headers.c>
+        Header set Content-Type "application/javascript"
+        Header set X-Content-Type-Options "nosniff"
+    </IfModule>
+</FilesMatch>
 
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>

@@ -16,15 +16,15 @@ return new class extends Migration
             
             // Hero Section
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default("OBE Syllabi");
-            $table->string('hero_subtitle')->default('Outcome-based education syllabi and curriculum documents');
+            $table->string('hero_title')->nullable();
+            $table->string('hero_subtitle')->nullable();
             
             // Syllabi Section
-            $table->string('section_title')->default("OBE Syllabi Preview");
+            $table->string('section_title')->nullable();
             $table->string('syllabi_document')->nullable(); // Can be image, docx, or pdf
             
             // Mula Sayo Para Sa Bayan Section
-            $table->string('footer_section_title')->default('Mula Sayo, Para Sa Bayan');
+            $table->string('footer_section_title')->nullable();
             $table->string('footer_image')->nullable();
             
             $table->timestamps();

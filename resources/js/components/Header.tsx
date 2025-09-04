@@ -102,6 +102,9 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
         { name: "Administrative Manual", href: "/exhibit/administrative-manual", description: "" },
         { name: "CHED Memorandum Order", href: "/exhibit/ched-memorandum-order", description: "" },
         { name: "Licensure", href: "/exhibit/licensure", description: "" },
+        { name: "COPC", href: "/exhibit/copc", description: "" },
+        { name: "BOR", href: "/exhibit/bor", description: "", },
+        { name: "PSV", href: "/exhibit/psv", description: "" }
     ];
 
     // Check if any faculty page is active

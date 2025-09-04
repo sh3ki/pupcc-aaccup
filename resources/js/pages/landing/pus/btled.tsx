@@ -747,14 +747,13 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
-                                                                    <div className="flex items-center text-xs font-medium group" style={{ color: COLORS.primaryMaroon }}>
-                                                                        <span>View Categories</span>
-                                                                        <svg className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
-                                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Categories
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -812,14 +811,13 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-end">
-                                                                    <div className="flex items-center text-xs font-medium group" style={{ color: COLORS.primaryMaroon }}>
-                                                                        <span>View Documents</span>
-                                                                        <svg className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
-                                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Documents
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>

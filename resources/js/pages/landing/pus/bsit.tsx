@@ -2,54 +2,11 @@ import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useRef, useEffect, useState, useMemo } from 'react';
+import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
-
-// Document Management Types
-interface Parameter {
-    id: number;
-    name: string;
-    code: string;
-    approved_count?: number;
-}
-
-interface Area {
-    id: number;
-    name: string;
-    code: string;
-    parameters?: Parameter[];
-    approved_count?: number;
-}
-
-interface Program {
-    id: number;
-    name: string;
-    code: string;
-    areas?: Area[];
-}
-
-interface DocumentItem {
-    id: number;
-    filename: string;
-    filepath: string;
-    url: string;
-    description?: string;
-    mimetype: string;
-    file_size: number;
-    created_at: string;
-    updated_at: string;
-    user: {
-        id: number;
-        name: string;
-        email: string;
-    };
-    checker: {
-        id: number;
-        name: string;
-        email: string;
-    };
-}
+import PDFThumbnail from '@/components/PDFThumbnail';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -66,15 +23,53 @@ interface GraduateItem {
     video_type: 'youtube' | 'upload';
 }
 
+// Document management types - match admin structure
+type Parameter = { 
+    id: number; 
+    name: string; 
+    code?: string; 
+    approved_count?: number; 
+    category_approved_counts?: Record<string, number> 
+};
+
+type Area = { 
+    id: number; 
+    name: string; 
+    code?: string; 
+    parameters?: Parameter[];
+    approved_count?: number;
+};
+
+type Program = { 
+    id: number; 
+    name: string; 
+    code?: string; 
+    areas: Area[];
+    approved_count?: number;
+};
+
 interface AccreditationArea {
-    id?: number;
     title: string;
+    image: string;
+    id?: number;
     name?: string;
     code?: string;
-    image: string;
     parameters?: Parameter[];
     approved_count?: number;
 }
+
+type DocumentItem = {
+    id: number;
+    filename: string;
+    url: string;
+    uploaded_at: string;
+    user_name?: string;
+    approved_by?: string;
+    approved_at?: string;
+    updated_at?: string;
+    parameter_id?: number;
+    category?: string;
+};
 
 interface BsitContent {
     hero_image: string;
@@ -101,6 +96,7 @@ interface BsitContent {
 interface Props {
     bsitContent: BsitContent;
     accreditationAreas?: AccreditationArea[];
+    // Match admin panel structure
     sidebar?: Program[];
 }
 
@@ -137,19 +133,19 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
 
-    // Document Management State
+    // Document Management State - exactly like BTLED
     const [documentMode, setDocumentMode] = useState(false);
     const [selected, setSelected] = useState<{ 
         areaId?: number; 
         parameterId?: number; 
         category?: string 
     }>({});
+    const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
     
     // Document states
     const [approvedDocs, setApprovedDocs] = useState<DocumentItem[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
-    const [search, setSearch] = useState('');
     const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
     
     // Store fetched data - use sidebar data if available, fallback to accreditationAreas
@@ -209,114 +205,75 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
-    // Fetch parameters when area is selected
-    useEffect(() => {
-        if (selected.areaId && !selected.parameterId) {
-            const currentArea = availableAreas.find(a => a.id === selected.areaId);
-            
-            // Only fetch if parameters are not already available
-            if (!currentArea?.parameters || currentArea.parameters.length === 0) {
-                setLoadingDocs(true);
-                
-                // Fetch parameters from backend
-                fetch(`/programs/bsit/documents?type=parameters&area_id=${selected.areaId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        setFetchedParameters(data.parameters || []);
-                        setFetchedAreas(prev => {
-                            const existing = prev.find(a => a.id === selected.areaId);
-                            if (existing) {
-                                return prev.map(a => a.id === selected.areaId ? { ...a, parameters: data.parameters || [] } : a);
-                            } else {
-                                const areaFromProps = accreditationAreas?.find(a => a.id === selected.areaId);
-                                if (areaFromProps) {
-                                    const newArea: Area = {
-                                        id: areaFromProps.id || 0,
-                                        name: areaFromProps.name || areaFromProps.title,
-                                        code: areaFromProps.code,
-                                        parameters: data.parameters || [],
-                                        approved_count: areaFromProps.approved_count
-                                    };
-                                    return [...prev, newArea];
-                                }
-                                return prev;
-                            }
-                        });
-                        setLoadingDocs(false);
-                    })
-                    .catch(error => {
-                        console.error('Error fetching parameters:', error);
-                        setLoadingDocs(false);
-                    });
-            }
-        }
-    }, [selected.areaId, selected.parameterId, availableAreas, accreditationAreas]);
+    // Remove the parameter fetching logic - use sidebar data directly like admin
+    // No separate parameter fetching needed
 
-    // Fetch approved documents
+    // Fetch approved documents - EXACTLY like admin panel
     useEffect(() => {
+        // Only fetch when all three are selected: area, parameter, and category
         if (selected.areaId && selected.parameterId && selected.category) {
             setLoadingDocs(true);
             
-            // Fetch documents from backend
-            fetch(`/programs/bsit/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`)
+            // Use same URL pattern as admin: /programs/bsent/documents with query params
+            fetch(`/programs/bsent/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
                 .then(response => response.json())
                 .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
+                    if (data.success) {
+                        setApprovedDocs(data.documents || []);
+                        setViewerIndex(0);
+                    } else {
+                        setApprovedDocs([]);
+                    }
                     setLoadingDocs(false);
+                    setViewingDocIndex(null); // Reset document viewing
                 })
                 .catch(error => {
                     console.error('Error fetching documents:', error);
-                    setLoadingDocs(false);
-                });
-            
-        } else if (selected.areaId && selected.parameterId) {
-            // Fetch all docs for the parameter to get category counts
-            setLoadingDocs(true);
-            fetch(`/programs/bsit/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}`)
-                .then(response => response.json())
-                .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
-                    setLoadingDocs(false);
-                })
-                .catch(error => {
-                    console.error('Error fetching parameter documents:', error);
+                    setApprovedDocs([]);
                     setLoadingDocs(false);
                 });
         } else {
+            // Clear documents when navigation changes
             setApprovedDocs([]);
             setViewerIndex(0);
         }
     }, [selected.areaId, selected.parameterId, selected.category]);
 
-    // Initial fetch of areas when component loads
+    // Sync bsitProgram areas to state when sidebar data loads - like admin
     useEffect(() => {
-        if (!bsitProgram?.areas && (!accreditationAreas || accreditationAreas.length === 0)) {
-            fetch('/programs/bsit/documents?type=areas')
-                .then(response => response.json())
-                .then(data => {
-                    setFetchedAreas(data.areas || []);
-                })
-                .catch(error => {
-                    console.error('Error fetching areas:', error);
-                });
+        if (bsitProgram?.areas && bsitProgram.areas.length > 0) {
+            setFetchedAreas(bsitProgram.areas);
+        } else if (accreditationAreas && accreditationAreas.length > 0) {
+            setFetchedAreas(
+                accreditationAreas.map(area => ({
+                    id: area.id || 0,
+                    name: area.name || area.title,
+                    code: area.code,
+                    parameters: area.parameters,
+                    approved_count: area.approved_count
+                }))
+            );
         }
-    }, [bsitProgram?.areas, accreditationAreas]);
-
-    // Filtered docs for preview
+    }, [bsitProgram?.areas, accreditationAreas]);    // Filtered docs for preview - exactly like admin
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
-        if (search) {
-            docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
+        // Filter by current parameter and category if both are selected
+        if (selected.parameterId && selected.category) {
+            docs = docs.filter(doc =>
+                doc.parameter_id === selected.parameterId &&
+                doc.category === selected.category
+            );
         }
         return docs;
-    }, [approvedDocs, search]);
+    }, [approvedDocs, selected.parameterId, selected.category]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
 
-    // Navigation functions
+    // Navigation functions - like admin
     const goTo = (idx: number) => {
         if (filteredDocs.length === 0) return;
         const doc = filteredDocs[idx];
@@ -326,6 +283,16 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
             setViewingDocIndex(realIdx);
         }
     };
+
+    // Reset viewingDocIndex when navigation changes - like admin
+    useEffect(() => {
+        setViewingDocIndex(null);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setRotate(0);
+        setZoom(0.9);
+        setFitMode(null);
+    }, [selected.areaId, selected.parameterId, selected.category]);
 
     // Document viewer handlers
     const handleDownload = () => {
@@ -381,274 +348,13 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
         setFitMode(null);
     }, [selected.areaId, selected.parameterId, selected.category]);
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (filteredDocs.length > 0) goTo(0);
-    };
-
     return (
         <>
-            <Head title="BSIT Program" />
+            <Head title="Bachelor of Science in Information Technology (BSIT) - PUP Calapan Campus" />
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="bsit-program" />
 
-                {/* Document Mode Toggle */}
-                <div className="fixed top-4 right-4 z-50">
-                    <button
-                        onClick={() => setDocumentMode(!documentMode)}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg shadow-lg transition-colors text-sm font-medium"
-                        type="button"
-                    >
-                        {documentMode ? 'Exit Documents' : 'View Documents'}
-                    </button>
-                </div>
-
-                {/* Document Management Mode */}
-                {documentMode && (
-                    <div className="fixed inset-0 bg-white z-40 overflow-auto">
-                        {/* Document Navigation Header */}
-                        <div className="sticky top-0 bg-slate-900 text-white p-4 shadow-lg z-50">
-                            <div className="container mx-auto">
-                                <div className="flex items-center justify-between">
-                                    <h1 className="text-lg font-semibold">BSIT Program Documents</h1>
-                                    <button
-                                        onClick={() => setDocumentMode(false)}
-                                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm"
-                                    >
-                                        ✕ Close
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Document Navigation */}
-                        <div className="bg-slate-50 border-b border-slate-200 pb-2">
-                            <div className="container mx-auto px-4 py-3">
-                                {/* Breadcrumb Navigation */}
-                                <div className="flex items-center gap-2 mb-4 text-sm">
-                                    <button
-                                        onClick={() => setSelected({})}
-                                        className="text-blue-600 hover:text-blue-800"
-                                    >
-                                        All Areas
-                                    </button>
-                                    {selected.areaId && (
-                                        <>
-                                            <span className="text-gray-400">›</span>
-                                            <button
-                                                onClick={() => setSelected({ areaId: selected.areaId })}
-                                                className="text-blue-600 hover:text-blue-800"
-                                            >
-                                                {selectedArea?.name}
-                                            </button>
-                                        </>
-                                    )}
-                                    {selected.parameterId && (
-                                        <>
-                                            <span className="text-gray-400">›</span>
-                                            <button
-                                                onClick={() => setSelected({ areaId: selected.areaId, parameterId: selected.parameterId })}
-                                                className="text-blue-600 hover:text-blue-800"
-                                            >
-                                                {selectedParameter?.name}
-                                            </button>
-                                        </>
-                                    )}
-                                    {selected.category && (
-                                        <>
-                                            <span className="text-gray-400">›</span>
-                                            <span className="text-gray-700">
-                                                {categoryList.find(c => c.value === selected.category)?.label}
-                                            </span>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* Area Selection */}
-                                {!selected.areaId && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-gray-800">Select an Area</h3>
-                                        <div className="grid gap-3">
-                                            {availableAreas.map((area, idx) => (
-                                                <button
-                                                    key={area.id || idx}
-                                                    onClick={() => setSelected({ areaId: area.id })}
-                                                    className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                                >
-                                                    <div className="font-medium text-gray-900">{area.name}</div>
-                                                    {area.code && (
-                                                        <div className="text-sm text-gray-500">Code: {area.code}</div>
-                                                    )}
-                                                    {area.approved_count !== undefined && (
-                                                        <div className="text-sm text-blue-600">{area.approved_count} documents</div>
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Parameter Selection */}
-                                {selected.areaId && !selected.parameterId && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-gray-800">{selectedArea?.name} - Parameters</h3>
-                                        {loadingDocs ? (
-                                            <div className="text-center py-8">
-                                                <div className="text-gray-500">Loading parameters...</div>
-                                            </div>
-                                        ) : selectedArea?.parameters && selectedArea.parameters.length > 0 ? (
-                                            <div className="grid gap-3">
-                                                {selectedArea.parameters.map((param, idx) => (
-                                                    <button
-                                                        key={param.id || idx}
-                                                        onClick={() => setSelected({ areaId: selected.areaId, parameterId: param.id })}
-                                                        className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                                    >
-                                                        <div className="font-medium text-gray-900">{param.name}</div>
-                                                        {param.code && (
-                                                            <div className="text-sm text-gray-500">Code: {param.code}</div>
-                                                        )}
-                                                        {param.approved_count !== undefined && (
-                                                            <div className="text-sm text-blue-600">{param.approved_count} documents</div>
-                                                        )}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <div className="text-gray-500">No parameters available for this area</div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Category Selection */}
-                                {selected.areaId && selected.parameterId && !selected.category && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-gray-800">{selectedParameter?.name} - Categories</h3>
-                                        <div className="grid gap-3">
-                                            {categoryList.map((category) => (
-                                                <button
-                                                    key={category.value}
-                                                    onClick={() => setSelected({ ...selected, category: category.value })}
-                                                    className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                                >
-                                                    <div className="font-medium text-gray-900">{category.label}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Document Search and Info */}
-                                {selected.areaId && selected.parameterId && selected.category && (
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-lg font-semibold text-gray-800">
-                                                {categoryList.find(c => c.value === selected.category)?.label} Documents
-                                            </h3>
-                                            <div className="text-sm text-gray-600">
-                                                {filteredDocs.length} document{filteredDocs.length !== 1 ? 's' : ''}
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Search */}
-                                        <form onSubmit={handleSearch} className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={search}
-                                                onChange={(e) => setSearch(e.target.value)}
-                                                placeholder="Search documents..."
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                            <button
-                                                type="submit"
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                            >
-                                                Search
-                                            </button>
-                                        </form>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Document Viewer */}
-                        {filteredDocs.length > 0 && viewingDocIndex !== null && (
-                            <div className="relative bg-slate-900">
-                                {currentDoc?.mimetype?.startsWith('video/') ? (
-                                    <VideoViewer
-                                        doc={currentDoc}
-                                        ref={videoPlayerRef}
-                                        isPlaying={isPlaying}
-                                        setIsPlaying={setIsPlaying}
-                                        volume={volume}
-                                        setVolume={setVolume}
-                                        isMuted={isMuted}
-                                        setIsMuted={setIsMuted}
-                                        playbackSpeed={playbackSpeed}
-                                        setPlaybackSpeed={setPlaybackSpeed}
-                                        currentTime={currentTime}
-                                        setCurrentTime={setCurrentTime}
-                                        duration={duration}
-                                        setDuration={setDuration}
-                                        onPrevious={() => filteredViewerIndex > 0 && goTo(filteredViewerIndex - 1)}
-                                        onNext={() => filteredViewerIndex < filteredDocs.length - 1 && goTo(filteredViewerIndex + 1)}
-                                        onClose={() => setViewingDocIndex(null)}
-                                        isFullscreen={isFullscreen}
-                                        setIsFullscreen={setIsFullscreen}
-                                    />
-                                ) : (
-                                    <PdfViewer
-                                        doc={currentDoc}
-                                        currentPage={currentPage}
-                                        setCurrentPage={setCurrentPage}
-                                        totalPages={totalPages}
-                                        setTotalPages={setTotalPages}
-                                        zoom={zoom}
-                                        fitMode={fitMode}
-                                        rotate={rotate}
-                                        infoOpen={infoOpen}
-                                        setInfoOpen={setInfoOpen}
-                                        gridOpen={gridOpen}
-                                        setGridOpen={setGridOpen}
-                                        isFullscreen={isFullscreen}
-                                        setIsFullscreen={setIsFullscreen}
-                                        onDownload={handleDownload}
-                                        onRotate={handleRotate}
-                                        onZoom={handleZoom}
-                                        onFitMode={toggleFitMode}
-                                        onPrevious={() => filteredViewerIndex > 0 && goTo(filteredViewerIndex - 1)}
-                                        onNext={() => filteredViewerIndex < filteredDocs.length - 1 && goTo(filteredViewerIndex + 1)}
-                                        onClose={() => setViewingDocIndex(null)}
-                                    />
-                                )}
-                            </div>
-                        )}
-
-                        {/* Document Grid */}
-                        {selected.areaId && selected.parameterId && selected.category && !loadingDocs && (
-                            <div className="container mx-auto px-4 py-6">
-                                <DocumentCardGrid
-                                    documents={filteredDocs}
-                                    onViewDocument={(index) => {
-                                        const docIndex = approvedDocs.findIndex(d => d.id === filteredDocs[index].id);
-                                        setViewerIndex(docIndex);
-                                        setViewingDocIndex(docIndex);
-                                    }}
-                                    search={search}
-                                    selectedArea={selectedArea}
-                                    selectedParameter={selectedParameter}
-                                    selectedCategory={categoryList.find(c => c.value === selected.category)}
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Main Content - only show when not in document mode */}
-                {!documentMode && (
-                    <main className="pt-16 sm:pt-20">
+                <main className="pt-16 sm:pt-20">
                     {/* Hero */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <img
@@ -718,7 +424,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                             </h2>
                             <ol className="list-decimal ml-6 space-y-3 text-lg text-gray-800">
                                 {bsitContent.objectives_data && bsitContent.objectives_data.length > 0 ? (
-                                    bsitContent.objectives_data.map((obj, idx) => (
+                                    bsitContent.objectives_data.map((obj: string, idx: number) => (
                                         <li key={idx}>{obj}</li>
                                     ))
                                 ) : (
@@ -838,32 +544,433 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                             <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.accreditation_section_title}
                             </h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                {bsitContent.accreditation_areas && bsitContent.accreditation_areas.length > 0 ? (
-                                    bsitContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
-                                        <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                            style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                            <img 
-                                                src={area.image || '/api/placeholder/300/200'} 
-                                                alt={area.title} 
-                                                className="w-full h-28 object-cover" 
-                                                style={{ minHeight: 112, maxHeight: 112 }} 
-                                            />
-                                            <div className="p-4 flex flex-col items-center">
-                                                <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
-                                                <button className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                    style={{ backgroundColor: COLORS.primaryMaroon }}>
-                                                    View Area
-                                                </button>
+                            
+                            {/* Show regular area cards when not in document mode */}
+                            {!documentMode && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                                    {availableAreas && availableAreas.length > 0 ? (
+                                        availableAreas.map((area: Area, idx: number) => (
+                                            <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                                <img 
+                                                    src="/api/placeholder/300/200"
+                                                    alt={area.name} 
+                                                    className="w-full h-28 object-cover" 
+                                                    style={{ minHeight: 112, maxHeight: 112 }} 
+                                                />
+                                                <div className="p-4 flex flex-col items-center">
+                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.name}</h3>
+                                                   
+                                                    <button 
+                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                        onClick={() => {
+                                                            setDocumentMode(true);
+                                                            setSelected({ areaId: area.id });
+                                                            setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
+                                                        }}
+                                                    >
+                                                        View Parameters
+                                                    </button>
+                                                </div>
                                             </div>
+                                        ))
+                                    ) : (
+                                        <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
+                                            No accreditation areas available
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
-                                        No accreditation areas available
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Document Management Interface */}
+                            {documentMode && (
+                                <div className="w-full">
+                                    {/* Back button */}
+                                    <div className="mb-6">
+                                        <button
+                                            className="flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105"
+                                            style={{ backgroundColor: COLORS.burntOrange, color: 'white' }}
+                                            onClick={() => {
+                                                setDocumentMode(false);
+                                                setSelected({});
+                                                setViewingDocIndex(null);
+                                            }}
+                                        >
+                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                            Back to Areas
+                                        </button>
                                     </div>
-                                )}
-                            </div>
+
+                                    {/* Area selection */}
+                                    {!selected.areaId && (
+                                        <DocumentCardGrid
+                                            items={availableAreas}
+                                            getKey={area => area.id || 0}
+                                            onCardClick={area => {
+                                                setSelected({ areaId: area.id });
+                                            }}
+                                            renderCardContent={(area) => (
+                                                <div className="p-5 flex flex-col h-full">
+                                                    <div className="flex items-start mb-3">
+                                                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                            style={{ backgroundColor: '#f1f5f9' }}>
+                                                            <svg className="w-5 h-5" style={{ color: COLORS.primaryMaroon }} fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </div>
+                                                        <h2 className="text-base font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                            {area.name}
+                                                        </h2>
+                                                    </div>
+                                                    <div className="flex-grow"></div>
+                                                    <div className="mt-auto">
+                                                        <div className="text-gray-600 mb-4">
+                                                            <div className="flex justify-between items-center mb-3">
+                                                                <span className="text-sm">Parameters:</span>
+                                                                <span className="font-semibold">{area.parameters?.length || 0}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-sm">Approved Documents:</span>
+                                                                <span className={`font-semibold ${(area.approved_count || 0) > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                    {area.approved_count || 0}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                                            <div className="flex items-center text-xs font-medium group" style={{ color: COLORS.primaryMaroon }}>
+                                                                <span>View Parameters</span>
+                                                                <svg className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-1" 
+                                                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        />
+                                    )}
+
+                                    {/* Parameter selection */}
+                                    {selected.areaId && !selected.parameterId && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                    {selectedArea?.name} - Parameters
+                                                </h3>
+                                                <p className="text-gray-700 mt-2">Select a parameter to view its categories.</p>
+                                            </div>
+                                            
+                                            {loadingDocs ? (
+                                                <div className="flex items-center justify-center py-12">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: COLORS.primaryMaroon }}></div>
+                                                    <span className="ml-3 text-gray-600">Loading parameters...</span>
+                                                </div>
+                                            ) : selectedArea?.parameters && selectedArea.parameters.length > 0 ? (
+                                                <DocumentCardGrid
+                                                    items={selectedArea.parameters}
+                                                    getKey={param => param.id}
+                                                    onCardClick={param => {
+                                                        setSelected({ 
+                                                            areaId: selected.areaId, 
+                                                            parameterId: param.id 
+                                                        });
+                                                    }}
+                                                    renderCardContent={(param) => (
+                                                        <div className="p-5 flex flex-col h-full">
+                                                            <div className="flex items-start mb-3">
+                                                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                                    style={{ backgroundColor: '#f1f5f9' }}>
+                                                                    <svg className="w-5 h-5" style={{ color: COLORS.primaryMaroon }} fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                </div>
+                                                                <h2 className="text-base font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                                    {param.code ? `${param.code} - ` : ''}
+                                                                    {param.name}
+                                                                </h2>
+                                                            </div>
+                                                            <div className="flex-grow"></div>
+                                                            <div className="mt-auto">
+                                                                <div className="text-gray-600 mb-4">
+                                                                    <div className="flex justify-between items-center mb-3">
+                                                                        <span className="text-sm">Categories:</span>
+                                                                        <span className="font-semibold">3</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-sm">Approved Documents:</span>
+                                                                        <span className={`font-semibold ${(param.approved_count || 0) > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                            {param.approved_count || 0}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Categories
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                />
+                                            ) : (
+                                                <div className="text-center py-12 text-gray-500">
+                                                    No parameters found for this area.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Category selection - Show when parameter is selected but no category */}
+                                    {selected.areaId && selected.parameterId && !selected.category && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                    {selectedParameter?.name} - Categories
+                                                </h3>
+                                                <p className="text-gray-700 mt-2">Select a category to view its documents.</p>
+                                            </div>
+                                            <DocumentCardGrid
+                                                items={categoryList}
+                                                getKey={cat => cat.value}
+                                                onCardClick={cat => {
+                                                    setSelected({
+                                                        areaId: selected.areaId,
+                                                        parameterId: selected.parameterId,
+                                                        category: cat.value
+                                                    });
+                                                }}
+                                                renderCardContent={(cat) => {
+                                                    const approvedCount = selectedParameter?.category_approved_counts?.[cat.value] || 0;
+                                                    return (
+                                                        <div className="p-5 flex flex-col h-full">
+                                                            <div className="flex items-start mb-3">
+                                                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
+                                                                    style={{ backgroundColor: '#f1f5f9' }}>
+                                                                    <svg className="w-5 h-5" style={{ color: COLORS.primaryMaroon }} fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                </div>
+                                                                <h2 className="text-base font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                                    {cat.label}
+                                                                </h2>
+                                                            </div>
+                                                            <div className="flex-grow"></div>
+                                                            <div className="mt-auto">
+                                                                <div className="text-gray-600 mb-4">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-sm">Approved Documents:</span>
+                                                                        <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                            {approvedCount}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    <button 
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                    >
+                                                                        View Documents
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Document viewer */}
+                                    {selected.areaId && selected.parameterId && selected.category && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                    {selectedParameter?.name} - {categoryList.find(cat => cat.value === selected.category)?.label}
+                                                </h3>
+                                                <p className="text-gray-700 mt-2">
+                                                    {viewingDocIndex === null ? "Select a document to view." : ""}
+                                                </p>
+                                            </div>
+
+                                            {/* Document Navigation */}
+                                            {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] && (
+                                                <div className="w-full flex flex-col items-center pb-4">
+                                                    <div className="w-full max-w-4xl mx-auto">
+                                                        <DocumentNavigation
+                                                            currentDocument={currentDoc}
+                                                            currentPage={currentPage}
+                                                            totalPages={totalPages}
+                                                            onPageChange={setCurrentPage}
+                                                            onDownload={handleDownload}
+                                                            onPrint={() => {
+                                                                if (!currentDoc) return;
+                                                                const win = window.open(currentDoc.url, '_blank');
+                                                                if (win) win.print();
+                                                            }}
+                                                            onRotate={handleRotate}
+                                                            onFitMode={toggleFitMode}
+                                                            onZoom={handleZoom}
+                                                            onInfo={() => setInfoOpen(true)}
+                                                            onGrid={() => setGridOpen(true)}
+                                                            onFullscreen={() => {
+                                                                if (!isFullscreen) {
+                                                                    document.documentElement.requestFullscreen?.();
+                                                                } else {
+                                                                    document.exitFullscreen?.();
+                                                                }
+                                                            }}
+                                                            fitMode={fitMode}
+                                                            rotate={rotate}
+                                                            zoom={zoom}
+                                                            isFullscreen={isFullscreen}
+                                                            infoOpen={infoOpen}
+                                                            setInfoOpen={setInfoOpen}
+                                                            gridOpen={gridOpen}
+                                                            setGridOpen={setGridOpen}
+                                                        />
+                                                    </div>
+                                                    
+                                                    {/* Document viewer */}
+                                                    {(() => {
+                                                        const doc = filteredDocs[filteredViewerIndex];
+                                                        if (!doc) return null;
+                                                        const ext = (doc.filename.split('.').pop() || '').toLowerCase();
+                                                        
+                                                        if (ext === 'pdf') {
+                                                            return (
+                                                                <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
+                                                                    <PdfViewer
+                                                                        url={doc.url}
+                                                                        currentPage={currentPage}
+                                                                        onTotalPagesChange={setTotalPages}
+                                                                        zoom={zoom}
+                                                                        rotate={rotate}
+                                                                        className="w-full h-full"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        }
+                                                        
+                                                        if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                                                            return (
+                                                                <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center" style={{ height: '72vh' }}>
+                                                                    <img src={doc.url} alt={doc.filename} className="max-h-full max-w-full object-contain" />
+                                                                </div>
+                                                            );
+                                                        }
+                                                        
+                                                        if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext)) {
+                                                            return (
+                                                                <div className="w-full max-w-4xl mx-auto" style={{ height: '72vh' }}>
+                                                                    <VideoViewer
+                                                                        ref={videoPlayerRef}
+                                                                        url={doc.url}
+                                                                        onTimeUpdate={(current, total) => {
+                                                                            setCurrentTime(current);
+                                                                            setDuration(total);
+                                                                        }}
+                                                                        className="w-full h-full"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        }
+                                                        
+                                                        return (
+                                                            <div className="w-full max-w-4xl mx-auto bg-gray-50 text-gray-500 flex items-center justify-center" style={{ height: '40vh' }}>
+                                                                No preview available for this file type.
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
+
+                                            {/* Document Grid */}
+                                            {viewingDocIndex === null && (
+                                                <div>
+                                                    {loadingDocs ? (
+                                                        <div className="flex items-center justify-center py-12">
+                                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: COLORS.primaryMaroon }}></div>
+                                                            <span className="ml-3 text-gray-600">Loading documents...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                                            {filteredDocs.length === 0 ? (
+                                                                <div className="col-span-full text-gray-400 text-center">
+                                                                    No approved documents for this category.
+                                                                </div>
+                                                            ) : (
+                                                                filteredDocs.map((doc) => {
+                                                                    const ext = doc.filename.split('.').pop()?.toLowerCase() || '';
+                                                                    return (
+                                                                        <div
+                                                                            key={doc.id}
+                                                                            className="bg-white rounded-xl shadow-md border-t-4 flex flex-col items-center overflow-hidden cursor-pointer hover:shadow-lg transition"
+                                                                            style={{
+                                                                                borderTopColor: COLORS.primaryMaroon,
+                                                                                aspectRatio: '8.5/13',
+                                                                                maxWidth: 230,
+                                                                                minHeight: 380,
+                                                                            }}
+                                                                            onClick={() => {
+                                                                                const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
+                                                                                setViewerIndex(realIdx);
+                                                                                setViewingDocIndex(realIdx);
+                                                                            }}
+                                                                        >
+                                                                            <div className="w-full flex-1 flex items-center justify-center bg-gray-50 p-2 overflow-hidden">
+                                                                                {['pdf'].includes(ext) ? (
+                                                                                    <PDFThumbnail
+                                                                                        url={doc.url}
+                                                                                        className="w-full h-68 border-none rounded bg-white overflow-x-hidden"
+                                                                                        scale={0.5}
+                                                                                    />
+                                                                                ) : ['jpg', 'jpeg', 'png'].includes(ext) ? (
+                                                                                    <img
+                                                                                        src={doc.url}
+                                                                                        alt={doc.filename}
+                                                                                        className="max-h-68 max-w-full rounded object-contain mx-auto w-auto h-auto overflow-x-hidden"
+                                                                                        style={{ width: '100%', objectFit: 'contain', height: '17rem', overflowX: 'hidden' }}
+                                                                                    />
+                                                                                ) : ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext) ? (
+                                                                                    <video
+                                                                                        src={doc.url}
+                                                                                        controls
+                                                                                        className="w-full h-56 rounded bg-black"
+                                                                                        style={{ objectFit: 'contain', height: '17rem' }}
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="w-full h-68 flex items-center justify-center px-5 text-center bg-gray-100 rounded text-gray-400 text-xs">
+                                                                                        No preview available for this file type.
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="w-full px-4 py-2 flex flex-col items-center border-t border-gray-100">
+                                                                                <div className="text-[11px] text-gray-600 text-left w-full">
+                                                                                    <div className="truncate"><span className="font-semibold">Uploaded by:</span> {doc.user_name || '—'}</div>
+                                                                                    <div className="truncate"><span className="font-semibold">Uploaded at:</span> {doc.uploaded_at || '—'}</div>
+                                                                                    <div className="truncate"><span className="font-semibold">Approved by:</span> {doc.approved_by || '—'}</div>
+                                                                                    <div className="truncate"><span className="font-semibold">Approved at:</span> {doc.approved_at || doc.updated_at || '—'}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </section>
 
@@ -884,22 +991,8 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                         </div>
                     </section>
                 </main>
-                )}
-
                 <Footer />
             </div>
-            <style jsx>{`
-                .text-shadow-lg {
-                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
-                }
-                @keyframes fade-in-up {
-                    from { opacity: 0; transform: translateY(30px);}
-                    to { opacity: 1; transform: translateY(0);}
-                }
-                .animate-fade-in-up {
-                    animation: fade-in-up 0.8s ease-out forwards;
-                }
-            `}</style>
         </>
     );
 }

@@ -16,15 +16,15 @@ return new class extends Migration
             
             // Hero Section
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default("University Policies");
-            $table->string('hero_subtitle')->default('Comprehensive policies and guidelines for university operations');
+            $table->string('hero_title')->nullable();
+            $table->string('hero_subtitle')->nullable();
             
             // Policies Section
-            $table->string('section_title')->default("University Policies Preview");
+            $table->string('section_title')->nullable();
             $table->string('policies_document')->nullable(); // Can be image, docx, or pdf
             
             // Mula Sayo Para Sa Bayan Section
-            $table->string('footer_section_title')->default('Mula Sayo, Para Sa Bayan');
+            $table->string('footer_section_title')->nullable();
             $table->string('footer_image')->nullable();
             
             $table->timestamps();

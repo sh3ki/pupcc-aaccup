@@ -11,22 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('exhibit_administrative_manual', function (Blueprint $table) {
+        Schema::create('exhibit_bor', function (Blueprint $table) {
             $table->id();
-            
-            // Hero Section
             $table->string('hero_image')->nullable();
             $table->string('hero_title')->nullable();
-            $table->string('hero_subtitle')->nullable();
-            
-            // Manual Section
+            $table->text('hero_subtitle')->nullable();
             $table->string('section_title')->nullable();
-            $table->string('manual_document')->nullable(); // Can be image, docx, or pdf
-            
-            // Mula Sayo Para Sa Bayan Section
+            $table->string('bor_document')->nullable();
             $table->string('footer_section_title')->nullable();
             $table->string('footer_image')->nullable();
-            
             $table->timestamps();
         });
     }
@@ -36,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('exhibit_administrative_manual');
+        Schema::dropIfExists('exhibit_bor');
     }
 };

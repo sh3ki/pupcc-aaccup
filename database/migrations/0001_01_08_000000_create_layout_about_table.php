@@ -17,27 +17,27 @@ return new class extends Migration
             
             // Hero Section
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default('About PUP Calauan');
-            $table->string('hero_subtitle')->default('Excellence in Education and Community Service');
+            $table->string('hero_title')->nullable();
+            $table->string('hero_subtitle')->nullable();
             
             // Our Story Section
-            $table->string('story_title')->default('Our Story');
+            $table->string('story_title')->nullable();
             $table->text('story_content')->nullable();
             
             // Mission Section
-            $table->string('mission_title')->default('Our Mission');
+            $table->string('mission_title')->nullable();
             $table->text('mission_content')->nullable();
             
             // Vision Section
-            $table->string('vision_title')->default('Our Vision');
+            $table->string('vision_title')->nullable();
             $table->text('vision_content')->nullable();
             
             // Faculty Section
-            $table->string('faculty_title')->default('Our Faculty');
+            $table->string('faculty_title')->nullable();
             $table->json('faculty_data')->nullable(); // Array of {image, name, description}
             
             // Mula Sayo Section
-            $table->string('mula_sayo_title')->default('Mula Sayo, Para sa Bayan');
+            $table->string('mula_sayo_title')->nullable();
             $table->string('mula_sayo_image')->nullable();
             
             $table->timestamps();

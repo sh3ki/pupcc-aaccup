@@ -85,6 +85,8 @@ const layoutNavItems = [
         { name: "Administrative Manual", href: '/admin/layout/exhibit/administrative-manual' },
         { name: "CHED Memorandum Order", href: '/admin/layout/exhibit/ched-memorandum-order' },
         { name: "Licensure", href: '/admin/layout/exhibit/licensure' },
+        { name: "COPC", href: '/admin/layout/exhibit/copc' },
+        { name: "PSV", href: '/admin/layout/exhibit/psv' }
     ]},
 ];
 

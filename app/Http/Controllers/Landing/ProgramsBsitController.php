@@ -350,10 +350,14 @@ class ProgramsBsitController extends Controller
      */
     private function getBsitAreas()
     {
-        // Get BSIT program
+        // Get BSIT program - try multiple search patterns
         $bsitProgram = Program::where('code', 'BSIT')
+            ->orWhere('code', 'BSIt')
+            ->orWhere('code', 'BS-IT')
             ->orWhere('name', 'like', '%BSIT%')
+            ->orWhere('name', 'like', '%BSIt%')
             ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
+            ->orWhere('name', 'like', '%Information Technology%')
             ->first();
 
         if (!$bsitProgram) {
@@ -436,14 +440,25 @@ class ProgramsBsitController extends Controller
      */
     private function getBsitDocumentsSidebar()
     {
-        // Get BSIT program
+        // Get BSIT program - try multiple search patterns
         $bsitProgram = Program::where('code', 'BSIT')
+            ->orWhere('code', 'BSIt')
+            ->orWhere('code', 'BS-IT')
             ->orWhere('name', 'like', '%BSIT%')
+            ->orWhere('name', 'like', '%BSIt%')
             ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
+            ->orWhere('name', 'like', '%Information Technology%')
             ->first();
 
         if (!$bsitProgram) {
-            return null;
+            // Return a default structure if no program found
+            return [
+                'id' => 0,
+                'name' => 'BSIT - Bachelor of Science in Information Technology',
+                'code' => 'BSIT',
+                'areas' => [],
+                'approved_count' => 0,
+            ];
         }
 
         // Get areas for BSIT program

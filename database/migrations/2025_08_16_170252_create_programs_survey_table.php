@@ -14,11 +14,11 @@ return new class extends Migration
         Schema::create('programs_survey', function (Blueprint $table) {
             $table->id();
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default('Programs Under Survey');
-            $table->string('hero_subtitle')->default('Comprehensive programs designed to meet industry standards and educational excellence.');
-            $table->string('programs_section_title')->default('Our Programs');
+            $table->string('hero_title')->nullable();
+            $table->string('hero_subtitle')->nullable();
+            $table->string('programs_section_title')->nullable();
             $table->json('programs_data')->nullable();
-            $table->string('mula_sayo_title')->default('Mula Sayo, Para Sa Bayan');
+            $table->string('mula_sayo_title')->nullable();
             $table->string('mula_sayo_image')->nullable();
             $table->timestamps();
         });

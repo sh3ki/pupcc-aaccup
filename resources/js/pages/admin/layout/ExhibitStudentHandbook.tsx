@@ -30,7 +30,7 @@ export default function LayoutExhibitStudentHandbook({ studentHandbookContent }:
     const [heroImage, setHeroImage] = useState<string | File>(studentHandbookContent.hero_image || '');
 
     // Handbook Section State
-    const [sectionTitle, setSectionTitle] = useState(studentHandbookContent.section_title || "Student Handbook Preview");
+    const [sectionTitle, setSectionTitle] = useState(studentHandbookContent.section_title || "  ");
     const [handbookDocument, setHandbookDocument] = useState<string | File>(studentHandbookContent.handbook_document || '');
 
     // Footer Section State

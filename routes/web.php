@@ -31,6 +31,9 @@ use App\Http\Controllers\Landing\ExhibitFacultyManualController;
 use App\Http\Controllers\Landing\ExhibitAdministrativeManualController;
 use App\Http\Controllers\Landing\ExhibitChedMemorandumOrderController;
 use App\Http\Controllers\Landing\ExhibitLicensureController;
+use App\Http\Controllers\Landing\ExhibitCopcController;
+use App\Http\Controllers\Landing\ExhibitBorController;
+use App\Http\Controllers\Landing\ExhibitPsvController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'show'])->name('home');
@@ -58,6 +61,9 @@ Route::get('/exhibit/faculty-manual', [ExhibitFacultyManualController::class, 's
 Route::get('/exhibit/administrative-manual', [ExhibitAdministrativeManualController::class, 'show'])->name('exhibit.administrative-manual');
 Route::get('/exhibit/ched-memorandum-order', [ExhibitChedMemorandumOrderController::class, 'show'])->name('exhibit.ched-memorandum-order');
 Route::get('/exhibit/licensure', [ExhibitLicensureController::class, 'show'])->name('exhibit.licensure');
+Route::get('/exhibit/copc', [ExhibitCopcController::class, 'show'])->name('exhibit.copc');
+Route::get('/exhibit/bor', [ExhibitBorController::class, 'show'])->name('exhibit.bor');
+Route::get('/exhibit/psv', [ExhibitPsvController::class, 'show'])->name('exhibit.psv');
 
 
 
@@ -137,6 +143,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/exhibit/ched-memorandum-order', [ExhibitChedMemorandumOrderController::class, 'update'])->name('admin.layout.exhibit.ched_memorandum_order.update');
         Route::get('/exhibit/licensure', [ExhibitLicensureController::class, 'index'])->name('admin.layout.exhibit.licensure');
         Route::post('/exhibit/licensure', [ExhibitLicensureController::class, 'update'])->name('admin.layout.exhibit.licensure.update');
+        Route::get('/exhibit/copc', [ExhibitCopcController::class, 'index'])->name('admin.layout.exhibit.copc');
+        Route::post('/exhibit/copc', [ExhibitCopcController::class, 'update'])->name('admin.layout.exhibit.copc.update');
+        Route::get('/exhibit/bor', [ExhibitBorController::class, 'index'])->name('admin.layout.exhibit.bor');
+        Route::post('/exhibit/bor', [ExhibitBorController::class, 'update'])->name('admin.layout.exhibit.bor.update');
+        Route::get('/exhibit/psv', [ExhibitPsvController::class, 'index'])->name('admin.layout.exhibit.psv');
+        Route::post('/exhibit/psv', [ExhibitPsvController::class, 'update'])->name('admin.layout.exhibit.psv.update');
     });
     
     //Reviewer routes
@@ -192,9 +204,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->limit(20)
             ->get(['id','name','email']);
     })->name('api.users.search');
-
-
-
 });
 
 require __DIR__.'/settings.php';

@@ -19,11 +19,11 @@ return new class extends Migration
             $table->json('carousel_data')->nullable(); // Array of {image, title, subtitle}
             
             // Accreditors Section
-            $table->string('accreditors_title')->default('Welcome PUP Calauan Accreditors');
+            $table->string('accreditors_title')->nullable();
             $table->json('accreditors_data')->nullable(); // Array of {image, name, position}
             
             // Director Message Section
-            $table->string('director_section_title')->default('Message from the Director');
+            $table->string('director_section_title')->nullable();
             $table->text('director_message')->nullable();
             $table->string('director_image')->nullable();
             $table->string('director_name')->nullable();
@@ -34,7 +34,7 @@ return new class extends Migration
             $table->json('videos_data')->nullable(); // Array of {youtube_id, title, thumbnail}
             
             // Programs Section
-            $table->string('programs_section_title')->default('Programs under Survey');
+            $table->string('programs_section_title')->nullable();
             $table->json('programs_data')->nullable(); // Array of {image, name, description}
             
             // Quick Links Section
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->json('quick_links_data')->nullable(); // Array of {url, title}
             
             // Mula Sayo Section
-            $table->string('mula_sayo_title')->default('Mula Sayo, Para sa Bayan');
+            $table->string('mula_sayo_title')->nullable();
             $table->string('mula_sayo_image')->nullable();
             
             $table->timestamps();

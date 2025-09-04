@@ -3,8 +3,16 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 // Set up PDF.js worker with multiple fallback options
 if (typeof window !== 'undefined') {
-    // Primary: Use the copied worker file in public directory
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.mjs';
+    // For production environments, use CDN workers which are more reliable
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+        // Use local .js worker for production (better compatibility than .mjs)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
+    } else {
+        // Use local worker for development
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.mjs';
+    }
 }
 
 interface PdfViewerProps {
@@ -28,7 +36,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [pageCanvases, setPageCanvases] = useState<HTMLCanvasElement[]>([]);
 
     // Load PDF document
     useEffect(() => {
@@ -37,40 +44,104 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         setError(null);
 
         const loadPdfWithFallback = async () => {
-            const workerSources = [
-                '/js/pdf.worker.mjs', // Local copied worker
-                `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`, // CDN fallback
-                `https://mozilla.github.io/pdf.js/build/pdf.worker.js` // Mozilla CDN fallback
+            const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+            
+            // More robust worker sources with local .js first for production
+            const workerSources = isProduction ? [
+                // Production: Use local .js worker first (best compatibility)
+                '/js/pdf.worker.min.js',
+                '/js/pdf.worker.js', // Fallback if .min version not found
+                // CDN fallbacks
+                `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`,
+                'https://unpkg.com/pdfjs-dist@5.4.54/legacy/build/pdf.worker.min.js',
+                'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.54/legacy/build/pdf.worker.min.js',
+            ] : [
+                // Development: Try local files first
+                '/js/pdf.worker.mjs',
+                '/js/pdf.worker.min.js',
+                `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
             ];
 
             for (let i = 0; i < workerSources.length; i++) {
                 try {
+                    console.log(`Trying worker source ${i + 1}/${workerSources.length}: ${workerSources[i]}`);
                     pdfjsLib.GlobalWorkerOptions.workerSrc = workerSources[i];
-                    const pdf = await pdfjsLib.getDocument(url).promise;
+                    
+                    // Simplified configuration for better compatibility
+                    const loadingTask = pdfjsLib.getDocument({
+                        url: url,
+                        cMapUrl: isProduction 
+                            ? `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`
+                            : 'https://unpkg.com/pdfjs-dist@5.4.54/cmaps/',
+                        cMapPacked: true,
+                        // Simplified options for production
+                        useSystemFonts: false,
+                        isEvalSupported: false,
+                        maxImageSize: 1024 * 1024,
+                        disableFontFace: false,
+                    });
+
+                    const pdf = await loadingTask.promise;
                     
                     if (!mounted) return;
                     setPdfDoc(pdf);
                     onTotalPagesChange(pdf.numPages);
-                    
-                    // Create canvas elements for all pages
-                    const canvases: HTMLCanvasElement[] = [];
-                    for (let j = 0; j < pdf.numPages; j++) {
-                        const canvas = document.createElement('canvas');
-                        canvas.style.display = 'block';
-                        canvas.style.margin = '0 auto 10px auto';
-                        canvas.style.maxWidth = '100%';
-                        canvas.style.height = 'auto';
-                        canvases.push(canvas);
-                    }
-                    setPageCanvases(canvases);
                     setLoading(false);
+                    console.log(`Successfully loaded PDF with worker source ${i + 1}`);
                     return; // Success, exit the loop
                 } catch (err) {
-                    console.warn(`Failed to load PDF with worker ${i + 1}:`, err);
+                    console.warn(`Failed to load PDF with worker ${i + 1} (${workerSources[i]}):`, err);
+                    
+                    // Log specific error details for debugging
+                    if (err instanceof Error) {
+                        console.warn(`Error type: ${err.name}, Message: ${err.message}`);
+                        if (err.message.includes('Failed to fetch dynamically imported module')) {
+                            console.warn('This is likely a MIME type or module loading issue');
+                        }
+                        if (err.message.includes('CORS')) {
+                            console.warn('This is a CORS policy issue');
+                        }
+                    }
+                    
                     if (i === workerSources.length - 1) {
-                        // Last attempt failed
+                        // Last attempt failed, try one more fallback with blob worker
+                        try {
+                            console.log('Trying blob worker as final fallback...');
+                            // Create a blob-based worker as absolute fallback
+                            const workerCode = `
+                                importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js');
+                            `;
+                            const blob = new Blob([workerCode], { type: 'application/javascript' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            pdfjsLib.GlobalWorkerOptions.workerSrc = blobUrl;
+                            
+                            const blobTask = pdfjsLib.getDocument({
+                                url: url,
+                                cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`,
+                                cMapPacked: true,
+                                useSystemFonts: false,
+                                isEvalSupported: false,
+                                maxImageSize: 1024 * 1024,
+                            });
+                            
+                            const blobPdf = await blobTask.promise;
+                            
+                            // Clean up blob URL
+                            URL.revokeObjectURL(blobUrl);
+                            
+                            if (!mounted) return;
+                            setPdfDoc(blobPdf);
+                            onTotalPagesChange(blobPdf.numPages);
+                            setLoading(false);
+                            console.log('Successfully loaded PDF with blob worker');
+                            return;
+                        } catch (blobErr) {
+                            console.error('Blob worker also failed:', blobErr);
+                        }
+                        
+                        // Absolutely final fallback
                         if (!mounted) return;
-                        setError('Failed to load PDF: ' + (err as Error).message);
+                        setError(`Unable to load PDF viewer. This may be due to browser security restrictions or network issues. Please try refreshing the page or use a different browser.`);
                         setLoading(false);
                     }
                     // Continue to next worker source
@@ -87,7 +158,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // Render all pages
     const renderAllPages = useCallback(async () => {
-        if (!pdfDoc || !containerRef.current || pageCanvases.length === 0) return;
+        if (!pdfDoc || !containerRef.current) return;
 
         try {
             const container = containerRef.current;
@@ -99,7 +170,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             // Render each page
             for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                 const page = await pdfDoc.getPage(pageNum);
-                const canvas = pageCanvases[pageNum - 1];
+                
+                // Create a new canvas for each render to avoid reuse issues
+                const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
                 
                 if (!context) continue;
@@ -118,6 +191,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                 // Set canvas dimensions
                 canvas.width = scaledViewport.width;
                 canvas.height = scaledViewport.height;
+
+                // Set canvas styles
+                canvas.style.display = 'block';
+                canvas.style.margin = '0 auto 10px auto';
+                canvas.style.maxWidth = '100%';
+                canvas.style.height = 'auto';
 
                 // Clear canvas
                 context.clearRect(0, 0, canvas.width, canvas.height);
@@ -159,7 +238,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             console.error('Error rendering pages:', err);
             setError('Failed to render pages: ' + (err as Error).message);
         }
-    }, [pdfDoc, pageCanvases, zoom, rotate]);
+    }, [pdfDoc, zoom, rotate]);
 
     // Re-render when dependencies change
     useEffect(() => {

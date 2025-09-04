@@ -16,15 +16,15 @@ return new class extends Migration
             
             // Hero Section
             $table->string('hero_image')->nullable();
-            $table->string('hero_title')->default("Citizen''s Charter");
-            $table->string('hero_subtitle')->default('Official guidelines and procedures for citizens accessing PUP Calauan services');
+            $table->string('hero_title')->nullable();
+            $table->string('hero_subtitle')->nullable();
             
             // Charter Section
-            $table->string('section_title')->default("Citizen''s Charter Preview");
+            $table->string('section_title')->nullable();
             $table->string('charter_document')->nullable(); // Can be image, docx, or pdf
             
             // Mula Sayo Para Sa Bayan Section
-            $table->string('footer_section_title')->default('Mula Sayo, Para Sa Bayan');
+            $table->string('footer_section_title')->nullable();
             $table->string('footer_image')->nullable();
             
             $table->timestamps();
