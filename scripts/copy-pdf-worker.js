@@ -3,14 +3,13 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createHash } from 'crypto';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Cross-platform PDF.js worker file copy script with production optimizations
-console.log('📄 Copying and optimizing PDF.js worker files...');
+// Cross-platform PDF.js worker file copy script
+console.log('📄 Copying PDF.js worker files...');
 
 // Ensure public/js directory exists
 const publicJsDir = path.join(__dirname, '..', 'public', 'js');
@@ -23,28 +22,12 @@ if (!fs.existsSync(publicJsDir)) {
 const nodePath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build');
 const sources = [
     { src: 'pdf.worker.mjs', dest: 'pdf.worker.mjs' },
-    { src: 'pdf.worker.min.mjs', dest: 'pdf.worker.min.js' }, // Rename .min.mjs to .min.js for better compatibility
-    { src: 'pdf.worker.js', dest: 'pdf.worker.js', optional: true },
-    // Also copy regular PDF.js for fallback
-    { src: 'pdf.mjs', dest: 'pdf.min.js', optional: true },
-    { src: 'pdf.js', dest: 'pdf.fallback.js', optional: true }
+    { src: 'pdf.worker.min.mjs', dest: 'pdf.worker.min.js' }, // Rename .min.mjs to .min.js
+    { src: 'pdf.worker.js', dest: 'pdf.worker.js', optional: true }
 ];
-
-// Function to add integrity hash
-const addIntegrityHash = (filePath) => {
-    try {
-        const content = fs.readFileSync(filePath);
-        const hash = createHash('sha384').update(content).digest('base64');
-        return `sha384-${hash}`;
-    } catch (error) {
-        console.warn(`⚠ Could not generate integrity hash for ${filePath}`);
-        return null;
-    }
-};
 
 let copiedFiles = 0;
 let errors = 0;
-const integrityHashes = {};
 
 sources.forEach(({ src, dest, optional = false }) => {
     const srcPath = path.join(nodePath, src);
@@ -53,13 +36,6 @@ sources.forEach(({ src, dest, optional = false }) => {
     try {
         if (fs.existsSync(srcPath)) {
             fs.copyFileSync(srcPath, destPath);
-            
-            // Generate integrity hash for security
-            const integrity = addIntegrityHash(destPath);
-            if (integrity) {
-                integrityHashes[dest] = integrity;
-            }
-            
             console.log(`✓ Copied ${src} → ${dest}`);
             copiedFiles++;
         } else if (!optional) {
@@ -74,21 +50,6 @@ sources.forEach(({ src, dest, optional = false }) => {
     }
 });
 
-// Create a manifest file for integrity checking
-const manifestPath = path.join(publicJsDir, 'pdf-workers-manifest.json');
-const manifest = {
-    generated: new Date().toISOString(),
-    files: integrityHashes,
-    version: 'pdfjs-5.4.54'
-};
-
-try {
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-    console.log('✓ Created worker manifest file');
-} catch (error) {
-    console.warn('⚠ Could not create manifest file:', error.message);
-}
-
 // Verify files exist and get sizes
 console.log('\n📊 Verification:');
 sources.forEach(({ dest }) => {
@@ -101,7 +62,6 @@ sources.forEach(({ dest }) => {
 });
 
 console.log(`\n🎉 PDF.js worker copy completed: ${copiedFiles} files copied, ${errors} errors`);
-console.log('💡 Production optimization: Use OptimizedPdfViewer for faster loading');
 
 if (errors > 0) {
     globalThis.process.exit(1);

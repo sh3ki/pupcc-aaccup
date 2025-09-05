@@ -6,8 +6,7 @@ import React from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import DocumentUploadModal from '@/components/DocumentUploadModal';
-import OptimizedPdfViewer from '@/components/OptimizedPdfViewer';
-import PdfPerformanceMonitor from '@/components/PdfPerformanceMonitor';
+import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
 
 import PDFThumbnail from '@/components/PDFThumbnail';
@@ -969,16 +968,7 @@ export default function AdminDocuments(props: PageProps) {
                                                     if (ext === 'pdf') {
                                                         return (
                                                             <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
-                                                                <PdfPerformanceMonitor 
-                                                                    url={doc.url}
-                                                                    onMetrics={(metrics) => {
-                                                                        console.log('PDF Performance:', metrics);
-                                                                        if (metrics.loadTime > 5000) {
-                                                                            console.warn('Slow PDF loading detected:', doc.filename);
-                                                                        }
-                                                                    }}
-                                                                />
-                                                                <OptimizedPdfViewer
+                                                                <PdfViewer
                                                                     url={doc.url}
                                                                     currentPage={currentPage}
                                                                     onTotalPagesChange={setTotalPages}
