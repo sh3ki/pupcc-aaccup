@@ -1,3 +1,16 @@
+# File upload limits for large documents
+<IfModule mod_php.c>
+    php_value upload_max_filesize 50M
+    php_value post_max_size 50M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# For servers running PHP as CGI/FastCGI
+<IfModule mod_fcgid.c>
+    FcgidMaxRequestLen 52428800
+</IfModule>
+
 <IfModule mod_mime.c>
     # Ensure ES modules are served with the correct MIME type
     AddType application/javascript .mjs

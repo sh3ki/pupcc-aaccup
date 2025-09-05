@@ -18,8 +18,30 @@ class ExhibitController extends Controller
     {
         $content = Exhibit::getContent();
         
+        // Transform image paths for frontend
+        $transformedContent = $content->toArray();
+        
+        // Transform hero image
+        if (!empty($transformedContent['hero_image']) && !str_starts_with($transformedContent['hero_image'], 'http') && !str_starts_with($transformedContent['hero_image'], '/storage/')) {
+            $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
+        }
+        
+        // Transform exhibit images
+        if (!empty($transformedContent['exhibit_data'])) {
+            foreach ($transformedContent['exhibit_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform mula sayo image
+        if (!empty($transformedContent['mula_sayo_image']) && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
+            $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
+        }
+        
         return Inertia::render('admin/layout/Exhibit', [
-            'exhibitContent' => $content
+            'exhibitContent' => (object) $transformedContent
         ]);
     }
 
@@ -34,21 +56,21 @@ class ExhibitController extends Controller
         $transformedContent = $content->toArray();
         
         // Transform hero image
-        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http') && !str_starts_with($transformedContent['hero_image'], '/storage/')) {
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
         // Transform exhibit images
         if ($transformedContent['exhibit_data']) {
             foreach ($transformedContent['exhibit_data'] as &$item) {
-                if ($item['image'] && !str_starts_with($item['image'], 'http')) {
+                if ($item['image'] && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
                     $item['image'] = Storage::url($item['image']);
                 }
             }
         }
         
         // Transform mula sayo image
-        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http')) {
+        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
             $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
         }
         

@@ -18,8 +18,57 @@ class HomeController extends Controller
     {
         $content = Home::getContent();
         
+        // Transform image paths for frontend
+        $transformedContent = $content->toArray();
+        
+        // Transform carousel images
+        if (!empty($transformedContent['carousel_data'])) {
+            foreach ($transformedContent['carousel_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform accreditor images
+        if (!empty($transformedContent['accreditors_data'])) {
+            foreach ($transformedContent['accreditors_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform director image
+        if (!empty($transformedContent['director_image']) && !str_starts_with($transformedContent['director_image'], 'http') && !str_starts_with($transformedContent['director_image'], '/storage/')) {
+            $transformedContent['director_image'] = Storage::url($transformedContent['director_image']);
+        }
+        
+        // Transform video files
+        if (!empty($transformedContent['videos_data'])) {
+            foreach ($transformedContent['videos_data'] as &$item) {
+                if (isset($item['video']) && $item['video'] && isset($item['video_type']) && $item['video_type'] === 'upload' && !str_starts_with($item['video'], 'http') && !str_starts_with($item['video'], '/storage/')) {
+                    $item['video'] = Storage::url($item['video']);
+                }
+            }
+        }
+        
+        // Transform program images
+        if (!empty($transformedContent['programs_data'])) {
+            foreach ($transformedContent['programs_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform mula sayo image
+        if (!empty($transformedContent['mula_sayo_image']) && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
+            $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
+        }
+        
         return Inertia::render('landing/welcome', [
-            'landingContent' => $content
+            'landingContent' => (object) $transformedContent
         ]);
     }
 
@@ -30,8 +79,57 @@ class HomeController extends Controller
     {
         $content = Home::getContent();
         
+        // Transform image paths for frontend
+        $transformedContent = $content->toArray();
+        
+        // Transform carousel images
+        if (!empty($transformedContent['carousel_data'])) {
+            foreach ($transformedContent['carousel_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform accreditor images
+        if (!empty($transformedContent['accreditors_data'])) {
+            foreach ($transformedContent['accreditors_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform director image
+        if (!empty($transformedContent['director_image']) && !str_starts_with($transformedContent['director_image'], 'http') && !str_starts_with($transformedContent['director_image'], '/storage/')) {
+            $transformedContent['director_image'] = Storage::url($transformedContent['director_image']);
+        }
+        
+        // Transform video files
+        if (!empty($transformedContent['videos_data'])) {
+            foreach ($transformedContent['videos_data'] as &$item) {
+                if (isset($item['video']) && $item['video'] && isset($item['video_type']) && $item['video_type'] === 'upload' && !str_starts_with($item['video'], 'http') && !str_starts_with($item['video'], '/storage/')) {
+                    $item['video'] = Storage::url($item['video']);
+                }
+            }
+        }
+        
+        // Transform program images
+        if (!empty($transformedContent['programs_data'])) {
+            foreach ($transformedContent['programs_data'] as &$item) {
+                if (!empty($item['image']) && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
+                    $item['image'] = Storage::url($item['image']);
+                }
+            }
+        }
+        
+        // Transform mula sayo image
+        if (!empty($transformedContent['mula_sayo_image']) && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
+            $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
+        }
+        
         return Inertia::render('admin/layout/Home', [
-            'landingContent' => $content
+            'landingContent' => (object) $transformedContent
         ]);
     }
 
@@ -48,7 +146,7 @@ class HomeController extends Controller
         // Transform carousel images
         if ($transformedContent['carousel_data']) {
             foreach ($transformedContent['carousel_data'] as &$item) {
-                if ($item['image'] && !str_starts_with($item['image'], 'http')) {
+                if ($item['image'] && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
                     $item['image'] = Storage::url($item['image']);
                 }
             }
@@ -57,21 +155,21 @@ class HomeController extends Controller
         // Transform accreditor images
         if ($transformedContent['accreditors_data']) {
             foreach ($transformedContent['accreditors_data'] as &$item) {
-                if ($item['image'] && !str_starts_with($item['image'], 'http')) {
+                if ($item['image'] && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
                     $item['image'] = Storage::url($item['image']);
                 }
             }
         }
         
         // Transform director image
-        if ($transformedContent['director_image'] && !str_starts_with($transformedContent['director_image'], 'http')) {
+        if ($transformedContent['director_image'] && !str_starts_with($transformedContent['director_image'], 'http') && !str_starts_with($transformedContent['director_image'], '/storage/')) {
             $transformedContent['director_image'] = Storage::url($transformedContent['director_image']);
         }
         
         // Transform video files
         if ($transformedContent['videos_data']) {
             foreach ($transformedContent['videos_data'] as &$item) {
-                if (isset($item['video']) && $item['video'] && isset($item['video_type']) && $item['video_type'] === 'upload' && !str_starts_with($item['video'], 'http')) {
+                if (isset($item['video']) && $item['video'] && isset($item['video_type']) && $item['video_type'] === 'upload' && !str_starts_with($item['video'], 'http') && !str_starts_with($item['video'], '/storage/')) {
                     $item['video'] = Storage::url($item['video']);
                 }
             }
@@ -80,14 +178,14 @@ class HomeController extends Controller
         // Transform program images
         if ($transformedContent['programs_data']) {
             foreach ($transformedContent['programs_data'] as &$item) {
-                if ($item['image'] && !str_starts_with($item['image'], 'http')) {
+                if ($item['image'] && !str_starts_with($item['image'], 'http') && !str_starts_with($item['image'], '/storage/')) {
                     $item['image'] = Storage::url($item['image']);
                 }
             }
         }
         
         // Transform mula sayo image
-        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http')) {
+        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
             $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
         }
         

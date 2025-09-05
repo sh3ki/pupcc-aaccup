@@ -36,6 +36,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [loadingProgress, setLoadingProgress] = useState(0);
 
     // Load PDF document
     useEffect(() => {
@@ -67,19 +68,33 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                     console.log(`Trying worker source ${i + 1}/${workerSources.length}: ${workerSources[i]}`);
                     pdfjsLib.GlobalWorkerOptions.workerSrc = workerSources[i];
                     
-                    // Simplified configuration for better compatibility
+                    // Optimized configuration for faster loading
                     const loadingTask = pdfjsLib.getDocument({
                         url: url,
                         cMapUrl: isProduction 
                             ? `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`
                             : 'https://unpkg.com/pdfjs-dist@5.4.54/cmaps/',
                         cMapPacked: true,
-                        // Simplified options for production
-                        useSystemFonts: false,
+                        // Performance optimizations
+                        useSystemFonts: true,
                         isEvalSupported: false,
-                        maxImageSize: 1024 * 1024,
+                        maxImageSize: 1024 * 1024, // 1MB max image size
                         disableFontFace: false,
+                        // Enable progressive loading
+                        disableAutoFetch: false,
+                        disableStream: false,
+                        disableRange: false,
+                        // Reduce memory usage
+                        verbosity: 0, // Disable debug logs
                     });
+
+                    // Add progress tracking
+                    loadingTask.onProgress = (progress: { loaded: number; total: number }) => {
+                        if (progress.total > 0) {
+                            const percent = Math.round((progress.loaded / progress.total) * 100);
+                            setLoadingProgress(percent);
+                        }
+                    };
 
                     const pdf = await loadingTask.promise;
                     
@@ -268,8 +283,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     if (loading) {
         return (
-            <div className={`flex items-center justify-center ${className}`}>
-                <div className="text-gray-500">Loading PDF...</div>
+            <div className={`flex flex-col items-center justify-center ${className}`}>
+                <div className="text-gray-500 mb-4">Loading PDF...</div>
+                {loadingProgress > 0 && (
+                    <div className="w-64 bg-gray-200 rounded-full h-2">
+                        <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${loadingProgress}%` }}
+                        ></div>
+                    </div>
+                )}
+                {loadingProgress > 0 && (
+                    <div className="text-sm text-gray-400 mt-2">{loadingProgress}%</div>
+                )}
             </div>
         );
     }

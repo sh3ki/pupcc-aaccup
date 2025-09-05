@@ -47,7 +47,13 @@ export default function FileUpload({
             }
         } else if (typeof value === 'string' && value) {
             // Handle existing images (URLs)
-            setPreviewUrl(value.startsWith('/storage/') ? value : `/storage/${value}`);
+            if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/storage/')) {
+                // Already a full URL or storage URL
+                setPreviewUrl(value);
+            } else if (value) {
+                // Relative path, add storage prefix
+                setPreviewUrl(`/storage/${value}`);
+            }
         }
     }, [value]);
 
