@@ -1,0 +1,9 @@
+{
+  "generated": "2025-09-05T10:23:00.591Z",
+  "files": {
+    "pdf.worker.mjs": "sha384-3Motlpbo8DatsdazeaA2DNP8Wnq+59zgIsuj4jsDQAslV2T1v42VJV3k90fMAtGt",
+    "pdf.worker.min.js": "sha384-q23ws5k8QsRceMBfO1K6QVjGsuLN1NyWYUTtLS9p/Od7UcPEoMLCpbd/u+Rbo1AM",
+    "pdf.min.js": "sha384-+RHJplvSpAxbQwwBTbFluysasILpciLmVmO9I7jS2dfENV+HjX38X/Y8aw4m/to2"
+  },
+  "version": "pdfjs-5.4.54"
+}
