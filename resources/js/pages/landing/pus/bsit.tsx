@@ -492,15 +492,15 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
 
                     {/* Notable Graduates */}
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
-                        <div className="w-full max-w-4xl mx-auto text-center">
+                        <div className="w-full max-w-6xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.graduates_section_title}
                             </h2>
-                            <div className="flex flex-col items-center gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {bsitContent.graduates_data && bsitContent.graduates_data.length > 0 ? (
                                     bsitContent.graduates_data.map((grad: GraduateItem, idx: number) => (
-                                        <div key={idx} className="w-full flex flex-col items-center">
-                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ maxWidth: 500, height: 280 }}>
+                                        <div key={idx} className="flex flex-col items-center">
+                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ height: 280 }}>
                                                 {grad.video_type === 'youtube' ? (
                                                     <iframe
                                                         src={`https://www.youtube.com/embed/${grad.video}`}
@@ -524,7 +524,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="text-center text-gray-500">
+                                    <div className="col-span-full text-center text-gray-500">
                                         No graduates available
                                     </div>
                                 )}
