@@ -53,76 +53,27 @@ interface LandingData {
     mula_sayo_image: string;
 }
 
-export default function Welcome() {
-    const [currentSlide, setCurrentSlide] = useState(0);
-    const [isTransitioning, setIsTransitioning] = useState(false);
+interface Props {
+    landingContent: LandingData;
+}
+
+export default function Welcome({ landingContent }: Props) {
     const [scrollDirection, setScrollDirection] = useState('down');
     const [lastScrollY, setLastScrollY] = useState(0);
-    const [landingData, setLandingData] = useState<LandingData | null>(null);
 
     // For seamless infinite slider
     const [slideIndex, setSlideIndex] = useState(1); // Start at 1 (first real slide)
     const [isSliding, setIsSliding] = useState(false);
+    const [isPaused, setIsPaused] = useState(false); // Add pause state for user interactions
+    const [isTabActive, setIsTabActive] = useState(true); // Track tab visibility
     const sliderRef = useRef<HTMLDivElement>(null);
-
-    // Fetch landing data from API
-    useEffect(() => {
-        fetch('/api/landing-content')
-            .then(res => res.json())
-            .then(data => {
-                setLandingData(data);
-            })
-            .catch(error => {
-                console.error('Error fetching landing data:', error);
-                // Fallback to default data
-                setLandingData({
-                    carousel_data: [
-                        { image: '/api/placeholder/1400/700', title: 'Welcome to PUP Calauan', subtitle: 'Excellence in Education' },
-                        { image: '/api/placeholder/1400/700', title: 'Academic Excellence', subtitle: 'Nurturing Future Leaders' },
-                        { image: '/api/placeholder/1400/700', title: 'Student Life', subtitle: 'Building Character and Skills' },
-                        { image: '/api/placeholder/1400/700', title: 'Campus Facilities', subtitle: 'Modern Learning Environment' },
-                    ],
-                    accreditors_title: 'Welcome PUP Calauan Accreditors',
-                    accreditors_data: [
-                        { image: '/api/placeholder/200/200', name: 'Dr. Maria Santos', position: 'Lead Accreditor' },
-                        { image: '/api/placeholder/200/200', name: 'Prof. Juan Dela Cruz', position: 'Program Evaluator' },
-                        { image: '/api/placeholder/200/200', name: 'Dr. Ana Rodriguez', position: 'Quality Assessor' },
-                        { image: '/api/placeholder/200/200', name: 'Prof. Carlos Mendoza', position: 'Standards Reviewer' },
-                    ],
-                    director_section_title: 'Message from the Director',
-                    director_image: '/api/placeholder/300/300',
-                    director_name: 'Dr. Campus Director',
-                    director_position: 'Campus Director',
-                    director_message: 'Welcome to PUP Calauan Campus. We are committed to providing quality education and fostering excellence in our students.',
-                    videos_section_title: 'Campus Videos',
-                    videos_data: [
-                        { title: 'Campus Overview', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
-                        { title: 'Student Life', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
-                        { title: 'Academic Excellence', video: 'dQw4w9WgXcQ', video_type: 'youtube' },
-                    ],
-                    programs_section_title: 'Programs under Survey',
-                    programs_data: [
-                        { image: '/api/placeholder/400/250', name: 'Bachelor of Technology and Livelihood Education', description: 'A program designed to develop competent teachers in technology and livelihood education, equipped with practical and theoretical skills for the modern classroom.' },
-                        { image: '/api/placeholder/400/250', name: 'Bachelor of Science in Entrepreneurship', description: 'A program that nurtures innovative and entrepreneurial mindsets, preparing students to launch and manage successful business ventures.' },
-                        { image: '/api/placeholder/400/250', name: 'Bachelor of Science in Information Technology', description: 'A comprehensive IT program focusing on software development, networking, and system administration, with hands-on laboratory experience.' },
-                    ],
-                    quick_links_title: 'Quick Links',
-                    quick_links_data: [
-                        { url: 'https://pup.edu.ph', title: 'PUP Website' },
-                        { url: 'https://sis.pup.edu.ph', title: 'PUP SIS' },
-                        { url: 'https://facebook.com/PUPOfficial', title: 'PUP Facebook' },
-                    ],
-                    mula_sayo_title: 'Mula Sayo, Para sa Bayan',
-                    mula_sayo_image: '/api/placeholder/1200/400'
-                });
-            });
-    }, []);
+    const autoSlideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Slider images derived from landing data
     const getSliderImages = () => {
-        if (!landingData) return [];
+        if (!landingContent) return [];
         
-        const originalImages = landingData.carousel_data.map((item, index) => ({
+        const originalImages = landingContent.carousel_data.map((item, index) => ({
             id: index + 1,
             src: item.image || '/api/placeholder/1400/700',
             alt: item.title || `PUP Calauan Campus ${index + 1}`,
@@ -147,6 +98,7 @@ export default function Welcome() {
         const ref = useRef<HTMLDivElement>(null);
 
         useEffect(() => {
+            const currentRef = ref.current; // Store ref value to avoid cleanup issues
             const observer = new IntersectionObserver(
                 ([entry]) => {
                     if (entry.isIntersecting && !hasAnimated) {
@@ -163,13 +115,13 @@ export default function Welcome() {
                 { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
             );
 
-            if (ref.current) {
-                observer.observe(ref.current);
+            if (currentRef) {
+                observer.observe(currentRef);
             }
 
             return () => {
-                if (ref.current) {
-                    observer.unobserve(ref.current);
+                if (currentRef) {
+                    observer.unobserve(currentRef);
                 }
             };
         }, [hasAnimated]);
@@ -191,18 +143,57 @@ export default function Welcome() {
 
     // Handle next/prev with seamless loop
     const goToSlide = (idx: number) => {
+        if (isSliding) return; // Prevent multiple transitions
         setSlideIndex(idx);
         setIsSliding(true);
+        
+        // Pause auto-slide temporarily when user manually navigates
+        setIsPaused(true);
+        setTimeout(() => setIsPaused(false), 5000); // Resume after 5 seconds
     };
+
+    // Handle tab visibility change to pause carousel when tab is not active
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            setIsTabActive(!document.hidden);
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     // Auto-slide functionality with seamless loop
     useEffect(() => {
-        const timer = setInterval(() => {
-            goToSlide(slideIndex + 1);
-        }, 2000);
-        return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [slideIndex]);
+        // Only start auto-slide if we have landing data and images and not paused and tab is active
+        if (!landingContent || sliderImages.length === 0 || isPaused || !isTabActive) {
+            return;
+        }
+
+        autoSlideTimerRef.current = setInterval(() => {
+            setSlideIndex(prevIndex => {
+                const nextIndex = prevIndex + 1;
+                setIsSliding(true);
+                return nextIndex;
+            });
+        }, 2000); // Increased from 2000 to 4000ms for better user experience
+
+        return () => {
+            if (autoSlideTimerRef.current) {
+                clearInterval(autoSlideTimerRef.current);
+                autoSlideTimerRef.current = null;
+            }
+        };
+    }, [landingContent, sliderImages.length, isPaused, isTabActive]); // Include tab visibility in dependencies
+
+    // Cleanup on component unmount
+    useEffect(() => {
+        return () => {
+            if (autoSlideTimerRef.current) {
+                clearInterval(autoSlideTimerRef.current);
+                autoSlideTimerRef.current = null;
+            }
+        };
+    }, []);
 
     // Handle transition end for seamless loop
     useEffect(() => {
@@ -255,7 +246,11 @@ export default function Welcome() {
                 {/* Main Content */}
                 <main className="pt-16 sm:pt-20">
                     {/* Image Slider */}
-                    <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
+                    <section 
+                        className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden"
+                        onMouseEnter={() => setIsPaused(true)}
+                        onMouseLeave={() => setIsPaused(false)}
+                    >
                         <div 
                             ref={sliderRef}
                             className={`flex h-full ${isSliding ? 'transition-transform duration-700 ease-in-out' : ''}`}
@@ -306,7 +301,7 @@ export default function Welcome() {
 
                         {/* Slider Indicators */}
                         <div className="absolute bottom-4 sm:bottom-6 lg:bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2 sm:space-x-3">
-                            {landingData?.carousel_data.map((_, index) => (
+                            {landingContent?.carousel_data.map((_, index) => (
                                 <button
                                     key={index}
                                     onClick={() => {
@@ -345,10 +340,10 @@ export default function Welcome() {
                         
                         <div className="w-full max-w-8xl mx-auto text-center relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-8 sm:mb-12 lg:mb-16 transition-all duration-500 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                {landingData?.accreditors_title || 'Welcome PUP Calauan Accreditors'}
+                                {landingContent?.accreditors_title || 'Welcome PUP Calauan Accreditors'}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 lg:gap-12">
-                                {landingData?.accreditors_data.map((accreditor, index) => (
+                                {landingContent?.accreditors_data.map((accreditor, index) => (
                                     <div 
                                         key={index} 
                                         className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
@@ -397,16 +392,16 @@ export default function Welcome() {
                                     messageVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-32'
                                 }`}>
                                     <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 sm:mb-8 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                        {landingData?.director_section_title || 'Message from the Director'}
+                                        {landingContent?.director_section_title || 'Message from the Director'}
                                     </h2>
                                     <div className="space-y-4 sm:space-y-6 text-base sm:text-lg lg:text-xl text-gray-700 leading-relaxed">
                                         <p className="transition-all duration-300 hover:text-gray-900 transform hover:scale-102 whitespace-pre-line">
-                                            {landingData?.director_message || 'Welcome to the Polytechnic University of the Philippines - Calauan Campus. As we continue our journey towards academic excellence, we remain committed to providing quality education that meets international standards.'}
+                                            {landingContent?.director_message || 'Welcome to the Polytechnic University of the Philippines - Calauan Campus. As we continue our journey towards academic excellence, we remain committed to providing quality education that meets international standards.'}
                                         </p>
                                     </div>
                                     <div className="mt-6 sm:mt-8 group">
-                                        <p className="font-bold text-xl sm:text-2xl text-gray-900 transition-all duration-300 group-hover:scale-105">{landingData?.director_name || 'Dr. Campus Director'}</p>
-                                        <p className="text-lg sm:text-xl transition-all duration-300 group-hover:font-medium" style={{ color: COLORS.burntOrange }}>{landingData?.director_position || 'Campus Director'}</p>
+                                        <p className="font-bold text-xl sm:text-2xl text-gray-900 transition-all duration-300 group-hover:scale-105">{landingContent?.director_name || 'Dr. Campus Director'}</p>
+                                        <p className="text-lg sm:text-xl transition-all duration-300 group-hover:font-medium" style={{ color: COLORS.burntOrange }}>{landingContent?.director_position || 'Campus Director'}</p>
                                     </div>
                                 </div>
                                 <div className={`order-1 lg:order-2 text-center transition-all duration-1200 delay-400 ${
@@ -414,8 +409,8 @@ export default function Welcome() {
                                 }`}>
                                     <div className="relative group">
                                         <img
-                                            src={landingData?.director_image || '/api/placeholder/600/800'}
-                                            alt={landingData?.director_name || 'Campus Director'}
+                                            src={landingContent?.director_image || '/api/placeholder/600/800'}
+                                            alt={landingContent?.director_name || 'Campus Director'}
                                             className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto rounded-2xl shadow-xl border-4 hover:scale-105 transition-transform duration-500 hover:shadow-2xl"
                                             style={{ borderColor: COLORS.softYellow, height: 'auto', aspectRatio: '3/4', objectFit: 'cover' }}
                                         />
@@ -442,10 +437,10 @@ export default function Welcome() {
                         
                         <div className="w-full max-w-8xl mx-auto">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-8 sm:mb-12 lg:mb-16 text-white transition-all duration-300 hover:scale-102">
-                                {landingData?.videos_section_title || 'Campus Videos'}
+                                {landingContent?.videos_section_title || 'Campus Videos'}
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
-                                {landingData?.videos_data.map((video, index) => (
+                                {landingContent?.videos_data.map((video, index) => (
                                     <div 
                                         key={index} 
                                         className={`group cursor-pointer transform transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
@@ -515,10 +510,10 @@ export default function Welcome() {
                         
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-8 sm:mb-12 lg:mb-16 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                {landingData?.programs_section_title || 'Programs Under Survey'}
+                                {landingContent?.programs_section_title || 'Programs Under Survey'}
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
-                                {landingData?.programs_data.map((program, index) => (
+                                {landingContent?.programs_data.map((program, index) => (
                                     <div 
                                         key={index} 
                                         className={`bg-white rounded-2xl shadow-lg overflow-hidden transform transition-all duration-500 hover:scale-105 hover:-translate-y-3 border-t-4 hover:shadow-2xl group ${
@@ -581,10 +576,10 @@ export default function Welcome() {
                         
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-8 sm:mb-12 lg:mb-16 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
-                                {landingData?.quick_links_title || 'Quick Links'}
+                                {landingContent?.quick_links_title || 'Quick Links'}
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
-                                {landingData?.quick_links_data.map((link, index) => (
+                                {landingContent?.quick_links_data.map((link, index) => (
                                     <a
                                         key={index}
                                         href={link.url}
@@ -619,15 +614,15 @@ export default function Welcome() {
                     >
                         <div className="absolute inset-0 w-full h-full">
                             <img
-                                src={landingData?.mula_sayo_image || '/api/placeholder/1600/400'}
-                                alt={landingData?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
+                                src={landingContent?.mula_sayo_image || '/api/placeholder/1600/400'}
+                                alt={landingContent?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
                                 className="w-full h-full object-cover object-center opacity-70"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
                             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
-                                {landingData?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
+                                {landingContent?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
                             </h2>
                         </div>
                     </section>

@@ -47,6 +47,19 @@ export default function ReviewerDocumentsPending(props: PageProps) {
         // Refresh the current view by reloading the pending documents
         window.location.reload();
     };
+
+    // Check URL parameters to auto-open the add modal
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('add') === 'true') {
+            setAddModalOpen(true);
+            // Clean up the URL parameter
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('add');
+            window.history.replaceState({}, '', newUrl.toString());
+        }
+    }, []);
+
     const [selected, setSelected] = useState<{ programId?: number; areaId?: number; parameterId?: number; category?: string }>({});
     const [expanded, setExpanded] = useState<{ [programId: number]: boolean }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
@@ -973,16 +986,6 @@ export default function ReviewerDocumentsPending(props: PageProps) {
                                 ) : null}
                             </div>
                             <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
-                                    onClick={() => setAddModalOpen(true)}
-                                >
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Add
-                                </button>
                                 <button
                                     type="button"
                                     className="flex items-center bg-[#C46B02] hover:bg-[#a86a00] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"

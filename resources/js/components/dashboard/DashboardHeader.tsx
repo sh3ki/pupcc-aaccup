@@ -42,18 +42,21 @@ const NAVS: Record<Role, NavEntry[]> = {
 
 // Document dropdown items for each role
 const adminDocumentDropdownItems = [
+    { name: 'Add Documents', href: '/admin/documents/pending?add=true' },
     { name: 'Approved', href: '/admin/documents' },
     { name: 'Pending', href: '/admin/documents/pending' },
     { name: 'Disapproved', href: '/admin/documents/disapproved' },
 ];
 
 const reviewerDocumentDropdownItems = [
+    { name: 'Add Documents', href: '/reviewer/documents/pending?add=true' },
     { name: 'Approved', href: '/reviewer/documents' },
     { name: 'Pending', href: '/reviewer/documents/pending' },
     { name: 'Disapproved', href: '/reviewer/documents/disapproved' }, // <-- updated
 ];
 
 const facultyDocumentDropdownItems = [
+    { name: 'Add Documents', href: '/faculty/documents/pending?add=true' },
     { name: 'Approved', href: '/faculty/documents' },
     { name: 'Pending', href: '/faculty/documents/pending' },
     { name: 'Disapproved', href: '/faculty/documents/disapproved' }, // <-- updated
@@ -403,8 +406,31 @@ export default function DashboardHeader() {
                                             <Link
                                                 key={item.name}
                                                 href={item.href}
-                                                className="block px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold text-gray-800 hover:text-gray-900 hover:bg-gray-50"
+                                                className={`block px-4 py-3 rounded-lg transition-all duration-300 group/item relative whitespace-nowrap text-sm font-semibold ${
+                                                    item.name === 'Add Documents'
+                                                        ? 'shadow-sm'
+                                                        : 'text-gray-800 hover:text-gray-900 hover:bg-gray-50'
+                                                }`}
+                                                style={
+                                                    item.name === 'Add Documents'
+                                                        ? { backgroundColor: COLORS.primaryMaroon, color: 'white' }
+                                                        : undefined
+                                                }
+                                                onMouseEnter={e => {
+                                                    if (item.name === 'Add Documents') {
+                                                        // lighter hover color than primaryMaroon
+                                                        (e.currentTarget as HTMLElement).style.backgroundColor = '#A63434';
+                                                    }
+                                                }}
+                                                onMouseLeave={e => {
+                                                    if (item.name === 'Add Documents') {
+                                                        (e.currentTarget as HTMLElement).style.backgroundColor = COLORS.primaryMaroon;
+                                                    }
+                                                }}
                                             >
+                                                {item.name === 'Add Documents' && (
+                                                    <span className="inline-block mr-2">+</span>
+                                                )}
                                                 {item.name}
                                             </Link>
                                         ))}
@@ -485,7 +511,7 @@ export default function DashboardHeader() {
                                 {dropdownOpen && (
                                     <div>
                                         <Link
-                                            href="/logout"
+                                            href={route('logout')}
                                             method="post"
                                             as="button"
                                             className="block w-full text-left px-4 py-3 text-sm font-medium text-black hover:bg-gray-50 transition-all duration-200"
@@ -710,9 +736,16 @@ export default function DashboardHeader() {
                                         <Link
                                             key={item.name}
                                             href={item.href}
-                                            className="block px-6 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
+                                            className={`block px-6 py-2 text-sm transition-all duration-300 ${
+                                                item.name === 'Add Documents'
+                                                    ? 'text-white bg-gradient-to-r from-red-700 to-red-800 hover:from-red-800 hover:to-red-900 mx-2 my-1 rounded-lg shadow-sm'
+                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                             onClick={() => setMenuOpen(false)}
                                         >
+                                            {item.name === 'Add Documents' && (
+                                                <span className="inline-block mr-2">+</span>
+                                            )}
                                             {item.name}
                                         </Link>
                                     ))}
@@ -758,7 +791,7 @@ export default function DashboardHeader() {
                         ))}
                         {/* Logout button */}
                         <Link
-                            href="/logout"
+                            href={route('logout')}
                             method="post"
                             as="button"
                             className="relative px-3 py-2.5 text-sm font-medium transition-all duration-300 group text-gray-700 hover:text-gray-900 hover:bg-gray-50 text-left"

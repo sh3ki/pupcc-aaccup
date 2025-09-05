@@ -530,16 +530,6 @@ export default function AdminDocuments(props: PageProps) {
                                 ) : null}
                             </div>
                             <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    className="flex items-center bg-[#7F0404] hover:bg-[#a00a0a] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition"
-                                    onClick={() => setAddModalOpen(true)}
-                                >
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Add
-                                </button>
                             </div>
                         </div>
                         
