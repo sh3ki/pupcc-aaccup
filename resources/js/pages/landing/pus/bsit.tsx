@@ -130,6 +130,10 @@ function useScrollAnimation() {
 }
 
 export default function BSITProgramPage({ bsitContent, accreditationAreas, sidebar }: Props) {
+    // Debug: Log the accreditation areas data
+    console.log('BSIT bsitContent.accreditation_areas:', bsitContent.accreditation_areas);
+    console.log('BSIT accreditationAreas prop:', accreditationAreas);
+    
     const [overviewRef, overviewVisible] = useScrollAnimation();
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
@@ -565,7 +569,57 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                             {/* Show regular area cards when not in document mode */}
                             {!documentMode && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                    {availableAreas && availableAreas.length > 0 ? (
+                                    {/* Debug info */}
+                                    {console.log('Checking accreditation areas:', {
+                                        exists: !!bsitContent.accreditation_areas,
+                                        isArray: Array.isArray(bsitContent.accreditation_areas),
+                                        length: bsitContent.accreditation_areas?.length || 0,
+                                        data: bsitContent.accreditation_areas
+                                    })}
+                                    
+                                    {/* First show content-based accreditation areas with images */}
+                                    {bsitContent.accreditation_areas && bsitContent.accreditation_areas.length > 0 ? (
+                                        bsitContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
+                                            <div key={`content-${idx}`} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                                <img 
+                                                    src={area.image || '/api/placeholder/300/200'}
+                                                    alt={area.title} 
+                                                    className="w-full h-28 object-cover" 
+                                                    style={{ minHeight: 112, maxHeight: 112 }} 
+                                                />
+                                                <div className="p-4 flex flex-col items-center">
+                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
+                                                    
+                                                    {/* Find corresponding document area if available */}
+                                                    {(() => {
+                                                        const correspondingDocArea = availableAreas.find(docArea => 
+                                                            docArea.name?.toLowerCase().includes(area.title?.toLowerCase()?.replace(/area\s+[ivx]+:\s*/i, '')) ||
+                                                            area.title?.toLowerCase().includes(docArea.name?.toLowerCase())
+                                                        );
+                                                        return correspondingDocArea ? (
+                                                            <button 
+                                                                className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                                                style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                onClick={() => {
+                                                                    setDocumentMode(true);
+                                                                    setSelected({ areaId: correspondingDocArea.id });
+                                                                    setAreaExpanded(prev => ({ ...prev, [correspondingDocArea.id]: true }));
+                                                                }}
+                                                            >
+                                                                View Documents
+                                                            </button>
+                                                        ) : (
+                                                            <div className="px-4 py-1 rounded-lg text-gray-500 font-bold text-sm">
+                                                                No Documents
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : availableAreas && availableAreas.length > 0 ? (
+                                        /* Fallback to regular database areas if no content areas */
                                         availableAreas.map((area: Area, idx: number) => (
                                             <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
                                                 style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
@@ -594,7 +648,11 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                         ))
                                     ) : (
                                         <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
-                                            No accreditation areas available
+                                            <p>No accreditation areas available</p>
+                                            <p className="text-xs mt-2">
+                                                Debug: Content areas: {bsitContent.accreditation_areas ? `${bsitContent.accreditation_areas.length} items` : 'null'}, 
+                                                Available areas: {availableAreas ? `${availableAreas.length} items` : 'null'}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
