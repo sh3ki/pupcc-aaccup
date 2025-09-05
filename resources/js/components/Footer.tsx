@@ -33,15 +33,15 @@ export default function Footer() {
                         <div className="space-y-3 sm:space-y-4 text-sm sm:text-base">
                             <div className="flex items-start space-x-3 group hover:text-yellow-200 transition-colors duration-300">
                                 <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mt-1 flex-shrink-0" />
-                                <span className="leading-relaxed">Calauan, Laguna, Philippines</span>
+                                <span className="leading-relaxed">Brgy. Masiit, Calauan, Laguna</span>
                             </div>
                             <div className="flex items-center space-x-3 group hover:text-yellow-200 transition-colors duration-300">
                                 <Phone className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                                <span>(049) 123-4567</span>
+                                <span>(+63) 909 845 7869</span>
                             </div>
                             <div className="flex items-start space-x-3 group hover:text-yellow-200 transition-colors duration-300">
                                 <Mail className="w-4 h-4 sm:w-5 sm:h-5 mt-1 flex-shrink-0" />
-                                <span className="break-all">info@pupcalauan.edu.ph</span>
+                                <span className="break-all">calauan@pup.edu.ph</span>
                             </div>
                         </div>
                     </div>

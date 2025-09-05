@@ -6,6 +6,7 @@ import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
+import { VideoNavigation } from '@/components/VideoNavigation';
 import PDFThumbnail from '@/components/PDFThumbnail';
 
 const COLORS = {
@@ -435,35 +436,51 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                     </section>
 
                     {/* AVP Section */}
+                    {/* AVP Section */}
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
                         <div className="w-full max-w-5xl mx-auto text-center">
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.avp_section_title}
                             </h2>
-                            <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto mb-4" style={{ maxWidth: 800, height: 450 }}>
+                            <div className="w-full max-w-4xl mx-auto mb-4">
                                 {bsitContent.program_video_type === 'youtube' ? (
-                                    <iframe
-                                        src={`https://www.youtube.com/embed/${bsitContent.program_video}`}
-                                        title="Program AVP"
-                                        frameBorder={0}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                        className="w-full h-full"
-                                    ></iframe>
+                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto" style={{ maxWidth: 800, height: 450 }}>
+                                        <iframe
+                                            src={`https://www.youtube.com/embed/${bsitContent.program_video}`}
+                                            title="Program AVP"
+                                            frameBorder={0}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            className="w-full h-full"
+                                        ></iframe>
+                                    </div>
                                 ) : (
-                                    <video
-                                        src={bsitContent.program_video}
-                                        controls
-                                        className="w-full h-full"
-                                    >
-                                        Your browser does not support the video tag.
-                                    </video>
+                                    <VideoNavigation
+                                        currentVideo={{
+                                            id: 2,
+                                            filename: `bsit_program_avp.${bsitContent.program_video?.split('.').pop() || 'mp4'}`,
+                                            url: bsitContent.program_video?.startsWith('http') || bsitContent.program_video?.startsWith('/storage/') 
+                                                ? bsitContent.program_video 
+                                                : `/storage/${bsitContent.program_video}`,
+                                            uploaded_at: new Date().toISOString()
+                                        }}
+                                        onInfo={() => {
+                                            console.log('BSIT Program AVP Video Info');
+                                        }}
+                                        onDownload={() => {
+                                            const videoUrl = bsitContent.program_video?.startsWith('http') || bsitContent.program_video?.startsWith('/storage/') 
+                                                ? bsitContent.program_video 
+                                                : `/storage/${bsitContent.program_video}`;
+                                            const link = document.createElement('a');
+                                            link.href = videoUrl;
+                                            link.download = `bsit_program_avp.${bsitContent.program_video?.split('.').pop() || 'mp4'}`;
+                                            link.click();
+                                        }}
+                                    />
                                 )}
                             </div>
                         </div>
-                    </section>
-
-                    {/* Program in Action */}
+                    </section>                    {/* Program in Action */}
                     <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12" style={{ backgroundColor: '#f8fafc' }}>
                         <div className="w-full max-w-6xl mx-auto">
                             <h2 className="text-3xl text-center font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>

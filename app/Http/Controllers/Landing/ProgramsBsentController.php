@@ -38,19 +38,19 @@ class ProgramsBsentController extends Controller
         $transformedContent = $content->toArray();
         
         // Transform hero image
-        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http') && !str_starts_with($transformedContent['hero_image'], '/storage/')) {
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
         // Transform program image
-        if ($transformedContent['program_image'] && !str_starts_with($transformedContent['program_image'], 'http')) {
+        if ($transformedContent['program_image'] && !str_starts_with($transformedContent['program_image'], 'http') && !str_starts_with($transformedContent['program_image'], '/storage/')) {
             $transformedContent['program_image'] = Storage::url($transformedContent['program_image']);
         }
         
         // Transform action images
         if ($transformedContent['action_images']) {
             foreach ($transformedContent['action_images'] as &$image) {
-                if ($image && !str_starts_with($image, 'http')) {
+                if ($image && !str_starts_with($image, 'http') && !str_starts_with($image, '/storage/')) {
                     $image = Storage::url($image);
                 }
             }
@@ -59,7 +59,7 @@ class ProgramsBsentController extends Controller
         // Transform graduate videos
         if ($transformedContent['graduates_data']) {
             foreach ($transformedContent['graduates_data'] as &$graduate) {
-                if ($graduate['video'] && $graduate['video_type'] === 'upload' && !str_starts_with($graduate['video'], 'http')) {
+                if ($graduate['video'] && $graduate['video_type'] === 'upload' && !str_starts_with($graduate['video'], 'http') && !str_starts_with($graduate['video'], '/storage/')) {
                     $graduate['video'] = Storage::url($graduate['video']);
                 }
             }
@@ -68,14 +68,14 @@ class ProgramsBsentController extends Controller
         // Transform accreditation area images
         if ($transformedContent['accreditation_areas']) {
             foreach ($transformedContent['accreditation_areas'] as &$area) {
-                if ($area['image'] && !str_starts_with($area['image'], 'http')) {
+                if ($area['image'] && !str_starts_with($area['image'], 'http') && !str_starts_with($area['image'], '/storage/')) {
                     $area['image'] = Storage::url($area['image']);
                 }
             }
         }
         
         // Transform mula sayo image
-        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http')) {
+        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
             $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
         }
         
@@ -93,19 +93,19 @@ class ProgramsBsentController extends Controller
         $transformedContent = $content->toArray();
         
         // Transform hero image
-        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+        if ($transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http') && !str_starts_with($transformedContent['hero_image'], '/storage/')) {
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
         // Transform program image
-        if ($transformedContent['program_image'] && !str_starts_with($transformedContent['program_image'], 'http')) {
+        if ($transformedContent['program_image'] && !str_starts_with($transformedContent['program_image'], 'http') && !str_starts_with($transformedContent['program_image'], '/storage/')) {
             $transformedContent['program_image'] = Storage::url($transformedContent['program_image']);
         }
         
         // Transform action images
         if ($transformedContent['action_images']) {
             foreach ($transformedContent['action_images'] as &$image) {
-                if ($image && !str_starts_with($image, 'http')) {
+                if ($image && !str_starts_with($image, 'http') && !str_starts_with($image, '/storage/')) {
                     $image = Storage::url($image);
                 }
             }
@@ -114,7 +114,7 @@ class ProgramsBsentController extends Controller
         // Transform graduate videos
         if ($transformedContent['graduates_data']) {
             foreach ($transformedContent['graduates_data'] as &$graduate) {
-                if ($graduate['video'] && $graduate['video_type'] === 'upload' && !str_starts_with($graduate['video'], 'http')) {
+                if ($graduate['video'] && $graduate['video_type'] === 'upload' && !str_starts_with($graduate['video'], 'http') && !str_starts_with($graduate['video'], '/storage/')) {
                     $graduate['video'] = Storage::url($graduate['video']);
                 }
             }
@@ -123,14 +123,14 @@ class ProgramsBsentController extends Controller
         // Transform accreditation area images
         if ($transformedContent['accreditation_areas']) {
             foreach ($transformedContent['accreditation_areas'] as &$area) {
-                if ($area['image'] && !str_starts_with($area['image'], 'http')) {
+                if ($area['image'] && !str_starts_with($area['image'], 'http') && !str_starts_with($area['image'], '/storage/')) {
                     $area['image'] = Storage::url($area['image']);
                 }
             }
         }
         
         // Transform mula sayo image
-        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http')) {
+        if ($transformedContent['mula_sayo_image'] && !str_starts_with($transformedContent['mula_sayo_image'], 'http') && !str_starts_with($transformedContent['mula_sayo_image'], '/storage/')) {
             $transformedContent['mula_sayo_image'] = Storage::url($transformedContent['mula_sayo_image']);
         }
         

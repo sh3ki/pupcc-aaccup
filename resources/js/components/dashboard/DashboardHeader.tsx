@@ -287,7 +287,7 @@ export default function DashboardHeader() {
                                                         )}
                                                         {/* Side Modal/Submenu */}
                                                         <div
-                                                            className={`absolute ${item.name === 'Exhibit' ? '-top-20' : 'top-0'} left-full ml-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 z-[999] ${
+                                                            className={`absolute ${item.name === 'Exhibit' ? '-top-46' : 'top-0'} left-full ml-2 ${item.name === 'Exhibit' ? 'w-64' : 'w-50'} bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 z-[999] ${
                                                                 (item.name === 'About' && aboutDropdownOpen) ||
                                                                 (item.name === 'Programs Under Survey' && programsDropdownOpen) ||
                                                                 (item.name === 'Exhibit' && exhibitDropdownOpen)

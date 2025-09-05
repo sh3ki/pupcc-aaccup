@@ -6,6 +6,7 @@ import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
+import { VideoNavigation } from '@/components/VideoNavigation';
 import PDFThumbnail from '@/components/PDFThumbnail';
 
 const COLORS = {
@@ -442,24 +443,41 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                             <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
                                 {bsentContent.avp_section_title}
                             </h2>
-                            <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto mb-4" style={{ maxWidth: 800, height: 450 }}>
+                            <div className="w-full max-w-4xl mx-auto mb-4">
                                 {bsentContent.program_video_type === 'youtube' ? (
-                                    <iframe
-                                        src={`https://www.youtube.com/embed/${bsentContent.program_video}`}
-                                        title="Program AVP"
-                                        frameBorder={0}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                        className="w-full h-full"
-                                    ></iframe>
+                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto" style={{ maxWidth: 800, height: 450 }}>
+                                        <iframe
+                                            src={`https://www.youtube.com/embed/${bsentContent.program_video}`}
+                                            title="Program AVP"
+                                            frameBorder={0}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            className="w-full h-full"
+                                        ></iframe>
+                                    </div>
                                 ) : (
-                                    <video
-                                        src={bsentContent.program_video}
-                                        controls
-                                        className="w-full h-full"
-                                    >
-                                        Your browser does not support the video tag.
-                                    </video>
+                                    <VideoNavigation
+                                        currentVideo={{
+                                            id: 1,
+                                            filename: `bsent_program_avp.${bsentContent.program_video?.split('.').pop() || 'mp4'}`,
+                                            url: bsentContent.program_video?.startsWith('http') || bsentContent.program_video?.startsWith('/storage/') 
+                                                ? bsentContent.program_video 
+                                                : `/storage/${bsentContent.program_video}`,
+                                            uploaded_at: new Date().toISOString()
+                                        }}
+                                        onInfo={() => {
+                                            console.log('BSENT Program AVP Video Info');
+                                        }}
+                                        onDownload={() => {
+                                            const videoUrl = bsentContent.program_video?.startsWith('http') || bsentContent.program_video?.startsWith('/storage/') 
+                                                ? bsentContent.program_video 
+                                                : `/storage/${bsentContent.program_video}`;
+                                            const link = document.createElement('a');
+                                            link.href = videoUrl;
+                                            link.download = `bsent_program_avp.${bsentContent.program_video?.split('.').pop() || 'mp4'}`;
+                                            link.click();
+                                        }}
+                                    />
                                 )}
                             </div>
                         </div>
@@ -547,45 +565,87 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                 {bsentContent.accreditation_section_title}
                             </h2>
                             
-                            {/* Show regular area cards when not in document mode */}
-                            {!documentMode && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                    {availableAreas && availableAreas.length > 0 ? (
-                                        availableAreas.map((area: Area, idx: number) => (
-                                            <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                                <img 
-                                                    src="/api/placeholder/300/200"
-                                                    alt={area.name} 
-                                                    className="w-full h-28 object-cover" 
-                                                    style={{ minHeight: 112, maxHeight: 112 }} 
-                                                />
-                                                <div className="p-4 flex flex-col items-center">
-                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.name}</h3>
-                                                  
-                                                    <button 
-                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
-                                                        onClick={() => {
-                                                            setDocumentMode(true);
-                                                            setSelected({ areaId: area.id });
-                                                            setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
-                                                        }}
-                                                    >
-                                                        View Parameters
-                                                    </button>
-                                                </div>
+            {/* Show regular area cards when not in document mode */}
+            {!documentMode && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                    {/* First show content-based accreditation areas with images */}
+                    {bsentContent.accreditation_areas && bsentContent.accreditation_areas.length > 0 ? (
+                        bsentContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
+                            <div key={`content-${idx}`} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                <img 
+                                    src={area.image || '/api/placeholder/300/200'}
+                                    alt={area.title} 
+                                    className="w-full h-28 object-cover" 
+                                    style={{ minHeight: 112, maxHeight: 112 }} 
+                                />
+                                <div className="p-4 flex flex-col items-center">
+                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
+                                    
+                                    {/* Find corresponding document area if available */}
+                                    {(() => {
+                                        const correspondingDocArea = availableAreas.find(docArea => 
+                                            docArea.name?.toLowerCase().includes(area.title?.toLowerCase()?.replace(/area\s+[ivx]+:\s*/i, '')) ||
+                                            area.title?.toLowerCase().includes(docArea.name?.toLowerCase())
+                                        );
+                                        return correspondingDocArea ? (
+                                            <button 
+                                                className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                                style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                onClick={() => {
+                                                    setDocumentMode(true);
+                                                    setSelected({ areaId: correspondingDocArea.id });
+                                                    setAreaExpanded(prev => ({ ...prev, [correspondingDocArea.id]: true }));
+                                                }}
+                                            >
+                                                View Documents
+                                            </button>
+                                        ) : (
+                                            <div className="px-4 py-1 rounded-lg bg-gray-300 text-gray-600 text-sm">
+                                                No Documents
                                             </div>
-                                        ))
-                                    ) : (
-                                        <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
-                                            No accreditation areas available
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
                                 </div>
-                            )}
-
-                            {/* Document Management Interface */}
+                            </div>
+                        ))
+                    ) : (
+                        /* Fallback to document-based areas if no content areas */
+                        availableAreas && availableAreas.length > 0 ? (
+                            availableAreas.map((area: Area, idx: number) => (
+                                <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
+                                    style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
+                                    <img 
+                                        src="/api/placeholder/300/200"
+                                        alt={area.name} 
+                                        className="w-full h-28 object-cover" 
+                                        style={{ minHeight: 112, maxHeight: 112 }} 
+                                    />
+                                    <div className="p-4 flex flex-col items-center">
+                                        <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.name}</h3>
+                                      
+                                        <button 
+                                            className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
+                                            style={{ backgroundColor: COLORS.primaryMaroon }}
+                                            onClick={() => {
+                                                setDocumentMode(true);
+                                                setSelected({ areaId: area.id });
+                                                setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
+                                            }}
+                                        >
+                                            View Parameters
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
+                                No accreditation areas available
+                            </div>
+                        )
+                    )}
+                </div>
+            )}                            {/* Document Management Interface */}
                             {documentMode && (
                                 <div className="w-full">
                                     {/* Back button */}
