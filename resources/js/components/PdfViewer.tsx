@@ -17,86 +17,75 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     rotate,
     className = ''
 }) => {
-    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const embedRef = useRef<HTMLEmbedElement>(null);
+    const objectRef = useRef<HTMLObjectElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [loadingProgress, setLoadingProgress] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
     const [currentScale, setCurrentScale] = useState(1);
     const [currentRotation, setCurrentRotation] = useState(0);
-    const [isIframeReady, setIsIframeReady] = useState(false);
+    const [viewerMethod, setViewerMethod] = useState<'embed' | 'object' | 'iframe'>('embed');
 
-    // Create PDF URL with viewer parameters for navigation
+    // Create PDF URL with proper parameters
     const createPdfUrl = useCallback(() => {
-        // Simply return the PDF URL without complex parameters for better compatibility
-        // Most browsers will handle page navigation via their built-in PDF viewer
-        return url;
-    }, [url]);
-
-    // Function to get PDF metadata and page count
-    const getPdfMetadata = useCallback(async () => {
-        try {
-            // Simple fallback - just set a default page count
-            // The iframe will handle the actual PDF rendering
-            setTotalPages(1); // Conservative default that works for all PDFs
-            onTotalPagesChange(1);
-            
-        } catch (err) {
-            console.warn('Could not determine PDF page count, using default:', err);
-            // Fallback to default
-            setTotalPages(1);
-            onTotalPagesChange(1);
+        let pdfUrl = url;
+        
+        // Add page parameter for browsers that support it
+        if (currentPage > 1) {
+            const separator = url.includes('#') ? '&' : '#';
+            pdfUrl += `${separator}page=${currentPage}`;
         }
-    }, [onTotalPagesChange]);
+        
+        return pdfUrl;
+    }, [url, currentPage]);
 
-    // Load PDF
+    // Load PDF with multiple fallback methods
     useEffect(() => {
         let mounted = true;
         setLoading(true);
         setError(null);
         setLoadingProgress(0);
-        setIsIframeReady(false);
 
         const loadPdf = async () => {
             try {
-                // Simulate loading progress and complete it quickly
+                // Quick progress simulation
+                const progressSteps = [20, 40, 60, 80, 100];
+                let currentStep = 0;
+                
                 const progressInterval = setInterval(() => {
-                    setLoadingProgress(prev => {
-                        if (prev >= 100) {
-                            clearInterval(progressInterval);
-                            return 100;
-                        }
-                        return prev + 25;
-                    });
-                }, 100);
+                    if (currentStep < progressSteps.length) {
+                        setLoadingProgress(progressSteps[currentStep]);
+                        currentStep++;
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 150);
 
-                // Test if PDF URL is accessible (simplified check)
+                // Test PDF accessibility
                 try {
                     const response = await fetch(url, { method: 'HEAD' });
                     if (!response.ok) {
                         throw new Error(`PDF not accessible: ${response.status}`);
                     }
                 } catch (fetchErr) {
-                    // If HEAD request fails, just proceed anyway
-                    console.warn('Could not verify PDF accessibility, proceeding anyway:', fetchErr);
+                    console.warn('Could not verify PDF accessibility:', fetchErr);
                 }
 
-                // Get PDF metadata (simplified)
-                await getPdfMetadata();
+                // Set default page count
+                onTotalPagesChange(10); // Default reasonable page count
 
                 if (!mounted) return;
 
                 clearInterval(progressInterval);
                 setLoadingProgress(100);
                 
-                // Set a timeout to ensure loading completes even if iframe doesn't fire onLoad
+                // Complete loading after a short delay
                 setTimeout(() => {
                     if (mounted) {
                         setLoading(false);
-                        setIsIframeReady(true);
                     }
-                }, 1000); // Give iframe 1 second to load, then proceed anyway
+                }, 500);
                 
             } catch (err) {
                 if (!mounted) return;
@@ -111,27 +100,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         return () => {
             mounted = false;
         };
-    }, [url, getPdfMetadata]);
-
-    // Handle iframe load
-    const handleIframeLoad = useCallback(() => {
-        setLoading(false);
-        setLoadingProgress(100);
-        setIsIframeReady(true);
-        console.log('PDF iframe loaded successfully');
-    }, []);
-
-    // Handle iframe error
-    const handleIframeError = useCallback((event: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
-        console.error('PDF iframe failed to load:', event);
-        // Don't set error immediately, sometimes iframes can recover
-        setTimeout(() => {
-            setLoading(false);
-            setIsIframeReady(true);
-            // Show a warning but still try to display the iframe
-            console.warn('PDF iframe had loading issues but continuing anyway');
-        }, 500);
-    }, []);
+    }, [url, onTotalPagesChange]);
 
     // Update scale when zoom changes
     useEffect(() => {
@@ -143,18 +112,44 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         setCurrentRotation(rotate);
     }, [rotate]);
 
-    // Navigate to specific page - for HTML viewer, we'll use postMessage or reload if needed
-    useEffect(() => {
-        if (isIframeReady && currentPage > 0 && iframeRef.current && totalPages > 0) {
-            // For HTML viewer, page navigation is handled by the browser's PDF viewer
-            // We can try to use URL fragments, but many browsers ignore them in iframes
-            // The navigation will be primarily handled by the DocumentNavigation component
-            console.log(`Navigating to page ${currentPage}`);
-        }
-    }, [currentPage, isIframeReady, totalPages]);
+    // Handle PDF load success
+    const handlePdfLoad = useCallback(() => {
+        setLoading(false);
+        setError(null);
+        console.log('PDF loaded successfully');
+    }, []);
 
-    // Apply zoom and rotation transforms to the iframe
-    const getIframeStyle = (): React.CSSProperties => {
+    // Handle PDF load error and try fallback methods
+    const handlePdfError = useCallback(() => {
+        console.warn(`PDF loading failed with method: ${viewerMethod}, trying fallback...`);
+        
+        if (viewerMethod === 'embed') {
+            setViewerMethod('object');
+        } else if (viewerMethod === 'object') {
+            setViewerMethod('iframe');
+        } else {
+            // All methods failed
+            setError('Unable to display PDF. Your browser may not support PDF viewing or the file may be corrupted.');
+            setLoading(false);
+        }
+    }, [viewerMethod]);
+
+    // Get container styles
+    const getContainerStyle = (): React.CSSProperties => {
+        return {
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden',
+            backgroundColor: '#f5f5f5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+        };
+    };
+
+    // Get viewer styles with transforms
+    const getViewerStyle = (): React.CSSProperties => {
         return {
             width: '100%',
             height: '100%',
@@ -165,69 +160,60 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         };
     };
 
-    // Container style for proper scrolling and centering
-    const getContainerStyle = (): React.CSSProperties => {
-        return {
-            width: '100%',
-            height: '100%',
-            overflow: 'auto',
-            backgroundColor: '#f5f5f5',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px 0',
-        };
-    };
+    // Render PDF viewer based on current method
+    const renderPdfViewer = () => {
+        const pdfUrl = createPdfUrl();
+        const style = getViewerStyle();
 
-    // Calculate iframe container dimensions to accommodate scaling and rotation
-    const getIframeContainerStyle = (): React.CSSProperties => {
-        const scaleFactor = currentScale;
-        const rotationRad = (currentRotation * Math.PI) / 180;
-        
-        // Calculate dimensions needed for rotated content
-        const cos = Math.abs(Math.cos(rotationRad));
-        const sin = Math.abs(Math.sin(rotationRad));
-        
-        // Expand container to fit rotated and scaled content
-        const widthMultiplier = cos + sin;
-        const heightMultiplier = cos + sin;
-        
-        return {
-            width: `${100 * scaleFactor * widthMultiplier}%`,
-            height: `${100 * scaleFactor * heightMultiplier}%`,
-            minWidth: '100%',
-            minHeight: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-        };
-    };
-
-    // Handle window resize to maintain proper scaling
-    useEffect(() => {
-        const handleResize = () => {
-            // Force re-render of iframe container when window resizes
-            if (containerRef.current) {
-                containerRef.current.style.height = `${containerRef.current.offsetHeight}px`;
-                setTimeout(() => {
-                    if (containerRef.current) {
-                        containerRef.current.style.height = '100%';
-                    }
-                }, 100);
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    // Scroll to current page effect - for iframe, we rely on the page parameter in URL
-    useEffect(() => {
-        if (containerRef.current && currentPage > 0 && isIframeReady) {
-            // Scroll container to top when page changes
-            containerRef.current.scrollTop = 0;
+        switch (viewerMethod) {
+            case 'embed':
+                return (
+                    <embed
+                        ref={embedRef}
+                        src={pdfUrl}
+                        type="application/pdf"
+                        style={style}
+                        onLoad={handlePdfLoad}
+                        onError={handlePdfError}
+                        title="PDF Document"
+                    />
+                );
+            
+            case 'object':
+                return (
+                    <object
+                        ref={objectRef}
+                        data={pdfUrl}
+                        type="application/pdf"
+                        style={style}
+                        onLoad={handlePdfLoad}
+                        onError={handlePdfError}
+                        title="PDF Document"
+                    >
+                        <p>
+                            Your browser doesn't support embedded PDFs. 
+                            <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                                Click here to download the PDF
+                            </a>
+                        </p>
+                    </object>
+                );
+            
+            case 'iframe':
+            default:
+                return (
+                    <iframe
+                        src={pdfUrl}
+                        style={style}
+                        onLoad={handlePdfLoad}
+                        onError={handlePdfError}
+                        title="PDF Document"
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+                        allow="fullscreen"
+                    />
+                );
         }
-    }, [currentPage, isIframeReady]);
+    };
 
     if (loading) {
         return (
@@ -250,12 +236,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     if (error) {
         return (
-            <div className={`flex items-center justify-center ${className}`}>
-                <div className="text-red-500 text-center">
+            <div className={`flex flex-col items-center justify-center ${className}`}>
+                <div className="text-red-500 text-center mb-4">
                     <div className="mb-2">{error}</div>
-                    <div className="text-sm text-gray-500">
-                        Try refreshing the page or use a different browser.
-                    </div>
+                </div>
+                <div className="flex flex-col items-center space-y-2">
+                    <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    >
+                        Open PDF in New Tab
+                    </a>
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                    >
+                        Refresh Page
+                    </button>
                 </div>
             </div>
         );
@@ -267,18 +266,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             className={`${className}`}
             style={getContainerStyle()}
         >
-            <div style={getIframeContainerStyle()}>
-                <iframe
-                    ref={iframeRef}
-                    src={createPdfUrl()}
-                    style={getIframeStyle()}
-                    onLoad={handleIframeLoad}
-                    onError={handleIframeError}
-                    title="PDF Viewer"
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
-                    allow="fullscreen"
-                />
-            </div>
+            {renderPdfViewer()}
         </div>
     );
 };

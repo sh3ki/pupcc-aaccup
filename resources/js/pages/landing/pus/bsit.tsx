@@ -727,12 +727,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                     {/* Parameter selection */}
                                     {selected.areaId && !selected.parameterId && (
                                         <div>
-                                            <div className="mb-4">
-                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
-                                                    {selectedArea?.name} - Parameters
-                                                </h3>
-                                                <p className="text-gray-700 mt-2">Select a parameter to view its categories.</p>
-                                            </div>
+                                            
                                             
                                             {loadingDocs ? (
                                                 <div className="flex items-center justify-center py-12">
@@ -808,12 +803,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                     {/* Category selection - Show when parameter is selected but no category */}
                                     {selected.areaId && selected.parameterId && !selected.category && (
                                         <div>
-                                            <div className="mb-4">
-                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
-                                                    {selectedParameter?.name} - Categories
-                                                </h3>
-                                                <p className="text-gray-700 mt-2">Select a category to view its documents.</p>
-                                            </div>
+                                          
                                             <DocumentCardGrid
                                                 items={categoryList}
                                                 getKey={cat => cat.value}
@@ -872,14 +862,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                     {/* Document viewer */}
                                     {selected.areaId && selected.parameterId && selected.category && (
                                         <div>
-                                            <div className="mb-4">
-                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
-                                                    {selectedParameter?.name} - {categoryList.find(cat => cat.value === selected.category)?.label}
-                                                </h3>
-                                                <p className="text-gray-700 mt-2">
-                                                    {viewingDocIndex === null ? "Select a document to view." : ""}
-                                                </p>
-                                            </div>
+                                           
 
                                             {/* Document Navigation */}
                                             {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] && (

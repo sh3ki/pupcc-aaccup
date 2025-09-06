@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PdfViewer from '@/components/PdfViewer';
@@ -29,12 +29,25 @@ const isImage = (url: string) => {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension);
 };
 
+interface Document {
+    title: string;
+    file: string;
+}
+
 interface ObeSyllabiContent {
     hero_image?: string;
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    syllabi_document?: string;
+    program1_image?: string;
+    program1_title: string;
+    program1_documents?: Document[];
+    program2_image?: string;
+    program2_title: string;
+    program2_documents?: Document[];
+    program3_image?: string;
+    program3_title: string;
+    program3_documents?: Document[];
     footer_section_title: string;
     footer_image?: string;
 }
@@ -64,17 +77,12 @@ function useScrollAnimation() {
     useEffect(() => {
         const observer = new IntersectionObserver(
             ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
+                if (entry.isIntersecting) {
                     setIsVisible(true);
                     setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
                 }
             },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+            { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
         );
         
         const currentRef = ref.current;
@@ -89,56 +97,75 @@ function useScrollAnimation() {
 }
 
 export default function ObeSyllabi({ obeSyllabiContent }: Props) {
-    // Use proper placeholder URLs that actually work
-    const syllabiUrl = obeSyllabiContent.syllabi_document || "https://via.placeholder.com/900x1200/f3f4f6/6b7280?text=Syllabi+Preview";
-    
-    // Hero Section Data
-    const heroImageUrl = obeSyllabiContent.hero_image || "https://via.placeholder.com/1600x500/7f0404/ffffff?text=OBE+Syllabi+Hero+Image";
-    
-    // Footer Section Data  
-    const footerImageUrl = obeSyllabiContent.footer_image || "https://via.placeholder.com/1600x400/7f0404/ffffff?text=Footer+Background";
-
-    // PDF state - initialize once and persist
+    // State for selected program and document preview
+    const [selectedProgram, setSelectedProgram] = useState<number | null>(null);
+    const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [pdfLoaded, setPdfLoaded] = useState(false);
     const [currentPage] = useState(1);
     const setTotalPages = useState(1)[1];
     const [zoom] = useState(0.9);
     const [rotate] = useState(0);
 
-    // Initialize PDF loading once on component mount
+    // Hero Section Data
+    const heroImageUrl = obeSyllabiContent.hero_image || "https://via.placeholder.com/1600/500/7f0404/ffffff?text=OBE+Syllabi+Hero+Image";
+    
+    // Footer Section Data  
+    const footerImageUrl = obeSyllabiContent.footer_image || "https://via.placeholder.com/1600/400/7f0404/ffffff?text=Footer+Background";
+
+    // Programs data
+    const programs = useMemo(() => [
+        {
+            id: 1,
+            title: obeSyllabiContent.program1_title,
+            image: obeSyllabiContent.program1_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+1",
+            documents: obeSyllabiContent.program1_documents || []
+        },
+        {
+            id: 2,
+            title: obeSyllabiContent.program2_title,
+            image: obeSyllabiContent.program2_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+2",
+            documents: obeSyllabiContent.program2_documents || []
+        },
+        {
+            id: 3,
+            title: obeSyllabiContent.program3_title,
+            image: obeSyllabiContent.program3_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+3",
+            documents: obeSyllabiContent.program3_documents || []
+        }
+    ], [obeSyllabiContent]);
+
+    // Initialize PDF loading when document is selected
     useEffect(() => {
-        if (obeSyllabiContent.syllabi_document && isPDF(obeSyllabiContent.syllabi_document) && !pdfLoaded) {
+        if (selectedDocument?.file && isPDF(selectedDocument.file) && !pdfLoaded) {
             setPdfLoaded(true);
         }
-    }, [obeSyllabiContent.syllabi_document, pdfLoaded]);
+    }, [selectedDocument, pdfLoaded]);
 
-    // Syllabi Display Component - moved outside of animation effects
-    const SyllabiDisplay = useCallback(() => {
-        // Check if we have real syllabi (not placeholder)
-        const hasRealSyllabi = obeSyllabiContent.syllabi_document && 
-                               !obeSyllabiContent.syllabi_document.includes('placeholder');
+    // Document Display Component
+    const DocumentDisplay = useCallback(({ document }: { document?: Document }) => {
+        // Check if we have a real document (not placeholder)
+        const hasRealDocument = document?.file && !document.file.includes('placeholder');
         
-        if (!hasRealSyllabi) {
+        if (!hasRealDocument) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
                     <div className="text-center">
                         <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <p className="text-gray-500 font-medium">No syllabi uploaded</p>
-                        <p className="text-gray-400 text-sm">Upload syllabi via the admin panel</p>
+                        <p className="text-gray-500 font-medium">No document uploaded</p>
+                        <p className="text-gray-400 text-sm">Upload a document via the admin panel</p>
                     </div>
                 </div>
             );
         }
 
-        if (isPDF(obeSyllabiContent.syllabi_document || '') && pdfLoaded) {
+        if (isPDF(document.file) && pdfLoaded) {
             return (
                 <div className="w-full">
-                    {/* PDF Display using PdfViewer component - only render when pdfLoaded is true */}
                     <div className="w-full max-w-4xl mx-auto rounded-xl border border-gray-200 overflow-hidden" style={{ height: '800px' }}>
                         <PdfViewer
-                            url={obeSyllabiContent.syllabi_document || ''}
+                            url={document.file}
                             currentPage={currentPage}
                             onTotalPagesChange={setTotalPages}
                             zoom={zoom}
@@ -146,11 +173,9 @@ export default function ObeSyllabi({ obeSyllabiContent }: Props) {
                             className="w-full h-full"
                         />
                     </div>
-                    
-                    {/* Fallback link if PDF viewer doesn't work */}
                     <div className="mt-4 text-center">
                         <a
-                            href={obeSyllabiContent.syllabi_document}
+                            href={document.file}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded-lg hover:bg-[#5a0303] transition-colors"
@@ -163,8 +188,7 @@ export default function ObeSyllabi({ obeSyllabiContent }: Props) {
                     </div>
                 </div>
             );
-        } else if (isPDF(obeSyllabiContent.syllabi_document || '') && !pdfLoaded) {
-            // Show loading state for PDF
+        } else if (isPDF(document.file) && !pdfLoaded) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
                     <div className="text-center">
@@ -175,12 +199,12 @@ export default function ObeSyllabi({ obeSyllabiContent }: Props) {
             );
         }
 
-        if (isImage(obeSyllabiContent.syllabi_document || '')) {
+        if (isImage(document.file)) {
             return (
                 <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center rounded-xl border border-gray-200 overflow-hidden" style={{ minHeight: '400px' }}>
                     <img
-                        src={obeSyllabiContent.syllabi_document}
-                        alt="Syllabi"
+                        src={document.file}
+                        alt="Document"
                         className="max-h-full max-w-full object-contain rounded-xl shadow-lg"
                         style={{ maxHeight: '800px', width: 'auto' }}
                     />
@@ -196,25 +220,68 @@ export default function ObeSyllabi({ obeSyllabiContent }: Props) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <p className="text-gray-600 font-medium">Document Available</p>
-                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(syllabiUrl).toUpperCase()} file</p>
+                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(document.file).toUpperCase()} file</p>
                     <a
-                        href={syllabiUrl}
+                        href={document.file}
                         download
                         className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded hover:bg-[#4D1414] transition-colors"
                     >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Download Syllabi
+                        Download Document
                     </a>
                 </div>
             </div>
         );
-    }, [obeSyllabiContent.syllabi_document, pdfLoaded, currentPage, setTotalPages, zoom, rotate, syllabiUrl]);
+    }, [pdfLoaded, currentPage, setTotalPages, zoom, rotate]);
     
     // Animation hooks for different sections
     const [heroRef, heroVisible] = useScrollAnimation();
-    const [syllabiRef, syllabiVisible] = useScrollAnimation();
+    const [programsRef, programsVisible] = useScrollAnimation();
+    const [documentsRef, documentsVisible] = useScrollAnimation();
+    const [documentRef, documentVisible] = useScrollAnimation();
+
+    // Force animation visibility for document section when program is selected
+    const [forceDocumentVisible, setForceDocumentVisible] = useState(false);
+    const [forceDocumentsVisible, setForceDocumentsVisible] = useState(false);
+
+    // Effect to trigger document animation when a program is selected
+    useEffect(() => {
+        if (selectedProgram && !selectedDocument) {
+            // Force documents section to be visible
+            setForceDocumentsVisible(true);
+            // Scroll to documents section when a program is selected
+            setTimeout(() => {
+                documentsRef.current?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }, 100);
+        } else {
+            setForceDocumentsVisible(false);
+        }
+    }, [selectedProgram, selectedDocument, documentsRef]);
+
+    useEffect(() => {
+        if (selectedDocument) {
+            // Force document section to be visible
+            setForceDocumentVisible(true);
+            // Scroll to document section when a document is selected
+            setTimeout(() => {
+                documentRef.current?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }, 100);
+        } else {
+            setForceDocumentVisible(false);
+        }
+    }, [selectedDocument, documentRef]);
+
+    // Combined visibility state for sections
+    const documentsSectionVisible = documentsVisible || forceDocumentsVisible;
+    const documentSectionVisible = documentVisible || forceDocumentVisible;
 
     return (
         <>
@@ -259,41 +326,221 @@ export default function ObeSyllabi({ obeSyllabiContent }: Props) {
                         </div>
                     </section>
 
-                    {/* Syllabi Display */}
-                    <section 
-                        ref={syllabiRef}
-                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
-                            syllabiVisible 
-                                ? 'opacity-100 transform translate-y-0' 
-                                : 'opacity-0 transform translate-y-12'
-                        }`}
-                    >
-                        <div className="w-full max-w-4xl mx-auto">
-                            <div className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border-t-4 transition-all duration-1000 delay-200 ${
-                                syllabiVisible 
-                                    ? 'opacity-100 transform translate-y-0 scale-100' 
-                                    : 'opacity-0 transform translate-y-8 scale-95'
-                            }`} style={{ borderTopColor: COLORS.primaryMaroon }}>
-                                <div className="p-8 sm:p-12 flex flex-col items-center">
-                                    <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-8 sm:mb-12 text-center transition-all duration-1000 delay-400 ${
-                                        syllabiVisible 
+                    {/* Programs Selection Section - Only show when no program is selected */}
+                    {!selectedProgram && (
+                        <section
+                            ref={programsRef}
+                            className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
+                                programsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                            }`}
+                            style={{ 
+                                background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
+                            }}
+                        >
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 opacity-5 pointer-events-none">
+                                <div className="absolute inset-0" style={{
+                                    backgroundImage: `radial-gradient(circle at 25% 25%, ${COLORS.primaryMaroon} 2px, transparent 2px)`,
+                                    backgroundSize: '50px 50px'
+                                }}></div>
+                            </div>
+                            <div className="w-full max-w-7xl mx-auto relative z-10">
+                                <h2 className="text-4xl sm:text-5xl font-bold text-center mb-16" style={{ color: COLORS.primaryMaroon }}>
+                                    {obeSyllabiContent.section_title}
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                                    {programs.map((program, idx) => (
+                                        <button
+                                            key={program.id}
+                                            onClick={() => {
+                                                setSelectedProgram(program.id);
+                                                setSelectedDocument(null);
+                                                setPdfLoaded(false);
+                                            }}
+                                            className={`group block bg-white rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
+                                                programsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                                            }`}
+                                            style={{
+                                                borderTopColor: COLORS.primaryMaroon,
+                                                transitionDelay: `${idx * 0.12}s`
+                                            }}
+                                        >
+                                            <div className="relative overflow-hidden">
+                                                <img
+                                                    src={program.image}
+                                                    alt={program.title}
+                                                    className="w-full h-[260px] object-cover transition-transform duration-500 group-hover:scale-110"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                            </div>
+                                            <div className="p-8">
+                                                <h3 className="text-2xl font-bold mb-4 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+                                                    {program.title}
+                                                </h3>
+                                                <span className="inline-block px-6 py-2 rounded-lg font-bold text-white transition-all duration-300 group-hover:scale-105" style={{ backgroundColor: COLORS.primaryMaroon }}>
+                                                    View Syllabi
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Documents List Section - Only show when a program is selected but no document */}
+                    {selectedProgram && !selectedDocument && (
+                        <section 
+                            ref={documentsRef}
+                            className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
+                                documentsSectionVisible 
+                                    ? 'opacity-100 transform translate-y-0' 
+                                    : 'opacity-0 transform translate-y-12'
+                            }`}
+                        >
+                            <div className="w-full max-w-6xl mx-auto">
+                                {/* Back Button */}
+                                <div className="mb-8">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedProgram(null);
+                                            setSelectedDocument(null);
+                                            setPdfLoaded(false);
+                                        }}
+                                        className="flex items-center px-6 py-3 bg-[#7F0404] text-white rounded-lg hover:bg-[#6B0303] transition-all duration-300 group font-semibold"
+                                    >
+                                        <svg className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                        </svg>
+                                        Back to Programs
+                                    </button>
+                                </div>
+                                
+                                {/* Program Title */}
+                                <div className="mb-12">
+                                    <h2 className={`text-4xl sm:text-5xl font-bold text-center transition-all duration-1000 delay-200 ${
+                                        documentsSectionVisible 
                                             ? 'opacity-100 transform translate-y-0' 
                                             : 'opacity-0 transform translate-y-8'
                                     }`} style={{ color: COLORS.primaryMaroon }}>
-                                        {obeSyllabiContent.section_title}
+                                        {programs.find(p => p.id === selectedProgram)?.title}
                                     </h2>
-                                    {/* Syllabi Display with PDF Support */}
-                                    <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
-                                        syllabiVisible 
-                                            ? 'opacity-100 transform translate-y-0 scale-100' 
-                                            : 'opacity-0 transform translate-y-8 scale-95'
+                                    <p className={`text-xl text-gray-600 text-center mt-4 transition-all duration-1000 delay-400 ${
+                                        documentsSectionVisible 
+                                            ? 'opacity-100 transform translate-y-0' 
+                                            : 'opacity-0 transform translate-y-8'
                                     }`}>
-                                        <SyllabiDisplay />
+                                        Select a document to view
+                                    </p>
+                                </div>
+
+                                {/* Documents Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {programs.find(p => p.id === selectedProgram)?.documents?.length ? (
+                                        programs.find(p => p.id === selectedProgram)?.documents?.map((document, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => {
+                                                    setSelectedDocument(document);
+                                                    setPdfLoaded(false);
+                                                }}
+                                                className={`group block bg-white rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 text-left ${
+                                                    documentsSectionVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                                                }`}
+                                                style={{
+                                                    borderTopColor: COLORS.primaryMaroon,
+                                                    transitionDelay: `${idx * 0.1}s`
+                                                }}
+                                            >
+                                                <div className="p-6">
+                                                    <div className="flex items-center mb-3">
+                                                        <svg className="w-8 h-8 mr-3 text-[#7F0404]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                        </svg>
+                                                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                                            {getFileExtension(document.file).toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="text-lg font-bold mb-3 text-[#7F0404] group-hover:text-[#5a0303] transition-colors">
+                                                        {document.title}
+                                                    </h3>
+                                                    <span className="inline-block px-4 py-2 bg-[#7F0404] text-white rounded-lg font-medium transition-all duration-300 group-hover:bg-[#5a0303] group-hover:scale-105">
+                                                        View Document
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="col-span-full flex flex-col items-center justify-center py-16">
+                                            <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                            </svg>
+                                            <p className="text-gray-500 font-medium">No documents available</p>
+                                            <p className="text-gray-400 text-sm">Upload documents via the admin panel</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Document Preview Section - Only show when a document is selected */}
+                    {selectedDocument && (
+                        <section 
+                            ref={documentRef}
+                            className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
+                                documentSectionVisible 
+                                    ? 'opacity-100 transform translate-y-0' 
+                                    : 'opacity-0 transform translate-y-12'
+                            }`}
+                        >
+                            <div className="w-full max-w-4xl mx-auto">
+                                {/* Back Button */}
+                                <div className="mb-8">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedDocument(null);
+                                            setPdfLoaded(false);
+                                        }}
+                                        className="flex items-center px-6 py-3 bg-[#7F0404] text-white rounded-lg hover:bg-[#6B0303] transition-all duration-300 group font-semibold"
+                                    >
+                                        <svg className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                        </svg>
+                                        Back to Documents
+                                    </button>
+                                </div>
+                                
+                                {/* Main Card Container */}
+                                <div className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border-t-4 transition-all duration-1000 delay-200 ${
+                                    documentSectionVisible 
+                                        ? 'opacity-100 transform translate-y-0 scale-100' 
+                                        : 'opacity-0 transform translate-y-8 scale-95'
+                                }`} style={{ borderTopColor: COLORS.primaryMaroon }}>
+                                    <div className="p-8 sm:p-12 flex flex-col items-center">
+                                        {/* Title Container */}
+                                        <div className="w-full mb-8 sm:mb-12">
+                                            <h2 className={`text-3xl sm:text-4xl md:text-5xl font-bold text-center transition-all duration-1000 delay-400 ${
+                                                documentSectionVisible 
+                                                    ? 'opacity-100 transform translate-y-0' 
+                                                    : 'opacity-0 transform translate-y-8'
+                                            }`} style={{ color: COLORS.primaryMaroon }}>
+                                                {selectedDocument.title}
+                                            </h2>
+                                        </div>
+                                        {/* Document Display with PDF Support */}
+                                        <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
+                                            documentSectionVisible 
+                                                ? 'opacity-100 transform translate-y-0 scale-100' 
+                                                : 'opacity-0 transform translate-y-8 scale-95'
+                                        }`}>
+                                            <DocumentDisplay document={selectedDocument} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
+                        </section>
+                    )}
                 </main>
 
                 {/* Mula Sayo, Para Sa Bayan Section */}

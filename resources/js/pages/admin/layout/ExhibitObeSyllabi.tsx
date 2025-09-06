@@ -4,12 +4,26 @@ import DashboardLayout from '@/layouts/DashboardLayout';
 import PagePreview from '@/components/PagePreview';
 import FileUpload from '@/components/FileUpload';
 
+interface Document {
+    title: string;
+    file: string | File;
+    oldFile?: string;
+}
+
 interface OBESyllabiContent {
     hero_image: string | File;
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    syllabi_document: string | File;
+    program1_title: string;
+    program1_image: string | File;
+    program1_documents: Document[];
+    program2_title: string;
+    program2_image: string | File;
+    program2_documents: Document[];
+    program3_title: string;
+    program3_image: string | File;
+    program3_documents: Document[];
     footer_section_title: string;
     footer_image: string | File;
 }
@@ -29,13 +43,104 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
     const [heroSubtitle, setHeroSubtitle] = useState(obeSyllabiContent.hero_subtitle || 'Outcome-based education syllabi and curriculum documents');
     const [heroImage, setHeroImage] = useState<string | File>(obeSyllabiContent.hero_image || '');
 
-    // Syllabi Section State
+    // Syllabi Documents Section State
     const [sectionTitle, setSectionTitle] = useState(obeSyllabiContent.section_title || "OBE Syllabi Preview");
-    const [syllabiDocument, setSyllabiDocument] = useState<string | File>(obeSyllabiContent.syllabi_document || '');
+    
+    // BTLED Program State
+    const [program1Title, setProgram1Title] = useState(obeSyllabiContent.program1_title || 'Bachelor of Technology and Livelihood Education');
+    const [program1Image, setProgram1Image] = useState<string | File>(obeSyllabiContent.program1_image || '');
+    const [program1Documents, setProgram1Documents] = useState<Document[]>(obeSyllabiContent.program1_documents || []);
+
+    // BSENT Program State
+    const [program2Title, setProgram2Title] = useState(obeSyllabiContent.program2_title || 'Bachelor of Science in Entrepreneurship');
+    const [program2Image, setProgram2Image] = useState<string | File>(obeSyllabiContent.program2_image || '');
+    const [program2Documents, setProgram2Documents] = useState<Document[]>(obeSyllabiContent.program2_documents || []);
+
+    // BSIT Program State
+    const [program3Title, setProgram3Title] = useState(obeSyllabiContent.program3_title || 'Bachelor of Science in Information Technology');
+    const [program3Image, setProgram3Image] = useState<string | File>(obeSyllabiContent.program3_image || '');
+    const [program3Documents, setProgram3Documents] = useState<Document[]>(obeSyllabiContent.program3_documents || []);
 
     // Footer Section State
     const [footerSectionTitle, setFooterSectionTitle] = useState(obeSyllabiContent.footer_section_title || 'Mula Sayo, Para Sa Bayan');
     const [footerImage, setFooterImage] = useState<string | File>(obeSyllabiContent.footer_image || '');
+
+    // Helper functions for managing documents
+    const addDocument = (program: 1 | 2 | 3) => {
+        const newDocument: Document = { title: '', file: '', oldFile: '' };
+        
+        switch (program) {
+            case 1:
+                setProgram1Documents([...program1Documents, newDocument]);
+                break;
+            case 2:
+                setProgram2Documents([...program2Documents, newDocument]);
+                break;
+            case 3:
+                setProgram3Documents([...program3Documents, newDocument]);
+                break;
+        }
+    };
+
+    const removeDocument = (program: 1 | 2 | 3, index: number) => {
+        switch (program) {
+            case 1:
+                setProgram1Documents(program1Documents.filter((_, i) => i !== index));
+                break;
+            case 2:
+                setProgram2Documents(program2Documents.filter((_, i) => i !== index));
+                break;
+            case 3:
+                setProgram3Documents(program3Documents.filter((_, i) => i !== index));
+                break;
+        }
+    };
+
+    const updateDocumentTitle = (program: 1 | 2 | 3, index: number, title: string) => {
+        switch (program) {
+            case 1: {
+                const newProgram1Docs = [...program1Documents];
+                newProgram1Docs[index] = { ...newProgram1Docs[index], title };
+                setProgram1Documents(newProgram1Docs);
+                break;
+            }
+            case 2: {
+                const newProgram2Docs = [...program2Documents];
+                newProgram2Docs[index] = { ...newProgram2Docs[index], title };
+                setProgram2Documents(newProgram2Docs);
+                break;
+            }
+            case 3: {
+                const newProgram3Docs = [...program3Documents];
+                newProgram3Docs[index] = { ...newProgram3Docs[index], title };
+                setProgram3Documents(newProgram3Docs);
+                break;
+            }
+        }
+    };
+
+    const updateDocumentFile = (program: 1 | 2 | 3, index: number, file: File | string) => {
+        switch (program) {
+            case 1: {
+                const newProgram1Docs = [...program1Documents];
+                newProgram1Docs[index] = { ...newProgram1Docs[index], file };
+                setProgram1Documents(newProgram1Docs);
+                break;
+            }
+            case 2: {
+                const newProgram2Docs = [...program2Documents];
+                newProgram2Docs[index] = { ...newProgram2Docs[index], file };
+                setProgram2Documents(newProgram2Docs);
+                break;
+            }
+            case 3: {
+                const newProgram3Docs = [...program3Documents];
+                newProgram3Docs[index] = { ...newProgram3Docs[index], file };
+                setProgram3Documents(newProgram3Docs);
+                break;
+            }
+        }
+    };
 
     // Save handler
     const handleSave = () => {
@@ -46,6 +151,9 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
         formData.append('hero_title', heroTitle);
         formData.append('hero_subtitle', heroSubtitle);
         formData.append('section_title', sectionTitle);
+        formData.append('program1_title', program1Title);
+        formData.append('program2_title', program2Title);
+        formData.append('program3_title', program3Title);
         formData.append('footer_section_title', footerSectionTitle);
 
         // Add hero image
@@ -53,15 +161,52 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
             formData.append('hero_image', heroImage);
         }
 
-        // Add syllabi document
-        if (syllabiDocument instanceof File) {
-            formData.append('syllabi_document', syllabiDocument);
+        // Add program images
+        if (program1Image instanceof File) {
+            formData.append('program1_image', program1Image);
+        }
+        if (program2Image instanceof File) {
+            formData.append('program2_image', program2Image);
+        }
+        if (program3Image instanceof File) {
+            formData.append('program3_image', program3Image);
         }
 
         // Add footer image
         if (footerImage instanceof File) {
             formData.append('footer_image', footerImage);
         }
+
+        // Add documents for each program
+        const programs = [
+            { key: 'program1', documents: program1Documents },
+            { key: 'program2', documents: program2Documents },
+            { key: 'program3', documents: program3Documents }
+        ];
+
+        programs.forEach(({ key, documents }) => {
+            // Send documents as JSON
+            const documentsData = documents.map((doc, index) => {
+                const docData: Record<string, string> = { title: doc.title };
+                
+                // If it's a new file upload, we'll handle it separately
+                if (doc.file instanceof File) {
+                    formData.append(`${key}_document_${index}`, doc.file);
+                } else if (typeof doc.file === 'string' && doc.file) {
+                    // Keep existing file path
+                    docData.file = doc.file;
+                }
+                
+                // Store old file path for cleanup
+                if (doc.oldFile) {
+                    docData.oldFile = doc.oldFile;
+                }
+                
+                return docData;
+            });
+            
+            formData.append(`${key}_documents`, JSON.stringify(documentsData));
+        });
 
         router.post('/admin/layout/exhibit/obe-syllabi', formData, {
             forceFormData: true,
@@ -84,9 +229,77 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
 
     const sections = [
         { id: 'hero', name: 'Hero Section' },
-        { id: 'syllabi', name: 'Syllabi Document' },
+        { id: 'syllabi', name: 'Syllabi Documents' },
         { id: 'footer', name: 'Mula Sayo' }
     ];
+
+    const DocumentManager = ({ title, documents, onAdd, onRemove, onUpdateTitle, onUpdateFile }: {
+        program: 1 | 2 | 3;
+        title: string;
+        documents: Document[];
+        onAdd: () => void;
+        onRemove: (index: number) => void;
+        onUpdateTitle: (index: number, title: string) => void;
+        onUpdateFile: (index: number, file: File | string) => void;
+    }) => (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div className="flex justify-between items-center mb-3">
+                <h4 className="text-md font-semibold text-[#7F0404]">{title}</h4>
+                <button
+                    type="button"
+                    onClick={onAdd}
+                    className="text-sm bg-[#7F0404] text-white px-3 py-1 rounded hover:bg-[#6B0303] transition-colors"
+                >
+                    Add Document
+                </button>
+            </div>
+            
+            <div className="space-y-4">
+                {documents.map((document, index) => (
+                    <div key={index} className="border border-gray-300 rounded p-3 bg-white">
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-sm font-medium text-gray-700">Document {index + 1}</span>
+                            <button
+                                type="button"
+                                onClick={() => onRemove(index)}
+                                className="text-red-600 hover:text-red-800 text-sm"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Document Title</label>
+                                <input
+                                    type="text"
+                                    value={document.title}
+                                    onChange={(e) => onUpdateTitle(index, e.target.value)}
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-[#C46B02] focus:border-transparent"
+                                    placeholder="Enter document title"
+                                />
+                            </div>
+                            
+                            <FileUpload
+                                label="Document File"
+                                value={document.file}
+                                onChange={(file) => onUpdateFile(index, file || '')}
+                                accept="image/*,.pdf,.doc,.docx"
+                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                maxSize={10}
+                            />
+                        </div>
+                    </div>
+                ))}
+                
+                {documents.length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                        No documents added yet. Click "Add Document" to start.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <>
@@ -160,11 +373,11 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                     </div>
                                 )}
 
-                                {/* Syllabi Document Section */}
+                                {/* Syllabi Documents Section */}
                                 {activeSection === 'syllabi' && (
                                     <div>
-                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Syllabi Document</h3>
-                                        <div className="space-y-4">
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Syllabi Documents</h3>
+                                        <div className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
@@ -176,17 +389,104 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                 />
                                             </div>
 
-                                            <FileUpload
-                                                label="Syllabi Document"
-                                                value={syllabiDocument}
-                                                onChange={(file) => setSyllabiDocument(file || '')}
-                                                accept="image/*,.pdf,.doc,.docx"
-                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                                maxSize={10}
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Upload syllabi document (Image, PDF, DOC, or DOCX)
-                                            </p>
+                                            {/* Program 1 - BTLED */}
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-sm font-semibold mb-1 text-[#7F0404]">BTLED Program Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={program1Title}
+                                                        onChange={(e) => setProgram1Title(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                        placeholder="Enter BTLED program title"
+                                                    />
+                                                </div>
+
+                                                <FileUpload
+                                                    label="BTLED Program Image"
+                                                    value={program1Image}
+                                                    onChange={(file) => setProgram1Image(file || '')}
+                                                    accept="image/*"
+                                                    allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                    maxSize={5}
+                                                />
+
+                                                <DocumentManager
+                                                    program={1}
+                                                    title="BTLED Documents"
+                                                    documents={program1Documents}
+                                                    onAdd={() => addDocument(1)}
+                                                    onRemove={(index) => removeDocument(1, index)}
+                                                    onUpdateTitle={(index, title) => updateDocumentTitle(1, index, title)}
+                                                    onUpdateFile={(index, file) => updateDocumentFile(1, index, file)}
+                                                />
+                                            </div>
+
+                                            {/* Program 2 - BSENT */}
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-sm font-semibold mb-1 text-[#7F0404]">BSENT Program Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={program2Title}
+                                                        onChange={(e) => setProgram2Title(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                        placeholder="Enter BSENT program title"
+                                                    />
+                                                </div>
+
+                                                <FileUpload
+                                                    label="BSENT Program Image"
+                                                    value={program2Image}
+                                                    onChange={(file) => setProgram2Image(file || '')}
+                                                    accept="image/*"
+                                                    allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                    maxSize={5}
+                                                />
+
+                                                <DocumentManager
+                                                    program={2}
+                                                    title="BSENT Documents"
+                                                    documents={program2Documents}
+                                                    onAdd={() => addDocument(2)}
+                                                    onRemove={(index) => removeDocument(2, index)}
+                                                    onUpdateTitle={(index, title) => updateDocumentTitle(2, index, title)}
+                                                    onUpdateFile={(index, file) => updateDocumentFile(2, index, file)}
+                                                />
+                                            </div>
+
+                                            {/* Program 3 - BSIT */}
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-sm font-semibold mb-1 text-[#7F0404]">BSIT Program Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={program3Title}
+                                                        onChange={(e) => setProgram3Title(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                        placeholder="Enter BSIT program title"
+                                                    />
+                                                </div>
+
+                                                <FileUpload
+                                                    label="BSIT Program Image"
+                                                    value={program3Image}
+                                                    onChange={(file) => setProgram3Image(file || '')}
+                                                    accept="image/*"
+                                                    allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                    maxSize={5}
+                                                />
+
+                                                <DocumentManager
+                                                    program={3}
+                                                    title="BSIT Documents"
+                                                    documents={program3Documents}
+                                                    onAdd={() => addDocument(3)}
+                                                    onRemove={(index) => removeDocument(3, index)}
+                                                    onUpdateTitle={(index, title) => updateDocumentTitle(3, index, title)}
+                                                    onUpdateFile={(index, file) => updateDocumentFile(3, index, file)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
