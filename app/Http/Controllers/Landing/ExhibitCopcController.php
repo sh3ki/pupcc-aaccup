@@ -59,74 +59,117 @@ class ExhibitCopcController extends Controller
             'hero_title',
             'hero_subtitle',
             'section_title',
-            'footer_section_title',
+            'footer_section_title'
         ]);
 
         // Handle hero image upload
         if ($request->hasFile('hero_image')) {
-            // Delete old image if exists
+            // Delete old hero image if it exists
             $oldContent = ExhibitCopc::getContent();
-            if ($oldContent && $oldContent->hero_image) {
+            if ($oldContent->hero_image && Storage::exists($oldContent->hero_image)) {
                 Storage::delete($oldContent->hero_image);
             }
             
-            $heroImagePath = $request->file('hero_image')->store('exhibit/copc/hero', 'public');
-            $data['hero_image'] = $heroImagePath;
+            $data['hero_image'] = $request->file('hero_image')->store('exhibit/copc/hero', 'public');
         }
 
         // Handle COPC document upload
         if ($request->hasFile('copc_document')) {
-            // Delete old document if exists
+            // Delete old COPC document if it exists
             $oldContent = ExhibitCopc::getContent();
-            if ($oldContent && $oldContent->copc_document) {
+            if ($oldContent->copc_document && Storage::exists($oldContent->copc_document)) {
                 Storage::delete($oldContent->copc_document);
             }
             
-            $documentPath = $request->file('copc_document')->store('exhibit/copc/documents', 'public');
-            $data['copc_document'] = $documentPath;
+            $data['copc_document'] = $request->file('copc_document')->store('exhibit/copc/documents', 'public');
         }
 
         // Handle footer image upload
         if ($request->hasFile('footer_image')) {
-            // Delete old image if exists
+            // Delete old footer image if it exists
             $oldContent = ExhibitCopc::getContent();
-            if ($oldContent && $oldContent->footer_image) {
+            if ($oldContent->footer_image && Storage::exists($oldContent->footer_image)) {
                 Storage::delete($oldContent->footer_image);
             }
             
-            $footerImagePath = $request->file('footer_image')->store('exhibit/copc/footer', 'public');
-            $data['footer_image'] = $footerImagePath;
+            $data['footer_image'] = $request->file('footer_image')->store('exhibit/copc/footer', 'public');
         }
 
         ExhibitCopc::updateContent($data);
 
-        return redirect()->back()->with('success', 'COPC content updated successfully!');
+        return back()->with('message', "COPC content updated successfully!");
     }
 
     /**
-     * Display the public COPC page
+     * Get COPC content for public display
      */
     public function show()
     {
         $content = ExhibitCopc::getContent();
         
-        // Transform paths for frontend
+        // Transform image paths for frontend
         $transformedContent = $content->toArray();
         
+        // Transform hero image
         if (isset($transformedContent['hero_image']) && $transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
+        // Transform COPC document
         if (isset($transformedContent['copc_document']) && $transformedContent['copc_document'] && !str_starts_with($transformedContent['copc_document'], 'http')) {
             $transformedContent['copc_document'] = Storage::url($transformedContent['copc_document']);
         }
         
+        // Transform footer image
         if (isset($transformedContent['footer_image']) && $transformedContent['footer_image'] && !str_starts_with($transformedContent['footer_image'], 'http')) {
             $transformedContent['footer_image'] = Storage::url($transformedContent['footer_image']);
         }
         
         return Inertia::render('landing/exhibit/copc', [
             'copcContent' => (object) $transformedContent,
+        ]);
+    }
+
+    /**
+     * Get COPC content as API response
+     */
+    public function getContent()
+    {
+        $content = ExhibitCopc::getContent();
+        
+        // Transform image paths for frontend
+        $transformedContent = (array) $content;
+        
+        // Transform hero image
+        if (isset($transformedContent['hero_image']) && $transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+            $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
+        }
+        
+        // Transform COPC document
+        if (isset($transformedContent['copc_document']) && $transformedContent['copc_document'] && !str_starts_with($transformedContent['copc_document'], 'http')) {
+            $transformedContent['copc_document'] = Storage::url($transformedContent['copc_document']);
+        }
+        
+        // Transform footer image
+        if (isset($transformedContent['footer_image']) && $transformedContent['footer_image'] && !str_starts_with($transformedContent['footer_image'], 'http')) {
+            $transformedContent['footer_image'] = Storage::url($transformedContent['footer_image']);
+        }
+        
+        return response()->json($transformedContent);
+    }
+
+    /**
+     * Debug endpoint to check database content
+     */
+    public function debug()
+    {
+        $copc = ExhibitCopc::first();
+        $content = ExhibitCopc::getContent();
+        
+        return response()->json([
+            'raw_record' => $copc,
+            'processed_content' => $content,
+            'storage_url_sample' => Storage::url('test.pdf'),
         ]);
     }
 }

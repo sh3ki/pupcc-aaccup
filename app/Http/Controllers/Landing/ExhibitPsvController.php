@@ -59,48 +59,45 @@ class ExhibitPsvController extends Controller
             'hero_title',
             'hero_subtitle',
             'section_title',
-            'footer_section_title',
+            'footer_section_title'
         ]);
 
         // Handle hero image upload
         if ($request->hasFile('hero_image')) {
-            // Delete old image if exists
+            // Delete old hero image if it exists
             $oldContent = ExhibitPsv::getContent();
-            if ($oldContent && $oldContent->hero_image) {
+            if ($oldContent->hero_image && Storage::exists($oldContent->hero_image)) {
                 Storage::delete($oldContent->hero_image);
             }
             
-            $heroImagePath = $request->file('hero_image')->store('exhibit/psv/hero', 'public');
-            $data['hero_image'] = $heroImagePath;
+            $data['hero_image'] = $request->file('hero_image')->store('exhibit/psv/hero', 'public');
         }
 
         // Handle PSV document upload
         if ($request->hasFile('psv_document')) {
-            // Delete old document if exists
+            // Delete old PSV document if it exists
             $oldContent = ExhibitPsv::getContent();
-            if ($oldContent && $oldContent->psv_document) {
+            if ($oldContent->psv_document && Storage::exists($oldContent->psv_document)) {
                 Storage::delete($oldContent->psv_document);
             }
             
-            $documentPath = $request->file('psv_document')->store('exhibit/psv/documents', 'public');
-            $data['psv_document'] = $documentPath;
+            $data['psv_document'] = $request->file('psv_document')->store('exhibit/psv/documents', 'public');
         }
 
         // Handle footer image upload
         if ($request->hasFile('footer_image')) {
-            // Delete old image if exists
+            // Delete old footer image if it exists
             $oldContent = ExhibitPsv::getContent();
-            if ($oldContent && $oldContent->footer_image) {
+            if ($oldContent->footer_image && Storage::exists($oldContent->footer_image)) {
                 Storage::delete($oldContent->footer_image);
             }
             
-            $footerImagePath = $request->file('footer_image')->store('exhibit/psv/footer', 'public');
-            $data['footer_image'] = $footerImagePath;
+            $data['footer_image'] = $request->file('footer_image')->store('exhibit/psv/footer', 'public');
         }
 
         ExhibitPsv::updateContent($data);
 
-        return redirect()->back()->with('success', 'PSV content updated successfully!');
+        return back()->with('message', "PSV content updated successfully!");
     }
 
     /**
@@ -127,6 +124,49 @@ class ExhibitPsvController extends Controller
         
         return Inertia::render('landing/exhibit/psv', [
             'psvContent' => (object) $transformedContent,
+        ]);
+    }
+
+    /**
+     * Get PSV content as API response
+     */
+    public function getContent()
+    {
+        $content = ExhibitPsv::getContent();
+        
+        // Transform image paths for frontend
+        $transformedContent = (array) $content;
+        
+        // Transform hero image
+        if (isset($transformedContent['hero_image']) && $transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+            $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
+        }
+        
+        // Transform PSV document
+        if (isset($transformedContent['psv_document']) && $transformedContent['psv_document'] && !str_starts_with($transformedContent['psv_document'], 'http')) {
+            $transformedContent['psv_document'] = Storage::url($transformedContent['psv_document']);
+        }
+        
+        // Transform footer image
+        if (isset($transformedContent['footer_image']) && $transformedContent['footer_image'] && !str_starts_with($transformedContent['footer_image'], 'http')) {
+            $transformedContent['footer_image'] = Storage::url($transformedContent['footer_image']);
+        }
+        
+        return response()->json($transformedContent);
+    }
+
+    /**
+     * Debug endpoint to check database content
+     */
+    public function debug()
+    {
+        $psv = ExhibitPsv::first();
+        $content = ExhibitPsv::getContent();
+        
+        return response()->json([
+            'raw_record' => $psv,
+            'processed_content' => $content,
+            'storage_url_sample' => Storage::url('test.pdf'),
         ]);
     }
 }

@@ -36,8 +36,8 @@ class ExhibitBor extends Model
             // Create default BOR if none exists
             $bor = static::create([
                 'hero_title' => 'Board of Regents',
-                'hero_subtitle' => 'Official documents and resolutions from the university Board of Regents',
-                'section_title' => 'BOR Documents',
+                'hero_subtitle' => 'Official BOR resolutions and decisions affecting PUP Calauan academic programs',
+                'section_title' => 'Board of Regents Preview',
                 'footer_section_title' => 'Mula Sayo, Para Sa Bayan',
                 'hero_image' => null,
                 'bor_document' => null,
@@ -58,7 +58,7 @@ class ExhibitBor extends Model
         if (!$bor) {
             return static::create($data);
         }
-
+        
         $bor->update($data);
         return $bor;
     }

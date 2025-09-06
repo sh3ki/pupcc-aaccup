@@ -36,8 +36,8 @@ class ExhibitCopc extends Model
             // Create default COPC if none exists
             $copc = static::create([
                 'hero_title' => 'Certificate of Program Compliance',
-                'hero_subtitle' => 'Official certification documents validating program compliance with educational standards',
-                'section_title' => 'COPC Documents',
+                'hero_subtitle' => 'Official COPC certifications and compliance documents for PUP Calauan academic programs',
+                'section_title' => 'Certificate of Program Compliance Preview',
                 'footer_section_title' => 'Mula Sayo, Para Sa Bayan',
                 'hero_image' => null,
                 'copc_document' => null,
@@ -58,7 +58,7 @@ class ExhibitCopc extends Model
         if (!$copc) {
             return static::create($data);
         }
-
+        
         $copc->update($data);
         return $copc;
     }

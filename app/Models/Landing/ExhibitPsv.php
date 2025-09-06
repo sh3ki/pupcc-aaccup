@@ -36,8 +36,8 @@ class ExhibitPsv extends Model
             // Create default PSV if none exists
             $psv = static::create([
                 'hero_title' => 'Primary Source Verification',
-                'hero_subtitle' => 'Official verification documents for academic credentials and institutional accreditation',
-                'section_title' => 'PSV Documents',
+                'hero_subtitle' => 'Official PSV documents and verifications for PUP Calauan academic programs',
+                'section_title' => 'Primary Source Verification Preview',
                 'footer_section_title' => 'Mula Sayo, Para Sa Bayan',
                 'hero_image' => null,
                 'psv_document' => null,
@@ -58,7 +58,7 @@ class ExhibitPsv extends Model
         if (!$psv) {
             return static::create($data);
         }
-
+        
         $psv->update($data);
         return $psv;
     }

@@ -48,241 +48,288 @@ function useScrollAnimation() {
     const [hasAnimated, setHasAnimated] = useState(false);
     const [scrollDirection, setScrollDirection] = useState('down');
     const [lastScrollY, setLastScrollY] = useState(0);
-
-    const elementRef = useRef<HTMLDivElement>(null);
-
-    const checkVisibility = useCallback(() => {
-        if (!elementRef.current) return;
-
-        const rect = elementRef.current.getBoundingClientRect();
-        const windowHeight = window.innerHeight;
-        const elementTop = rect.top;
-        const elementHeight = rect.height;
-
-        // Element is visible when it enters the viewport
-        const elementVisible = elementTop < windowHeight && (elementTop + elementHeight) > 0;
-
-        // Determine scroll direction
-        const currentScrollY = window.scrollY;
-        const newScrollDirection = currentScrollY > lastScrollY ? 'down' : 'up';
-        setScrollDirection(newScrollDirection);
-        setLastScrollY(currentScrollY);
-
-        if (elementVisible && !hasAnimated) {
-            setIsVisible(true);
-            setHasAnimated(true);
-        }
-    }, [hasAnimated, lastScrollY]);
+    const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Check visibility on mount
-        checkVisibility();
-
-        // Add scroll listener
-        window.addEventListener('scroll', checkVisibility);
-        window.addEventListener('resize', checkVisibility);
-
-        return () => {
-            window.removeEventListener('scroll', checkVisibility);
-            window.removeEventListener('resize', checkVisibility);
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
+            setLastScrollY(currentScrollY);
         };
-    }, [checkVisibility]);
 
-    return { isVisible, elementRef, scrollDirection };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [lastScrollY]);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !hasAnimated) {
+                    setIsVisible(true);
+                    setHasAnimated(true);
+                } else if (!entry.isIntersecting && hasAnimated) {
+                    setTimeout(() => {
+                        setIsVisible(false);
+                        setHasAnimated(false);
+                    }, 100);
+                }
+            },
+            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+        );
+        
+        const currentRef = ref.current;
+        if (currentRef) observer.observe(currentRef);
+        
+        return () => { 
+            if (currentRef) observer.unobserve(currentRef); 
+        };
+    }, [hasAnimated]);
+    
+    return [ref, isVisible, scrollDirection] as const;
 }
 
 export default function Psv({ psvContent }: Props) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(0);
-    const [zoom, setZoom] = useState(0.8);
-    const [rotate, setRotate] = useState(0);
+    // Use proper placeholder URLs that actually work
+    const psvUrl = psvContent.psv_document || "https://via.placeholder.com/900x1200/f3f4f6/6b7280?text=PSV+Preview";
+    
+    // Hero Section Data
+    const heroImageUrl = psvContent.hero_image || "https://via.placeholder.com/1600x500/7f0404/ffffff?text=PSV+Hero+Image";
+    
+    // Footer Section Data  
+    const footerImageUrl = psvContent.footer_image || "https://via.placeholder.com/1600x400/7f0404/ffffff?text=Footer+Background";
 
-    const heroAnimation = useScrollAnimation();
-    const documentAnimation = useScrollAnimation();
-    const footerAnimation = useScrollAnimation();
+    // PDF state - initialize once and persist
+    const [pdfLoaded, setPdfLoaded] = useState(false);
+    const [currentPage] = useState(1);
+    const setTotalPages = useState(1)[1];
+    const [zoom] = useState(0.9);
+    const [rotate] = useState(0);
 
-    const handlePageChange = (page: number) => {
-        if (page >= 1 && page <= totalPages) {
-            setCurrentPage(page);
+    // Initialize PDF loading once on component mount
+    useEffect(() => {
+        if (psvContent.psv_document && isPDF(psvContent.psv_document) && !pdfLoaded) {
+            setPdfLoaded(true);
         }
-    };
+    }, [psvContent.psv_document, pdfLoaded]);
 
-    const handleTotalPagesChange = (total: number) => {
-        setTotalPages(total);
-    };
+    // PSV Display Component - moved outside of animation effects
+    const PsvDisplay = useCallback(() => {
+        // Check if we have a real PSV (not placeholder)
+        const hasRealPsv = psvContent.psv_document && 
+                                  !psvContent.psv_document.includes('placeholder');
+        
+        if (!hasRealPsv) {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                    <div className="text-center">
+                        <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-gray-500 font-medium">No PSV document uploaded</p>
+                        <p className="text-gray-400 text-sm">Upload a PSV document via the admin panel</p>
+                    </div>
+                </div>
+            );
+        }
 
-    const handleZoomChange = (newZoom: number) => {
-        const clampedZoom = Math.max(0.1, Math.min(3, newZoom));
-        setZoom(clampedZoom);
-    };
+        if (isPDF(psvContent.psv_document || '') && pdfLoaded) {
+            return (
+                <div className="w-full">
+                    {/* PDF Display using PdfViewer component - only render when pdfLoaded is true */}
+                    <div className="w-full max-w-4xl mx-auto rounded-xl border border-gray-200 overflow-hidden" style={{ height: '800px' }}>
+                        <PdfViewer
+                            url={psvContent.psv_document || ''}
+                            currentPage={currentPage}
+                            onTotalPagesChange={setTotalPages}
+                            zoom={zoom}
+                            rotate={rotate}
+                            className="w-full h-full"
+                        />
+                    </div>
+                    
+                    {/* Fallback link if PDF viewer doesn't work */}
+                    <div className="mt-4 text-center">
+                        <a
+                            href={psvContent.psv_document}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded-lg hover:bg-[#5a0303] transition-colors"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download PDF
+                        </a>
+                    </div>
+                </div>
+            );
+        } else if (isPDF(psvContent.psv_document || '') && !pdfLoaded) {
+            // Show loading state for PDF
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                    <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-[#7F0404] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-gray-500 font-medium">Loading PDF...</p>
+                    </div>
+                </div>
+            );
+        }
 
-    const handleRotate = () => {
-        setRotate((prev) => (prev + 90) % 360);
-    };
+        if (isImage(psvContent.psv_document || '')) {
+            return (
+                <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center rounded-xl border border-gray-200 overflow-hidden" style={{ minHeight: '400px' }}>
+                    <img
+                        src={psvContent.psv_document}
+                        alt="PSV Document"
+                        className="max-h-full max-w-full object-contain rounded-xl shadow-lg"
+                        style={{ maxHeight: '800px', width: 'auto' }}
+                    />
+                </div>
+            );
+        }
+
+        // For other file types (DOCX, etc.)
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
+                <div className="text-center">
+                    <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-gray-600 font-medium">Document Available</p>
+                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(psvUrl).toUpperCase()} file</p>
+                    <a
+                        href={psvUrl}
+                        download
+                        className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded hover:bg-[#4D1414] transition-colors"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download PSV Document
+                    </a>
+                </div>
+            </div>
+        );
+    }, [psvContent.psv_document, pdfLoaded, currentPage, setTotalPages, zoom, rotate, psvUrl]);
+    
+    // Animation hooks for different sections
+    const [heroRef, heroVisible] = useScrollAnimation();
+    const [psvRef, psvVisible] = useScrollAnimation();
 
     return (
         <>
-            <Head title="PSV - Program Self-Verification" />
-            <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50">
-                <Header />
+            <Head title="Primary Source Verification" />
+            <div className="min-h-screen bg-white overflow-x-hidden">
+                <Header currentPage="exhibit" />
 
-                {/* Hero Section */}
-                <section 
-                    ref={heroAnimation.elementRef}
-                    className={`relative min-h-[70vh] flex items-center justify-center py-20 px-4 transition-all duration-1000 ${
-                        heroAnimation.isVisible 
-                            ? 'opacity-100 translate-y-0' 
-                            : 'opacity-0 translate-y-8'
-                    }`}
-                    style={{
-                        background: psvContent.hero_image
-                            ? `linear-gradient(135deg, rgba(127, 4, 4, 0.85) 0%, rgba(77, 20, 20, 0.85) 50%, rgba(196, 107, 2, 0.85) 100%), url(${psvContent.hero_image})`
-                            : `linear-gradient(135deg, ${COLORS.primaryMaroon} 0%, ${COLORS.darkMaroon} 50%, ${COLORS.burntOrange} 100%)`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        backgroundAttachment: 'fixed',
-                    }}
-                >
-                    <div className="absolute inset-0 bg-black opacity-20"></div>
-                    <div className="relative z-10 text-center text-white max-w-4xl mx-auto">
-                        <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-wide drop-shadow-lg">
-                            {psvContent.hero_title}
-                        </h1>
-                        <p className="text-xl md:text-2xl leading-relaxed opacity-90 drop-shadow-md">
-                            {psvContent.hero_subtitle}
-                        </p>
-                    </div>
-                </section>
-
-                {/* Document Section */}
-                {psvContent.psv_document && (
+                <main className="pt-16 sm:pt-20">
+                    {/* Hero Section */}
                     <section 
-                        ref={documentAnimation.elementRef}
-                        className={`py-20 px-4 bg-white transition-all duration-1000 delay-300 ${
-                            documentAnimation.isVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : 'opacity-0 translate-y-8'
+                        ref={heroRef}
+                        className={`relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden transition-all duration-1000 ${
+                            heroVisible 
+                                ? 'opacity-100 transform translate-y-0' 
+                                : 'opacity-0 transform translate-y-8'
                         }`}
                     >
-                        <div className="max-w-7xl mx-auto">
-                            <div className="text-center mb-12">
-                                <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                    {psvContent.section_title}
-                                </h2>
-                                <div className="w-24 h-1 mx-auto" style={{ backgroundColor: COLORS.burntOrange }}></div>
-                            </div>
-
-                            {isPDF(psvContent.psv_document) ? (
-                                <div className="bg-gray-50 rounded-lg shadow-2xl overflow-hidden">
-                                    {/* PDF Controls */}
-                                    <div className="bg-gray-800 text-white p-4 flex flex-wrap items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={() => handlePageChange(currentPage - 1)}
-                                                disabled={currentPage <= 1}
-                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm transition-colors"
-                                            >
-                                                Previous
-                                            </button>
-                                            <span className="text-sm">
-                                                Page {currentPage} of {totalPages}
-                                            </span>
-                                            <button
-                                                onClick={() => handlePageChange(currentPage + 1)}
-                                                disabled={currentPage >= totalPages}
-                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm transition-colors"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={() => handleZoomChange(zoom - 0.1)}
-                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm transition-colors"
-                                            >
-                                                Zoom Out
-                                            </button>
-                                            <span className="text-sm">{Math.round(zoom * 100)}%</span>
-                                            <button
-                                                onClick={() => handleZoomChange(zoom + 0.1)}
-                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm transition-colors"
-                                            >
-                                                Zoom In
-                                            </button>
-                                            <button
-                                                onClick={handleRotate}
-                                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm transition-colors"
-                                            >
-                                                Rotate
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* PDF Viewer */}
-                                    <div className="h-[800px]">
-                                        <PdfViewer
-                                            url={psvContent.psv_document}
-                                            currentPage={currentPage}
-                                            onTotalPagesChange={handleTotalPagesChange}
-                                            zoom={zoom}
-                                            rotate={rotate}
-                                            className="w-full h-full"
-                                        />
-                                    </div>
-                                </div>
-                            ) : isImage(psvContent.psv_document) ? (
-                                <div className="bg-white rounded-lg shadow-2xl overflow-hidden max-w-4xl mx-auto">
-                                    <img
-                                        src={psvContent.psv_document}
-                                        alt="PSV Document"
-                                        className="w-full h-auto"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="text-center">
-                                    <p className="text-gray-600 mb-4">Document available for download:</p>
-                                    <a
-                                        href={psvContent.psv_document}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-block px-6 py-3 text-white rounded-lg transition-colors"
-                                        style={{ backgroundColor: COLORS.primaryMaroon }}
-                                    >
-                                        Download PSV Document
-                                    </a>
-                                </div>
-                            )}
+                        <img
+                            src={heroImageUrl}
+                            alt="PSV Hero"
+                            className={`w-full h-full object-cover transition-transform duration-1000 ${
+                                heroVisible ? 'scale-100' : 'scale-95'
+                            } hover:scale-105`}
+                            style={{ minHeight: 400, maxHeight: 700 }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
+                            <h1 className={`text-5xl sm:text-6xl md:text-7xl font-bold text-white mb-4 drop-shadow-lg transition-all duration-1000 delay-300 ${
+                                heroVisible 
+                                    ? 'opacity-100 transform translate-y-0' 
+                                    : 'opacity-0 transform translate-y-12'
+                            }`}>
+                                {psvContent.hero_title}
+                            </h1>
+                            <p className={`text-xl sm:text-2xl md:text-3xl text-white/90 max-w-2xl mx-auto transition-all duration-1000 delay-500 ${
+                                heroVisible 
+                                    ? 'opacity-100 transform translate-y-0' 
+                                    : 'opacity-0 transform translate-y-12'
+                            }`}>
+                                {psvContent.hero_subtitle}
+                            </p>
                         </div>
                     </section>
-                )}
 
-                {/* Footer Section */}
-                <section 
-                    ref={footerAnimation.elementRef}
-                    className={`py-20 px-4 transition-all duration-1000 delay-600 ${
-                        footerAnimation.isVisible 
-                            ? 'opacity-100 translate-y-0' 
-                            : 'opacity-0 translate-y-8'
-                    }`}
-                    style={{
-                        background: psvContent.footer_image
-                            ? `linear-gradient(135deg, rgba(127, 4, 4, 0.9) 0%, rgba(196, 107, 2, 0.9) 100%), url(${psvContent.footer_image})`
-                            : `linear-gradient(135deg, ${COLORS.primaryMaroon} 0%, ${COLORS.burntOrange} 100%)`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                    }}
-                >
-                    <div className="max-w-4xl mx-auto text-center text-white">
-                        <h2 className="text-4xl md:text-5xl font-bold mb-6 drop-shadow-lg">
+                    {/* PSV Display */}
+                    <section 
+                        ref={psvRef}
+                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
+                            psvVisible 
+                                ? 'opacity-100 transform translate-y-0' 
+                                : 'opacity-0 transform translate-y-12'
+                        }`}
+                    >
+                        <div className="w-full max-w-4xl mx-auto">
+                            <div className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border-t-4 transition-all duration-1000 delay-200 ${
+                                psvVisible 
+                                    ? 'opacity-100 transform translate-y-0 scale-100' 
+                                    : 'opacity-0 transform translate-y-8 scale-95'
+                            }`} style={{ borderTopColor: COLORS.primaryMaroon }}>
+                                <div className="p-8 sm:p-12 flex flex-col items-center">
+                                    <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-8 sm:mb-12 text-center transition-all duration-1000 delay-400 ${
+                                        psvVisible 
+                                            ? 'opacity-100 transform translate-y-0' 
+                                            : 'opacity-0 transform translate-y-8'
+                                    }`} style={{ color: COLORS.primaryMaroon }}>
+                                        {psvContent.section_title}
+                                    </h2>
+                                    {/* PSV Display with PDF Support */}
+                                    <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
+                                        psvVisible 
+                                            ? 'opacity-100 transform translate-y-0 scale-100' 
+                                            : 'opacity-0 transform translate-y-8 scale-95'
+                                    }`}>
+                                        <PsvDisplay />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+
+                {/* Mula Sayo, Para Sa Bayan Section */}
+                <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
+                    <div className="absolute inset-0 w-full h-full">
+                        <img
+                            src={footerImageUrl}
+                            alt={psvContent.footer_section_title}
+                            className="w-full h-full object-cover object-center opacity-70"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
+                    </div>
+                    <div className="relative z-10 flex flex-col items-center justify-center h-full">
+                        <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
                             {psvContent.footer_section_title}
                         </h2>
-                        <div className="w-24 h-1 mx-auto" style={{ backgroundColor: COLORS.softYellow }}></div>
                     </div>
                 </section>
 
                 <Footer />
             </div>
+            <style>{`
+                @keyframes fade-in-up {
+                    from { opacity: 0; transform: translateY(30px);}
+                    to { opacity: 1; transform: translateY(0);}
+                }
+                .animate-fade-in-up {
+                    animation: fade-in-up 0.8s ease-out forwards;
+                }
+                .animation-delay-300 {
+                    animation-delay: 0.3s;
+                }
+                .text-shadow-lg {
+                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+                }
+            `}</style>
         </>
     );
 }

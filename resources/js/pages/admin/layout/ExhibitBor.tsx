@@ -1,360 +1,279 @@
-import React, { useState, useRef } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
-import PdfViewer from '@/components/PdfViewer';
+import PagePreview from '@/components/PagePreview';
+import FileUpload from '@/components/FileUpload';
 
 interface BorContent {
-    hero_image?: string;
+    hero_image: string | File;
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    bor_document?: string;
+    bor_document: string | File;
     footer_section_title: string;
-    footer_image?: string;
+    footer_image: string | File;
 }
 
 interface Props {
     borContent: BorContent;
 }
 
-// Helper functions
-const getFileExtension = (url: string) => {
-    if (!url) return '';
-    return url.split('.').pop()?.toLowerCase() || '';
-};
+export default function LayoutExhibitBor({ borContent }: Props) {
+    const [activeSection, setActiveSection] = useState('hero');
+    const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [previewKey, setPreviewKey] = useState(Date.now());
 
-const isPDF = (url: string) => {
-    const extension = getFileExtension(url);
-    return extension === 'pdf';
-};
+    // Hero Section State
+    const [heroTitle, setHeroTitle] = useState(borContent.hero_title || "Board of Regents");
+    const [heroSubtitle, setHeroSubtitle] = useState(borContent.hero_subtitle || 'Official BOR resolutions and decisions affecting PUP Calauan academic programs');
+    const [heroImage, setHeroImage] = useState<string | File>(borContent.hero_image || '');
 
-const isImage = (url: string) => {
-    const extension = getFileExtension(url);
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension);
-};
+    // BOR Section State
+    const [sectionTitle, setSectionTitle] = useState(borContent.section_title || "Board of Regents Preview");
+    const [borDocument, setBorDocument] = useState<string | File>(borContent.bor_document || '');
 
-export default function ExhibitBor({ borContent }: Props) {
-    const heroImageRef = useRef<HTMLInputElement>(null);
-    const documentRef = useRef<HTMLInputElement>(null);
-    const footerImageRef = useRef<HTMLInputElement>(null);
-    const [previewUrls, setPreviewUrls] = useState<{
-        hero_image?: string;
-        bor_document?: string;
-        footer_image?: string;
-    }>({});
+    // Footer Section State
+    const [footerSectionTitle, setFooterSectionTitle] = useState(borContent.footer_section_title || 'Mula Sayo, Para Sa Bayan');
+    const [footerImage, setFooterImage] = useState<string | File>(borContent.footer_image || '');
 
-    const { data, setData, post, processing, errors } = useForm({
-        hero_title: borContent.hero_title || '',
-        hero_subtitle: borContent.hero_subtitle || '',
-        section_title: borContent.section_title || '',
-        footer_section_title: borContent.footer_section_title || '',
-        hero_image: null as File | null,
-        bor_document: null as File | null,
-        footer_image: null as File | null,
-    });
-
-    const handleFileChange = (field: 'hero_image' | 'bor_document' | 'footer_image', file: File | null) => {
-        setData(field, file);
+    // Save handler
+    const handleSave = () => {
+        setSaving(true);
+        const formData = new FormData();
         
-        if (file) {
-            const url = URL.createObjectURL(file);
-            setPreviewUrls(prev => ({
-                ...prev,
-                [field]: url
-            }));
-        } else {
-            setPreviewUrls(prev => ({
-                ...prev,
-                [field]: undefined
-            }));
-        }
-    };
+        // Add basic fields
+        formData.append('hero_title', heroTitle);
+        formData.append('hero_subtitle', heroSubtitle);
+        formData.append('section_title', sectionTitle);
+        formData.append('footer_section_title', footerSectionTitle);
 
-    const submit = (e: React.FormEvent) => {
-        e.preventDefault();
-        post('/admin/exhibit-bor', {
+        // Add hero image
+        if (heroImage instanceof File) {
+            formData.append('hero_image', heroImage);
+        }
+
+        // Add BOR document
+        if (borDocument instanceof File) {
+            formData.append('bor_document', borDocument);
+        }
+
+        // Add footer image
+        if (footerImage instanceof File) {
+            formData.append('footer_image', footerImage);
+        }
+
+        router.post('/admin/layout/exhibit/bor', formData, {
             forceFormData: true,
+            onFinish: () => setSaving(false),
             onSuccess: () => {
-                // Clear preview URLs
-                Object.values(previewUrls).forEach(url => {
-                    if (url) URL.revokeObjectURL(url);
-                });
-                setPreviewUrls({});
-            }
+                // Refresh the preview by updating the key with a more significant delay
+                setTimeout(() => {
+                    setPreviewKey(Date.now());
+                }, 500);
+                
+                // Show success indicator
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 3000);
+            },
+            onError: (errors) => {
+                console.error('Save errors:', errors);
+            },
         });
     };
 
-    const getCurrentDocument = () => {
-        return previewUrls.bor_document || borContent.bor_document;
-    };
-
-    const getCurrentHeroImage = () => {
-        return previewUrls.hero_image || borContent.hero_image;
-    };
-
-    const getCurrentFooterImage = () => {
-        return previewUrls.footer_image || borContent.footer_image;
-    };
+    const sections = [
+        { id: 'hero', name: 'Hero Section' },
+        { id: 'bor', name: 'BOR Document' },
+        { id: 'footer', name: 'Mula Sayo' }
+    ];
 
     return (
-        <DashboardLayout>
-            <Head title="Manage BOR Exhibit" />
-            
-            <div className="p-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-900">Manage BOR Exhibit</h1>
-                        <p className="text-gray-600 mt-2">Update the Board of Regents exhibit content</p>
-                    </div>
+        <>
+            <Head title="Layout: Exhibit - Board of Regents" />
+            <DashboardLayout>
+                <div className="flex w-full h-[calc(100vh-64px-40px)]">
+                    {/* Sidebar - Content Management */}
+                    <aside className="w-1/4 bg-white border-r border-gray-200 h-full sticky top-16 self-start overflow-y-auto">
+                        <div className="p-6">
+                            {/* Header */}
+                            <div className="mb-6">
+                                <h2 className="text-xl font-bold text-gray-800">BOR Page Editor</h2>
+                                <p className="text-sm text-gray-600">Manage content and preview changes</p>
+                            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Form Section */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h2 className="text-xl font-semibold mb-6 text-gray-800">Edit Content</h2>
-                            
-                            <form onSubmit={submit} className="space-y-6">
-                                {/* Hero Section */}
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium text-gray-700 border-b pb-2">Hero Section</h3>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Hero Title
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.hero_title}
-                                            onChange={(e) => setData('hero_title', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Enter hero title"
-                                        />
-                                        {errors.hero_title && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.hero_title}</p>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Hero Subtitle
-                                        </label>
-                                        <textarea
-                                            value={data.hero_subtitle}
-                                            onChange={(e) => setData('hero_subtitle', e.target.value)}
-                                            rows={3}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Enter hero subtitle"
-                                        />
-                                        {errors.hero_subtitle && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.hero_subtitle}</p>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Hero Background Image
-                                        </label>
-                                        <input
-                                            ref={heroImageRef}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => handleFileChange('hero_image', e.target.files?.[0] || null)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        {errors.hero_image && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.hero_image}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Document Section */}
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium text-gray-700 border-b pb-2">Document Section</h3>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Section Title
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.section_title}
-                                            onChange={(e) => setData('section_title', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Enter section title"
-                                        />
-                                        {errors.section_title && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.section_title}</p>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            BOR Document
-                                        </label>
-                                        <input
-                                            ref={documentRef}
-                                            type="file"
-                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                            onChange={(e) => handleFileChange('bor_document', e.target.files?.[0] || null)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Accepted formats: PDF, DOC, DOCX, JPG, PNG
-                                        </p>
-                                        {errors.bor_document && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.bor_document}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Footer Section */}
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium text-gray-700 border-b pb-2">Footer Section</h3>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Footer Section Title
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.footer_section_title}
-                                            onChange={(e) => setData('footer_section_title', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Enter footer section title"
-                                        />
-                                        {errors.footer_section_title && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.footer_section_title}</p>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Footer Background Image
-                                        </label>
-                                        <input
-                                            ref={footerImageRef}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => handleFileChange('footer_image', e.target.files?.[0] || null)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        {errors.footer_image && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.footer_image}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-4 pt-6">
+                            {/* Section Navigation */}
+                            <div className="mb-6 space-y-1">
+                                {sections.map((section) => (
                                     <button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                        key={section.id}
+                                        onClick={() => setActiveSection(section.id)}
+                                        className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                                            activeSection === section.id
+                                                ? 'bg-gray-100 text-[#7F0404] font-semibold'
+                                                : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
                                     >
-                                        {processing ? 'Updating...' : 'Update BOR Exhibit'}
+                                        <span className="text-[#7F0404]">{section.name}</span>
                                     </button>
-                                </div>
-                            </form>
-                        </div>
+                                ))}
+                            </div>
 
-                        {/* Preview Section */}
-                        <div className="space-y-6">
-                            {/* Hero Image Preview */}
-                            {getCurrentHeroImage() && (
-                                <div className="bg-white rounded-lg shadow-md p-6">
-                                    <h3 className="text-lg font-medium text-gray-700 mb-4">Hero Image Preview</h3>
-                                    <div className="relative h-48 bg-gray-100 rounded-lg overflow-hidden">
-                                        <img
-                                            src={getCurrentHeroImage()}
-                                            alt="Hero preview"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                            {/* Dynamic Content Based on Active Section */}
+                            <div className="space-y-6">
+                                {/* Hero Section */}
+                                {activeSection === 'hero' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Hero Section</h3>
+                                        <div className="space-y-4">
+                                            <FileUpload
+                                                label="Hero Background Image"
+                                                value={heroImage}
+                                                onChange={(file) => setHeroImage(file || '')}
+                                                accept="image/*"
+                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                maxSize={5}
+                                            />
 
-                            {/* Document Preview */}
-                            {getCurrentDocument() && (
-                                <div className="bg-white rounded-lg shadow-md p-6">
-                                    <h3 className="text-lg font-medium text-gray-700 mb-4">Document Preview</h3>
-                                    {isPDF(getCurrentDocument()!) ? (
-                                        <div className="h-96 bg-gray-100 rounded-lg overflow-hidden">
-                                            <PdfViewer
-                                                url={getCurrentDocument()!}
-                                                currentPage={1}
-                                                onTotalPagesChange={() => {}}
-                                                zoom={0.6}
-                                                rotate={0}
-                                                className="w-full h-full"
-                                            />
-                                        </div>
-                                    ) : isImage(getCurrentDocument()!) ? (
-                                        <div className="relative h-96 bg-gray-100 rounded-lg overflow-hidden">
-                                            <img
-                                                src={getCurrentDocument()}
-                                                alt="Document preview"
-                                                className="w-full h-full object-contain"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-                                            <div className="text-center">
-                                                <div className="text-gray-500 mb-2">Document uploaded</div>
-                                                <div className="text-sm text-gray-400">Preview not available for this file type</div>
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Hero Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={heroTitle}
+                                                    onChange={(e) => setHeroTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter hero title"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Hero Subtitle</label>
+                                                <textarea
+                                                    value={heroSubtitle}
+                                                    onChange={(e) => setHeroSubtitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter hero subtitle"
+                                                    rows={3}
+                                                />
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Footer Image Preview */}
-                            {getCurrentFooterImage() && (
-                                <div className="bg-white rounded-lg shadow-md p-6">
-                                    <h3 className="text-lg font-medium text-gray-700 mb-4">Footer Image Preview</h3>
-                                    <div className="relative h-48 bg-gray-100 rounded-lg overflow-hidden">
-                                        <img
-                                            src={getCurrentFooterImage()}
-                                            alt="Footer preview"
-                                            className="w-full h-full object-cover"
-                                        />
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Quick Actions */}
-                            <div className="bg-white rounded-lg shadow-md p-6">
-                                <h3 className="text-lg font-medium text-gray-700 mb-4">Quick Actions</h3>
-                                <div className="space-y-3">
-                                    <a
-                                        href="/exhibit/bor"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block w-full text-center bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors"
-                                    >
-                                        View Public Page
-                                    </a>
+                                {/* BOR Document Section */}
+                                {activeSection === 'bor' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">BOR Document</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={sectionTitle}
+                                                    onChange={(e) => setSectionTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter section title"
+                                                />
+                                            </div>
+
+                                            <FileUpload
+                                                label="BOR Document"
+                                                value={borDocument}
+                                                onChange={(file) => setBorDocument(file || '')}
+                                                accept="image/*,.pdf,.doc,.docx"
+                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                maxSize={10}
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Upload BOR document (Image, PDF, DOC, or DOCX)
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Footer Section */}
+                                {activeSection === 'footer' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7F0404] mb-4">Mula Sayo, Para sa Bayan</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={footerSectionTitle}
+                                                    onChange={(e) => setFooterSectionTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                    placeholder="Enter footer section title"
+                                                />
+                                            </div>
+
+                                            <FileUpload
+                                                label="Background Image"
+                                                value={footerImage}
+                                                onChange={(file) => setFooterImage(file || '')}
+                                                accept="image/*"
+                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                maxSize={5}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Save Button */}
+                                <div className="pt-6 border-t border-gray-200">
                                     <button
-                                        type="button"
-                                        onClick={() => {
-                                            heroImageRef.current?.click();
-                                        }}
-                                        className="block w-full text-center bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        className="w-full flex items-center justify-center bg-[#7F0404] hover:bg-[#4D1414] disabled:bg-gray-400 text-white font-semibold px-6 py-3 rounded shadow transition-all duration-200 hover:scale-[1.02] hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-sm"
                                     >
-                                        Change Hero Image
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            documentRef.current?.click();
-                                        }}
-                                        className="block w-full text-center bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
-                                    >
-                                        Change Document
+                                        {saving ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                </svg>
+                                                Save Changes
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </aside>
+
+                    {/* Main Content - Preview */}
+                    <section className="flex-1 w-full px-8 py-4 pb-2 text-left flex flex-col h-full">
+                        {/* Preview Header */}
+                        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-800">BOR Page Preview</h1>
+                                <p className="text-sm text-gray-600">Live preview of your changes</p>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm">
+                                <div className={`w-2 h-2 rounded-full ${saveSuccess ? 'bg-green-500' : 'bg-green-400'}`}></div>
+                                <span className={saveSuccess ? 'text-green-600 font-medium' : 'text-gray-500'}>
+                                    {saveSuccess ? 'Preview Updated!' : 'Live Preview'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Preview Container */}
+                        <div className="flex-1 min-h-0 flex justify-center">
+                            <div className="h-full w-full max-w-7xl">
+                                <PagePreview 
+                                    pageUrl="/exhibit/bor" 
+                                    title="BOR Page Preview"
+                                    key={previewKey}
+                                />
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </div>
-        </DashboardLayout>
+            </DashboardLayout>
+        </>
     );
 }

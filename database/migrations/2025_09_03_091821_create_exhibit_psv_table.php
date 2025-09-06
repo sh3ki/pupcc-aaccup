@@ -13,13 +13,20 @@ return new class extends Migration
     {
         Schema::create('exhibit_psv', function (Blueprint $table) {
             $table->id();
+            
+            // Hero Section
             $table->string('hero_image')->nullable();
             $table->string('hero_title')->nullable();
-            $table->text('hero_subtitle')->nullable();
+            $table->string('hero_subtitle')->nullable();
+            
+            // PSV Section
             $table->string('section_title')->nullable();
-            $table->string('psv_document')->nullable();
+            $table->string('psv_document')->nullable(); // Can be image, docx, or pdf
+            
+            // Mula Sayo Para Sa Bayan Section
             $table->string('footer_section_title')->nullable();
             $table->string('footer_image')->nullable();
+            
             $table->timestamps();
         });
     }

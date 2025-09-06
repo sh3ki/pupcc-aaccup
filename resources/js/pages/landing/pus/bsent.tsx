@@ -719,13 +719,7 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                     {/* Parameter selection */}
                                     {selected.areaId && !selected.parameterId && (
                                         <div>
-                                            <div className="mb-4">
-                                                <h3 className="text-xl font-bold" style={{ color: COLORS.primaryMaroon }}>
-                                                    {selectedArea?.name} - Parameters
-                                                </h3>
-                                                <p className="text-gray-700 mt-2">Select a parameter to view its categories.</p>
-                                            </div>
-                                            
+                                           
                                             {loadingDocs ? (
                                                 <div className="flex items-center justify-center py-12">
                                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: COLORS.primaryMaroon }}></div>
@@ -735,51 +729,59 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                                 <DocumentCardGrid
                                                     items={selectedArea.parameters}
                                                     getKey={param => param.id}
+                                                    gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8"
                                                     onCardClick={param => {
                                                         setSelected({ 
                                                             areaId: selected.areaId, 
                                                             parameterId: param.id 
                                                         });
                                                     }}
-                                                    renderCardContent={(param) => (
-                                                        <div className="p-5 flex flex-col h-full">
-                                                            <div className="flex items-start mb-3">
-                                                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
-                                                                    style={{ backgroundColor: '#f1f5f9' }}>
-                                                                    <svg className="w-5 h-5" style={{ color: COLORS.primaryMaroon }} fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                                                                    </svg>
-                                                                </div>
-                                                                <h2 className="text-base font-bold" style={{ color: COLORS.primaryMaroon }}>
-                                                                    {param.code ? `${param.code} - ` : ''}
-                                                                    {param.name}
-                                                                </h2>
-                                                            </div>
-                                                            <div className="flex-grow"></div>
-                                                            <div className="mt-auto">
-                                                                <div className="text-gray-600 mb-4">
-                                                                    <div className="flex justify-between items-center mb-3">
-                                                                        <span className="text-sm">Categories:</span>
-                                                                        <span className="font-semibold">3</span>
+                                                    renderCardContent={(param) => {
+                                                        // Get the area image from bsentContent.accreditation_areas or fallback
+                                                        const areaImage = (() => {
+                                                            if (bsentContent.accreditation_areas && bsentContent.accreditation_areas.length > 0) {
+                                                                const matchingArea = bsentContent.accreditation_areas.find(area => 
+                                                                    area.title?.toLowerCase().includes(selectedArea?.name?.toLowerCase() || '') ||
+                                                                    selectedArea?.name?.toLowerCase().includes(area.title?.toLowerCase() || '')
+                                                                );
+                                                                return matchingArea?.image || '/api/placeholder/300/200';
+                                                            }
+                                                            return '/api/placeholder/300/200';
+                                                        })();
+
+                                                        return (
+                                                            <>
+                                                                <img 
+                                                                    src={areaImage}
+                                                                    alt={param.name} 
+                                                                    className="w-full h-28 object-cover" 
+                                                                    style={{ minHeight: 112, maxHeight: 112 }} 
+                                                                />
+                                                                <div className="p-4 flex flex-col items-center flex-grow">
+                                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>
+                                                                        {param.code ? `${param.code} - ` : ''}
+                                                                        {param.name}
+                                                                    </h3>
+                                                                    
+                                                                    {/* Keep Categories and Approved Documents visible */}
+                                                                    <div className="text-gray-600 mb-4 w-full">
+                                                                        <div className="flex justify-between items-center mb-3">
+                                                                          
+                                                                        </div>
+                                                                      
                                                                     </div>
-                                                                    <div className="flex justify-between items-center">
-                                                                        <span className="text-sm">Approved Documents:</span>
-                                                                        <span className={`font-semibold ${(param.approved_count || 0) > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                            {param.approved_count || 0}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
+                                                                    
+                                                                    {/* Button identical to Areas button */}
                                                                     <button 
-                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
+                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 mt-auto"
                                                                         style={{ backgroundColor: COLORS.primaryMaroon }}
                                                                     >
                                                                         View Categories
                                                                     </button>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                            </>
+                                                        );
+                                                    }}
                                                 />
                                             ) : (
                                                 <div className="text-center py-12 text-gray-500">
@@ -801,6 +803,7 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                             <DocumentCardGrid
                                                 items={categoryList}
                                                 getKey={cat => cat.value}
+                                                gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8"
                                                 onCardClick={cat => {
                                                     setSelected({
                                                         areaId: selected.areaId,
@@ -810,39 +813,42 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                                                 }}
                                                 renderCardContent={(cat) => {
                                                     const approvedCount = selectedParameter?.category_approved_counts?.[cat.value] || 0;
+                                                    // Get the area image from bsentContent.accreditation_areas or fallback
+                                                    const areaImage = (() => {
+                                                        if (bsentContent.accreditation_areas && bsentContent.accreditation_areas.length > 0) {
+                                                            const matchingArea = bsentContent.accreditation_areas.find(area => 
+                                                                area.title?.toLowerCase().includes(selectedArea?.name?.toLowerCase() || '') ||
+                                                                selectedArea?.name?.toLowerCase().includes(area.title?.toLowerCase() || '')
+                                                            );
+                                                            return matchingArea?.image || '/api/placeholder/300/200';
+                                                        }
+                                                        return '/api/placeholder/300/200';
+                                                    })();
+
                                                     return (
-                                                        <div className="p-5 flex flex-col h-full">
-                                                            <div className="flex items-start mb-3">
-                                                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-1"
-                                                                    style={{ backgroundColor: '#f1f5f9' }}>
-                                                                    <svg className="w-5 h-5" style={{ color: COLORS.primaryMaroon }} fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                                                                    </svg>
-                                                                </div>
-                                                                <h2 className="text-base font-bold" style={{ color: COLORS.primaryMaroon }}>
+                                                        <>
+                                                            <img 
+                                                                src={areaImage}
+                                                                alt={cat.label} 
+                                                                className="w-full h-28 object-cover" 
+                                                                style={{ minHeight: 112, maxHeight: 112 }} 
+                                                            />
+                                                            <div className="p-4 flex flex-col items-center flex-grow">
+                                                                <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>
                                                                     {cat.label}
-                                                                </h2>
+                                                                </h3>
+                                                                
+                                                               
+                                                                
+                                                                {/* Button */}
+                                                                <button 
+                                                                    className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 mt-auto"
+                                                                    style={{ backgroundColor: COLORS.primaryMaroon }}
+                                                                >
+                                                                    View Documents
+                                                                </button>
                                                             </div>
-                                                            <div className="flex-grow"></div>
-                                                            <div className="mt-auto">
-                                                                <div className="text-gray-600 mb-4">
-                                                                    <div className="flex justify-between items-center">
-                                                                        <span className="text-sm">Approved Documents:</span>
-                                                                        <span className={`font-semibold ${approvedCount > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                            {approvedCount}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="pt-3 border-t border-gray-100 flex justify-center">
-                                                                    <button 
-                                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 text-xs"
-                                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
-                                                                    >
-                                                                        View Documents
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                        </>
                                                     );
                                                 }}
                                             />

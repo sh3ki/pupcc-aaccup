@@ -100,11 +100,11 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
         { name: "Instructional Materials", href: "/exhibit/instructional-materials", description: "" },
         { name: "Faculty Manual", href: "/exhibit/faculty-manual", description: "" },
         { name: "Administrative Manual", href: "/exhibit/administrative-manual", description: "" },
-        { name: "CHED Memorandum Order", href: "/exhibit/ched-memorandum-order", description: "" },
         { name: "Licensure", href: "/exhibit/licensure", description: "" },
-        { name: "COPC", href: "/exhibit/copc", description: "" },
-        { name: "BOR", href: "/exhibit/bor", description: "", },
-        { name: "PSV", href: "/exhibit/psv", description: "" }
+        { name: "CHED Memorandum Order", href: "/exhibit/ched-memorandum-order", description: "" },
+        { name: "Board of Regents", href: "/exhibit/bor", description: "", },
+        { name: "Certificate of Program Compliance", href: "/exhibit/copc", description: "" },
+        { name: "Primary Source Verification", href: "/exhibit/psv", description: "" }
     ];
 
     // Check if any faculty page is active
@@ -162,6 +162,7 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
     }, [aboutDropdownOpen, programsDropdownOpen, exhibitDropdownOpen]);
 
     return (
+        <>
         <header 
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out ${
                 isScrolled 
@@ -249,7 +250,7 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
                                         
                                         {/* Desktop Dropdown */}
                                         <div
-                                            className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-1 w-auto min-w-48 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden transition-all duration-300 ${
+                                            className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-1 w-auto min-w-48 bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 ${
                                                 (item.name === 'About' && aboutDropdownOpen) || 
                                                 (item.name === 'Programs Under Survey' && programsDropdownOpen) ||
                                                 (item.name === 'Exhibit' && exhibitDropdownOpen)
@@ -258,11 +259,13 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
                                             }`}
                                             style={{ 
                                                 borderTop: `3px solid ${COLORS.primaryMaroon}`,
-                                                backdropFilter: 'blur(10px)'
+                                                backdropFilter: 'blur(10px)',
+                                                maxHeight: item.name === 'Exhibit' ? '70vh' : 'auto',
+                                                height: item.name === 'Exhibit' ? '70vh' : 'auto'
                                             }}
                                         >
-                                            <div className="p-2">
-                                                {item.dropdownItems?.map((dropdownItem, index) => (
+                                            <div className={`${item.name === 'Exhibit' ? 'h-full overflow-y-auto p-2 exhibit-dropdown-scroll' : 'p-2'}`}>
+                                                {item.dropdownItems?.map((dropdownItem) => (
                                                     <Link
                                                         key={dropdownItem.name}
                                                         href={dropdownItem.href}
@@ -403,12 +406,20 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
                                         </div>
                                         
                                         {/* Mobile Dropdown */}
-                                        <div className={`overflow-hidden transition-all duration-300 ${
+                                        <div className={`transition-all duration-300 ${
                                             (item.name === 'About' && mobileAboutOpen) || 
                                             (item.name === 'Programs Under Survey' && mobileProgramsOpen) ||
                                             (item.name === 'Exhibit' && mobileExhibitOpen)
-                                                ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
-                                        }`}>
+                                                ? 'opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
+                                        }`}
+                                        style={{
+                                            maxHeight: (item.name === 'Exhibit' && mobileExhibitOpen) ? '70vh' : 
+                                                       ((item.name === 'About' && mobileAboutOpen) || 
+                                                        (item.name === 'Programs Under Survey' && mobileProgramsOpen)) ? '16rem' : '0',
+                                            height: (item.name === 'Exhibit' && mobileExhibitOpen) ? '70vh' : 'auto'
+                                        }}
+                                        >
+                                            <div className={`${item.name === 'Exhibit' ? 'h-full overflow-y-auto exhibit-dropdown-scroll' : ''}`}>
                                             <Link
                                                 href={item.href}
                                                 className="block px-6 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
@@ -433,6 +444,7 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
                                                     {dropdownItem.name}
                                                 </Link>
                                             ))}
+                                            </div>
                                         </div>
                                     </div>
                                 ) : (
@@ -465,5 +477,31 @@ export default function Header({ currentPage = 'home' }: HeaderProps) {
                 </div>
             </div>
         </header>
+            <style>{`
+                /* Custom scrollbar for exhibit dropdown */
+                .exhibit-dropdown-scroll {
+                    scrollbar-width: thin;
+                    scrollbar-color: #7F0404 #f1f1f1;
+                }
+                
+                .exhibit-dropdown-scroll::-webkit-scrollbar {
+                    width: 6px;
+                }
+                
+                .exhibit-dropdown-scroll::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 3px;
+                }
+                
+                .exhibit-dropdown-scroll::-webkit-scrollbar-thumb {
+                    background: #7F0404;
+                    border-radius: 3px;
+                }
+                
+                .exhibit-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+                    background: #4D1414;
+                }
+            `}</style>
+        </>
     );
 }

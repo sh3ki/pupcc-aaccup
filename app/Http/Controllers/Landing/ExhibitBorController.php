@@ -59,74 +59,117 @@ class ExhibitBorController extends Controller
             'hero_title',
             'hero_subtitle',
             'section_title',
-            'footer_section_title',
+            'footer_section_title'
         ]);
 
         // Handle hero image upload
         if ($request->hasFile('hero_image')) {
-            // Delete old image if exists
+            // Delete old hero image if it exists
             $oldContent = ExhibitBor::getContent();
-            if ($oldContent && $oldContent->hero_image) {
+            if ($oldContent->hero_image && Storage::exists($oldContent->hero_image)) {
                 Storage::delete($oldContent->hero_image);
             }
             
-            $heroImagePath = $request->file('hero_image')->store('exhibit/bor/hero', 'public');
-            $data['hero_image'] = $heroImagePath;
+            $data['hero_image'] = $request->file('hero_image')->store('exhibit/bor/hero', 'public');
         }
 
         // Handle BOR document upload
         if ($request->hasFile('bor_document')) {
-            // Delete old document if exists
+            // Delete old BOR document if it exists
             $oldContent = ExhibitBor::getContent();
-            if ($oldContent && $oldContent->bor_document) {
+            if ($oldContent->bor_document && Storage::exists($oldContent->bor_document)) {
                 Storage::delete($oldContent->bor_document);
             }
             
-            $documentPath = $request->file('bor_document')->store('exhibit/bor/documents', 'public');
-            $data['bor_document'] = $documentPath;
+            $data['bor_document'] = $request->file('bor_document')->store('exhibit/bor/documents', 'public');
         }
 
         // Handle footer image upload
         if ($request->hasFile('footer_image')) {
-            // Delete old image if exists
+            // Delete old footer image if it exists
             $oldContent = ExhibitBor::getContent();
-            if ($oldContent && $oldContent->footer_image) {
+            if ($oldContent->footer_image && Storage::exists($oldContent->footer_image)) {
                 Storage::delete($oldContent->footer_image);
             }
             
-            $footerImagePath = $request->file('footer_image')->store('exhibit/bor/footer', 'public');
-            $data['footer_image'] = $footerImagePath;
+            $data['footer_image'] = $request->file('footer_image')->store('exhibit/bor/footer', 'public');
         }
 
         ExhibitBor::updateContent($data);
 
-        return redirect()->back()->with('success', 'BOR content updated successfully!');
+        return back()->with('message', "BOR content updated successfully!");
     }
 
     /**
-     * Display the public BOR page
+     * Get BOR content for public display
      */
     public function show()
     {
         $content = ExhibitBor::getContent();
         
-        // Transform paths for frontend
+        // Transform image paths for frontend
         $transformedContent = $content->toArray();
         
+        // Transform hero image
         if (isset($transformedContent['hero_image']) && $transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
             $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
         }
         
+        // Transform BOR document
         if (isset($transformedContent['bor_document']) && $transformedContent['bor_document'] && !str_starts_with($transformedContent['bor_document'], 'http')) {
             $transformedContent['bor_document'] = Storage::url($transformedContent['bor_document']);
         }
         
+        // Transform footer image
         if (isset($transformedContent['footer_image']) && $transformedContent['footer_image'] && !str_starts_with($transformedContent['footer_image'], 'http')) {
             $transformedContent['footer_image'] = Storage::url($transformedContent['footer_image']);
         }
         
         return Inertia::render('landing/exhibit/bor', [
             'borContent' => (object) $transformedContent,
+        ]);
+    }
+
+    /**
+     * Get BOR content as API response
+     */
+    public function getContent()
+    {
+        $content = ExhibitBor::getContent();
+        
+        // Transform image paths for frontend
+        $transformedContent = (array) $content;
+        
+        // Transform hero image
+        if (isset($transformedContent['hero_image']) && $transformedContent['hero_image'] && !str_starts_with($transformedContent['hero_image'], 'http')) {
+            $transformedContent['hero_image'] = Storage::url($transformedContent['hero_image']);
+        }
+        
+        // Transform BOR document
+        if (isset($transformedContent['bor_document']) && $transformedContent['bor_document'] && !str_starts_with($transformedContent['bor_document'], 'http')) {
+            $transformedContent['bor_document'] = Storage::url($transformedContent['bor_document']);
+        }
+        
+        // Transform footer image
+        if (isset($transformedContent['footer_image']) && $transformedContent['footer_image'] && !str_starts_with($transformedContent['footer_image'], 'http')) {
+            $transformedContent['footer_image'] = Storage::url($transformedContent['footer_image']);
+        }
+        
+        return response()->json($transformedContent);
+    }
+
+    /**
+     * Debug endpoint to check database content
+     */
+    public function debug()
+    {
+        $bor = ExhibitBor::first();
+        $content = ExhibitBor::getContent();
+        
+        return response()->json([
+            'raw_record' => $bor,
+            'processed_content' => $content,
+            'storage_url_sample' => Storage::url('test.pdf'),
         ]);
     }
 }

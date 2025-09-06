@@ -86,10 +86,11 @@ const layoutNavItems = [
         { name: "Instructional Materials", href: '/admin/layout/exhibit/instructional-materials' },
         { name: "Faculty Manual", href: '/admin/layout/exhibit/faculty-manual' },
         { name: "Administrative Manual", href: '/admin/layout/exhibit/administrative-manual' },
-        { name: "CHED Memorandum Order", href: '/admin/layout/exhibit/ched-memorandum-order' },
         { name: "Licensure", href: '/admin/layout/exhibit/licensure' },
-        { name: "COPC", href: '/admin/layout/exhibit/copc' },
-        { name: "PSV", href: '/admin/layout/exhibit/psv' }
+        { name: "CHED Memorandum Order", href: '/admin/layout/exhibit/ched-memorandum-order' },
+        { name: "Certificate of Program Compliance", href: '/admin/layout/exhibit/copc' },
+        { name: "Board of Regents", href: '/admin/layout/exhibit/bor' },
+        { name: "Primary Source Verification", href: '/admin/layout/exhibit/psv' }
     ]},
 ];
 
@@ -287,7 +288,7 @@ export default function DashboardHeader() {
                                                         )}
                                                         {/* Side Modal/Submenu */}
                                                         <div
-                                                            className={`absolute ${item.name === 'Exhibit' ? '-top-46' : 'top-0'} left-full ml-2 ${item.name === 'Exhibit' ? 'w-64' : 'w-50'} bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 z-[999] ${
+                                                            className={`absolute ${item.name === 'Exhibit' ? '-top-50' : 'top-0'} left-full ml-2 ${item.name === 'Exhibit' ? 'w-68' : 'w-50'} bg-white rounded-xl shadow-2xl border border-gray-100 transition-all duration-300 z-[999] ${
                                                                 (item.name === 'About' && aboutDropdownOpen) ||
                                                                 (item.name === 'Programs Under Survey' && programsDropdownOpen) ||
                                                                 (item.name === 'Exhibit' && exhibitDropdownOpen)
