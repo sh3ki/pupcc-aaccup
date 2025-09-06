@@ -8,7 +8,9 @@ $tables = @(
     "exhibit_ched_memorandum_order",
     "exhibit_copc", 
     "exhibit_bor",
-    "exhibit_psv"
+    "exhibit_psv",
+    "exhibit_obe_syllabi",
+    "exhibit_instructional_materials"
 )
 
 # Confirm action

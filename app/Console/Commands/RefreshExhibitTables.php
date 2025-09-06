@@ -20,7 +20,7 @@ class RefreshExhibitTables extends Command
      *
      * @var string
      */
-    protected $description = 'Drop and recreate specific exhibit tables (exhibit_ched_memorandum_order, exhibit_copc, exhibit_bor, exhibit_psv)';
+    protected $description = 'Drop and recreate specific exhibit tables (exhibit_ched_memorandum_order, exhibit_copc, exhibit_bor, exhibit_psv, exhibit_obe_syllabi, exhibit_instructional_materials)';
 
     /**
      * The tables to refresh
@@ -29,7 +29,9 @@ class RefreshExhibitTables extends Command
         'exhibit_ched_memorandum_order',
         'exhibit_copc',
         'exhibit_bor',
-        'exhibit_psv'
+        'exhibit_psv',
+        'exhibit_obe_syllabi',
+        'exhibit_instructional_materials'
     ];
 
     /**
@@ -39,7 +41,9 @@ class RefreshExhibitTables extends Command
         '2025_08_16_225212_create_exhibit_ched_memorandum_order_table',
         '2025_09_03_091629_create_exhibit_copc_table',
         '2025_09_03_091750_create_exhibit_bor_table',
-        '2025_09_03_091821_create_exhibit_psv_table'
+        '2025_09_03_091821_create_exhibit_psv_table',
+        '2025_08_16_225216_create_exhibit_obe_syllabi_table',
+        '2025_08_16_225214_create_exhibit_instructional_materials_table'
     ];
 
     /**
