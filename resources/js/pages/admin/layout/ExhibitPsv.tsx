@@ -33,12 +33,12 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
     const [previewKey, setPreviewKey] = useState(Date.now());
 
     // Hero Section State
-    const [heroTitle, setHeroTitle] = useState(psvContent.hero_title || "Primary Source Verification");
-    const [heroSubtitle, setHeroSubtitle] = useState(psvContent.hero_subtitle || 'Official PSV documents and verifications for PUP Calauan academic programs');
+    const [heroTitle, setHeroTitle] = useState(psvContent.hero_title || "Preliminary Survey Visit");
+    const [heroSubtitle, setHeroSubtitle] = useState(psvContent.hero_subtitle || 'Official PSV documents for PUP Calauan academic programs');
     const [heroImage, setHeroImage] = useState<string | File>(psvContent.hero_image || '');
 
     // PSV Documents Section State
-    const [sectionTitle, setSectionTitle] = useState(psvContent.section_title || "Primary Source Verification Preview");
+    const [sectionTitle, setSectionTitle] = useState(psvContent.section_title || "Preliminary Survey Visit Preview");
     
     // BTLED Program State
     const [program1Title, setProgram1Title] = useState(psvContent.program1_title || 'Bachelor of Technology and Livelihood Education');
@@ -134,7 +134,7 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
 
     return (
         <>
-            <Head title="Layout: Exhibit - Primary Source Verification" />
+            <Head title="Layout: Exhibit - Preliminary Survey Visit" />
             <DashboardLayout>
                 <div className="flex w-full h-[calc(100vh-64px-40px)]">
                     {/* Sidebar - Content Management */}

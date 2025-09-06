@@ -43,9 +43,9 @@ class ExhibitPsv extends Model
         if (!$psv) {
             // Create default PSV if none exists
             $psv = static::create([
-                'hero_title' => 'Primary Source Verification',
-                'hero_subtitle' => 'Official PSV documents and verifications for PUP Calauan academic programs',
-                'section_title' => 'Primary Source Verification Preview',
+                'hero_title' => 'Preliminary Survey Visit',
+                'hero_subtitle' => 'Official PSV documents for PUP Calauan academic programs',
+                'section_title' => 'Preliminary Survey Visit Preview',
                 'program1_title' => 'Bachelor of Technology and Livelihood Education',
                 'program2_title' => 'Bachelor of Science in Entrepreneurship',
                 'program3_title' => 'Bachelor of Science in Information Technology',

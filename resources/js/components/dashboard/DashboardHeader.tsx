@@ -90,7 +90,7 @@ const layoutNavItems = [
         { name: "CHED Memorandum Order", href: '/admin/layout/exhibit/ched-memorandum-order' },
         { name: "Certificate of Program Compliance", href: '/admin/layout/exhibit/copc' },
         { name: "Board of Regents", href: '/admin/layout/exhibit/bor' },
-        { name: "Primary Source Verification", href: '/admin/layout/exhibit/psv' }
+        { name: "Preliminary Survey Visit", href: '/admin/layout/exhibit/psv' }
     ]},
 ];
 
