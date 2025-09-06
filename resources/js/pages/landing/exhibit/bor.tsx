@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PdfViewer from '@/components/PdfViewer';
@@ -34,7 +34,15 @@ interface BorContent {
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    bor_document?: string;
+    program1_image?: string;
+    program1_title: string;
+    program1_document?: string;
+    program2_image?: string;
+    program2_title: string;
+    program2_document?: string;
+    program3_image?: string;
+    program3_title: string;
+    program3_document?: string;
     footer_section_title: string;
     footer_image?: string;
 }
@@ -64,17 +72,12 @@ function useScrollAnimation() {
     useEffect(() => {
         const observer = new IntersectionObserver(
             ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
+                if (entry.isIntersecting) {
                     setIsVisible(true);
                     setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
                 }
             },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+            { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
         );
         
         const currentRef = ref.current;
@@ -89,56 +92,77 @@ function useScrollAnimation() {
 }
 
 export default function Bor({ borContent }: Props) {
-    // Use proper placeholder URLs that actually work
-    const borUrl = borContent.bor_document || "https://via.placeholder.com/900x1200/f3f4f6/6b7280?text=BOR+Preview";
-    
-    // Hero Section Data
-    const heroImageUrl = borContent.hero_image || "https://via.placeholder.com/1600x500/7f0404/ffffff?text=BOR+Hero+Image";
-    
-    // Footer Section Data  
-    const footerImageUrl = borContent.footer_image || "https://via.placeholder.com/1600x400/7f0404/ffffff?text=Footer+Background";
-
-    // PDF state - initialize once and persist
+    // State for selected program and document preview
+    const [selectedProgram, setSelectedProgram] = useState<number | null>(null);
     const [pdfLoaded, setPdfLoaded] = useState(false);
     const [currentPage] = useState(1);
     const setTotalPages = useState(1)[1];
     const [zoom] = useState(0.9);
     const [rotate] = useState(0);
 
-    // Initialize PDF loading once on component mount
-    useEffect(() => {
-        if (borContent.bor_document && isPDF(borContent.bor_document) && !pdfLoaded) {
-            setPdfLoaded(true);
-        }
-    }, [borContent.bor_document, pdfLoaded]);
+    // Hero Section Data
+    const heroImageUrl = borContent.hero_image || "https://via.placeholder.com/1600/500/7f0404/ffffff?text=BOR+Hero+Image";
+    
+    // Footer Section Data  
+    const footerImageUrl = borContent.footer_image || "https://via.placeholder.com/1600/400/7f0404/ffffff?text=Footer+Background";
 
-    // BOR Display Component - moved outside of animation effects
-    const BorDisplay = useCallback(() => {
-        // Check if we have a real BOR (not placeholder)
-        const hasRealBor = borContent.bor_document && 
-                                  !borContent.bor_document.includes('placeholder');
+    // Programs data
+    const programs = useMemo(() => [
+        {
+            id: 1,
+            title: borContent.program1_title,
+            image: borContent.program1_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+1",
+            document: borContent.program1_document
+        },
+        {
+            id: 2,
+            title: borContent.program2_title,
+            image: borContent.program2_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+2",
+            document: borContent.program2_document
+        },
+        {
+            id: 3,
+            title: borContent.program3_title,
+            image: borContent.program3_image || "https://via.placeholder.com/600/400/7f0404/ffffff?text=Program+3",
+            document: borContent.program3_document
+        }
+    ], [borContent]);
+
+    // Initialize PDF loading when program is selected
+    useEffect(() => {
+        if (selectedProgram !== null) {
+            const program = programs.find(p => p.id === selectedProgram);
+            if (program?.document && isPDF(program.document) && !pdfLoaded) {
+                setPdfLoaded(true);
+            }
+        }
+    }, [selectedProgram, pdfLoaded, programs]);
+
+    // Document Display Component
+    const DocumentDisplay = useCallback(({ document }: { document?: string }) => {
+        // Check if we have a real document (not placeholder)
+        const hasRealDocument = document && !document.includes('placeholder');
         
-        if (!hasRealBor) {
+        if (!hasRealDocument) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
                     <div className="text-center">
                         <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <p className="text-gray-500 font-medium">No BOR document uploaded</p>
-                        <p className="text-gray-400 text-sm">Upload a BOR document via the admin panel</p>
+                        <p className="text-gray-500 font-medium">No document uploaded</p>
+                        <p className="text-gray-400 text-sm">Upload a document via the admin panel</p>
                     </div>
                 </div>
             );
         }
 
-        if (isPDF(borContent.bor_document || '') && pdfLoaded) {
+        if (isPDF(document) && pdfLoaded) {
             return (
                 <div className="w-full">
-                    {/* PDF Display using PdfViewer component - only render when pdfLoaded is true */}
                     <div className="w-full max-w-4xl mx-auto rounded-xl border border-gray-200 overflow-hidden" style={{ height: '800px' }}>
                         <PdfViewer
-                            url={borContent.bor_document || ''}
+                            url={document}
                             currentPage={currentPage}
                             onTotalPagesChange={setTotalPages}
                             zoom={zoom}
@@ -146,11 +170,9 @@ export default function Bor({ borContent }: Props) {
                             className="w-full h-full"
                         />
                     </div>
-                    
-                    {/* Fallback link if PDF viewer doesn't work */}
                     <div className="mt-4 text-center">
                         <a
-                            href={borContent.bor_document}
+                            href={document}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded-lg hover:bg-[#5a0303] transition-colors"
@@ -163,8 +185,7 @@ export default function Bor({ borContent }: Props) {
                     </div>
                 </div>
             );
-        } else if (isPDF(borContent.bor_document || '') && !pdfLoaded) {
-            // Show loading state for PDF
+        } else if (isPDF(document) && !pdfLoaded) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-100 rounded-xl border border-gray-200">
                     <div className="text-center">
@@ -175,12 +196,12 @@ export default function Bor({ borContent }: Props) {
             );
         }
 
-        if (isImage(borContent.bor_document || '')) {
+        if (isImage(document)) {
             return (
                 <div className="w-full max-w-4xl mx-auto bg-gray-50 flex items-center justify-center rounded-xl border border-gray-200 overflow-hidden" style={{ minHeight: '400px' }}>
                     <img
-                        src={borContent.bor_document}
-                        alt="BOR Document"
+                        src={document}
+                        alt="Document"
                         className="max-h-full max-w-full object-contain rounded-xl shadow-lg"
                         style={{ maxHeight: '800px', width: 'auto' }}
                     />
@@ -196,29 +217,53 @@ export default function Bor({ borContent }: Props) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <p className="text-gray-600 font-medium">Document Available</p>
-                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(borUrl).toUpperCase()} file</p>
+                    <p className="text-gray-500 text-sm mb-4">Click to download: {getFileExtension(document).toUpperCase()} file</p>
                     <a
-                        href={borUrl}
+                        href={document}
                         download
                         className="inline-flex items-center px-4 py-2 bg-[#7F0404] text-white rounded hover:bg-[#4D1414] transition-colors"
                     >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Download BOR Document
+                        Download Document
                     </a>
                 </div>
             </div>
         );
-    }, [borContent.bor_document, pdfLoaded, currentPage, setTotalPages, zoom, rotate, borUrl]);
+    }, [pdfLoaded, currentPage, setTotalPages, zoom, rotate]);
     
     // Animation hooks for different sections
     const [heroRef, heroVisible] = useScrollAnimation();
-    const [borRef, borVisible] = useScrollAnimation();
+    const [programsRef, programsVisible] = useScrollAnimation();
+    const [documentRef, documentVisible] = useScrollAnimation();
+
+    // Force animation visibility for document section when program is selected
+    const [forceDocumentVisible, setForceDocumentVisible] = useState(false);
+
+    // Effect to trigger document animation when a program is selected
+    useEffect(() => {
+        if (selectedProgram) {
+            // Force document section to be visible
+            setForceDocumentVisible(true);
+            // Scroll to document section when a program is selected
+            setTimeout(() => {
+                documentRef.current?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }, 100);
+        } else {
+            setForceDocumentVisible(false);
+        }
+    }, [selectedProgram, documentRef]);
+
+    // Combined visibility state for document section
+    const documentSectionVisible = documentVisible || forceDocumentVisible;
 
     return (
         <>
-            <Head title="Board of Regents" />
+            <Head title="BOR" />
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="exhibit" />
 
@@ -259,44 +304,127 @@ export default function Bor({ borContent }: Props) {
                         </div>
                     </section>
 
-                    {/* BOR Display */}
-                    <section 
-                        ref={borRef}
-                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
-                            borVisible 
-                                ? 'opacity-100 transform translate-y-0' 
-                                : 'opacity-0 transform translate-y-12'
-                        }`}
-                    >
-                        <div className="w-full max-w-4xl mx-auto">
-                            <div className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border-t-4 transition-all duration-1000 delay-200 ${
-                                borVisible 
-                                    ? 'opacity-100 transform translate-y-0 scale-100' 
-                                    : 'opacity-0 transform translate-y-8 scale-95'
-                            }`} style={{ borderTopColor: COLORS.primaryMaroon }}>
-                                <div className="p-8 sm:p-12 flex flex-col items-center">
-                                    <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-8 sm:mb-12 text-center transition-all duration-1000 delay-400 ${
-                                        borVisible 
-                                            ? 'opacity-100 transform translate-y-0' 
-                                            : 'opacity-0 transform translate-y-8'
-                                    }`} style={{ color: COLORS.primaryMaroon }}>
-                                        {borContent.section_title}
-                                    </h2>
-                                    {/* BOR Display with PDF Support */}
-                                    <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
-                                        borVisible 
-                                            ? 'opacity-100 transform translate-y-0 scale-100' 
-                                            : 'opacity-0 transform translate-y-8 scale-95'
-                                    }`}>
-                                        <BorDisplay />
+                    {/* Programs Selection Section - Only show when no program is selected */}
+                    {!selectedProgram && (
+                        <section
+                            ref={programsRef}
+                            className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
+                                programsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                            }`}
+                            style={{ 
+                                background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
+                            }}
+                        >
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 opacity-5 pointer-events-none">
+                                <div className="absolute inset-0" style={{
+                                    backgroundImage: `radial-gradient(circle at 25% 25%, ${COLORS.primaryMaroon} 2px, transparent 2px)`,
+                                    backgroundSize: '50px 50px'
+                                }}></div>
+                            </div>
+                            <div className="w-full max-w-7xl mx-auto relative z-10">
+                                <h2 className="text-4xl sm:text-5xl font-bold text-center mb-16" style={{ color: COLORS.primaryMaroon }}>
+                                    {borContent.section_title}
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                                    {programs.map((program, idx) => (
+                                        <button
+                                            key={program.id}
+                                            onClick={() => {
+                                                setSelectedProgram(program.id);
+                                                setPdfLoaded(false);
+                                            }}
+                                            className={`group block bg-white rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
+                                                programsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                                            }`}
+                                            style={{
+                                                borderTopColor: COLORS.primaryMaroon,
+                                                transitionDelay: `${idx * 0.12}s`
+                                            }}
+                                        >
+                                            <div className="relative overflow-hidden">
+                                                <img
+                                                    src={program.image}
+                                                    alt={program.title}
+                                                    className="w-full h-[260px] object-cover transition-transform duration-500 group-hover:scale-110"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                            </div>
+                                            <div className="p-8">
+                                                <h3 className="text-2xl font-bold mb-4 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+                                                    {program.title}
+                                                </h3>
+                                                <span className="inline-block px-6 py-2 rounded-lg font-bold text-white transition-all duration-300 group-hover:scale-105" style={{ backgroundColor: COLORS.primaryMaroon }}>
+                                                    View Document
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Document Preview Section - Only show when a program is selected */}
+                    {selectedProgram && (
+                        <section 
+                            ref={documentRef}
+                            className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1000 ${
+                                documentSectionVisible 
+                                    ? 'opacity-100 transform translate-y-0' 
+                                    : 'opacity-0 transform translate-y-12'
+                            }`}
+                        >
+                            <div className="w-full max-w-4xl mx-auto">
+                                {/* Back Button - Outside the card */}
+                                <div className="mb-8">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedProgram(null);
+                                            setPdfLoaded(false);
+                                        }}
+                                        className="flex items-center px-6 py-3 bg-[#7F0404] text-white rounded-lg hover:bg-[#6B0303] transition-all duration-300 group font-semibold"
+                                    >
+                                        <svg className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                        </svg>
+                                        Back to Programs
+                                    </button>
+                                </div>
+                                
+                                {/* Main Card Container */}
+                                <div className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border-t-4 transition-all duration-1000 delay-200 ${
+                                    documentSectionVisible 
+                                        ? 'opacity-100 transform translate-y-0 scale-100' 
+                                        : 'opacity-0 transform translate-y-8 scale-95'
+                                }`} style={{ borderTopColor: COLORS.primaryMaroon }}>
+                                    <div className="p-8 sm:p-12 flex flex-col items-center">
+                                        {/* Title Container */}
+                                        <div className="w-full mb-8 sm:mb-12">
+                                            <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-center transition-all duration-1000 delay-400 ${
+                                                documentSectionVisible 
+                                                    ? 'opacity-100 transform translate-y-0' 
+                                                    : 'opacity-0 transform translate-y-8'
+                                            }`} style={{ color: COLORS.primaryMaroon }}>
+                                                {programs.find(p => p.id === selectedProgram)?.title}
+                                            </h2>
+                                        </div>
+                                        {/* Document Display with PDF Support */}
+                                        <div className={`w-full flex justify-center items-center transition-all duration-1000 delay-600 ${
+                                            documentSectionVisible 
+                                                ? 'opacity-100 transform translate-y-0 scale-100' 
+                                                : 'opacity-0 transform translate-y-8 scale-95'
+                                        }`}>
+                                            <DocumentDisplay document={programs.find(p => p.id === selectedProgram)?.document} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
+                        </section>
+                    )}
                 </main>
 
-                {/* Mula Sayo, Para Sa Bayan Section */}
+                {/* Footer Section */}
                 <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
                     <div className="absolute inset-0 w-full h-full">
                         <img

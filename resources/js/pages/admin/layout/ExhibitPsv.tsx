@@ -9,7 +9,15 @@ interface PsvContent {
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    psv_document: string | File;
+    program1_title: string;
+    program1_image: string | File;
+    program1_document: string | File;
+    program2_title: string;
+    program2_image: string | File;
+    program2_document: string | File;
+    program3_title: string;
+    program3_image: string | File;
+    program3_document: string | File;
     footer_section_title: string;
     footer_image: string | File;
 }
@@ -29,9 +37,23 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
     const [heroSubtitle, setHeroSubtitle] = useState(psvContent.hero_subtitle || 'Official PSV documents and verifications for PUP Calauan academic programs');
     const [heroImage, setHeroImage] = useState<string | File>(psvContent.hero_image || '');
 
-    // PSV Section State
+    // PSV Documents Section State
     const [sectionTitle, setSectionTitle] = useState(psvContent.section_title || "Primary Source Verification Preview");
-    const [psvDocument, setPsvDocument] = useState<string | File>(psvContent.psv_document || '');
+    
+    // BTLED Program State
+    const [program1Title, setProgram1Title] = useState(psvContent.program1_title || 'Bachelor of Technology and Livelihood Education');
+    const [program1Image, setProgram1Image] = useState<string | File>(psvContent.program1_image || '');
+    const [program1Document, setProgram1Document] = useState<string | File>(psvContent.program1_document || '');
+
+    // BSIT Program State
+    const [program2Title, setProgram2Title] = useState(psvContent.program2_title || 'Bachelor of Science in Information Technology');
+    const [program2Image, setProgram2Image] = useState<string | File>(psvContent.program2_image || '');
+    const [program2Document, setProgram2Document] = useState<string | File>(psvContent.program2_document || '');
+
+    // BSENT Program State
+    const [program3Title, setProgram3Title] = useState(psvContent.program3_title || 'Bachelor of Science in Entrepreneurship');
+    const [program3Image, setProgram3Image] = useState<string | File>(psvContent.program3_image || '');
+    const [program3Document, setProgram3Document] = useState<string | File>(psvContent.program3_document || '');
 
     // Footer Section State
     const [footerSectionTitle, setFooterSectionTitle] = useState(psvContent.footer_section_title || 'Mula Sayo, Para Sa Bayan');
@@ -46,6 +68,9 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
         formData.append('hero_title', heroTitle);
         formData.append('hero_subtitle', heroSubtitle);
         formData.append('section_title', sectionTitle);
+        formData.append('program1_title', program1Title);
+        formData.append('program2_title', program2Title);
+        formData.append('program3_title', program3Title);
         formData.append('footer_section_title', footerSectionTitle);
 
         // Add hero image
@@ -53,9 +78,28 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
             formData.append('hero_image', heroImage);
         }
 
-        // Add PSV document
-        if (psvDocument instanceof File) {
-            formData.append('psv_document', psvDocument);
+        // Add program 1 files
+        if (program1Image instanceof File) {
+            formData.append('program1_image', program1Image);
+        }
+        if (program1Document instanceof File) {
+            formData.append('program1_document', program1Document);
+        }
+
+        // Add program 2 files
+        if (program2Image instanceof File) {
+            formData.append('program2_image', program2Image);
+        }
+        if (program2Document instanceof File) {
+            formData.append('program2_document', program2Document);
+        }
+
+        // Add program 3 files
+        if (program3Image instanceof File) {
+            formData.append('program3_image', program3Image);
+        }
+        if (program3Document instanceof File) {
+            formData.append('program3_document', program3Document);
         }
 
         // Add footer image
@@ -164,7 +208,7 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
                                 {activeSection === 'psv' && (
                                     <div>
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">PSV Document</h3>
-                                        <div className="space-y-4">
+                                        <div className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
@@ -176,17 +220,119 @@ export default function LayoutExhibitPsv({ psvContent }: Props) {
                                                 />
                                             </div>
 
-                                            <FileUpload
-                                                label="PSV Document"
-                                                value={psvDocument}
-                                                onChange={(file) => setPsvDocument(file || '')}
-                                                accept="image/*,.pdf,.doc,.docx"
-                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                                maxSize={10}
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Upload PSV document (Image, PDF, DOC, or DOCX)
-                                            </p>
+                                            {/* BTLED Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BTLED Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program1Title}
+                                                            onChange={(e) => setProgram1Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BTLED program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program1Image}
+                                                        onChange={(file) => setProgram1Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="PSV Document"
+                                                        value={program1Document}
+                                                        onChange={(file) => setProgram1Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload PSV document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* BSIT Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BSIT Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program2Title}
+                                                            onChange={(e) => setProgram2Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BSIT program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program2Image}
+                                                        onChange={(file) => setProgram2Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="PSV Document"
+                                                        value={program2Document}
+                                                        onChange={(file) => setProgram2Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload PSV document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* BSENT Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BSENT Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program3Title}
+                                                            onChange={(e) => setProgram3Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BSENT program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program3Image}
+                                                        onChange={(file) => setProgram3Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="PSV Document"
+                                                        value={program3Document}
+                                                        onChange={(file) => setProgram3Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload PSV document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

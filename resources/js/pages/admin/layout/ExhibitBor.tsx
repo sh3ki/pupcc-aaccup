@@ -9,7 +9,15 @@ interface BorContent {
     hero_title: string;
     hero_subtitle: string;
     section_title: string;
-    bor_document: string | File;
+    program1_title: string;
+    program1_image: string | File;
+    program1_document: string | File;
+    program2_title: string;
+    program2_image: string | File;
+    program2_document: string | File;
+    program3_title: string;
+    program3_image: string | File;
+    program3_document: string | File;
     footer_section_title: string;
     footer_image: string | File;
 }
@@ -29,9 +37,23 @@ export default function LayoutExhibitBor({ borContent }: Props) {
     const [heroSubtitle, setHeroSubtitle] = useState(borContent.hero_subtitle || 'Official BOR resolutions and decisions affecting PUP Calauan academic programs');
     const [heroImage, setHeroImage] = useState<string | File>(borContent.hero_image || '');
 
-    // BOR Section State
+    // BOR Documents Section State
     const [sectionTitle, setSectionTitle] = useState(borContent.section_title || "Board of Regents Preview");
-    const [borDocument, setBorDocument] = useState<string | File>(borContent.bor_document || '');
+    
+    // BTLED Program State
+    const [program1Title, setProgram1Title] = useState(borContent.program1_title || 'Bachelor of Technology and Livelihood Education');
+    const [program1Image, setProgram1Image] = useState<string | File>(borContent.program1_image || '');
+    const [program1Document, setProgram1Document] = useState<string | File>(borContent.program1_document || '');
+
+    // BSIT Program State
+    const [program2Title, setProgram2Title] = useState(borContent.program2_title || 'Bachelor of Science in Information Technology');
+    const [program2Image, setProgram2Image] = useState<string | File>(borContent.program2_image || '');
+    const [program2Document, setProgram2Document] = useState<string | File>(borContent.program2_document || '');
+
+    // BSENT Program State
+    const [program3Title, setProgram3Title] = useState(borContent.program3_title || 'Bachelor of Science in Entrepreneurship');
+    const [program3Image, setProgram3Image] = useState<string | File>(borContent.program3_image || '');
+    const [program3Document, setProgram3Document] = useState<string | File>(borContent.program3_document || '');
 
     // Footer Section State
     const [footerSectionTitle, setFooterSectionTitle] = useState(borContent.footer_section_title || 'Mula Sayo, Para Sa Bayan');
@@ -46,6 +68,9 @@ export default function LayoutExhibitBor({ borContent }: Props) {
         formData.append('hero_title', heroTitle);
         formData.append('hero_subtitle', heroSubtitle);
         formData.append('section_title', sectionTitle);
+        formData.append('program1_title', program1Title);
+        formData.append('program2_title', program2Title);
+        formData.append('program3_title', program3Title);
         formData.append('footer_section_title', footerSectionTitle);
 
         // Add hero image
@@ -53,9 +78,28 @@ export default function LayoutExhibitBor({ borContent }: Props) {
             formData.append('hero_image', heroImage);
         }
 
-        // Add BOR document
-        if (borDocument instanceof File) {
-            formData.append('bor_document', borDocument);
+        // Add program 1 files
+        if (program1Image instanceof File) {
+            formData.append('program1_image', program1Image);
+        }
+        if (program1Document instanceof File) {
+            formData.append('program1_document', program1Document);
+        }
+
+        // Add program 2 files
+        if (program2Image instanceof File) {
+            formData.append('program2_image', program2Image);
+        }
+        if (program2Document instanceof File) {
+            formData.append('program2_document', program2Document);
+        }
+
+        // Add program 3 files
+        if (program3Image instanceof File) {
+            formData.append('program3_image', program3Image);
+        }
+        if (program3Document instanceof File) {
+            formData.append('program3_document', program3Document);
         }
 
         // Add footer image
@@ -164,7 +208,7 @@ export default function LayoutExhibitBor({ borContent }: Props) {
                                 {activeSection === 'bor' && (
                                     <div>
                                         <h3 className="text-lg font-semibold text-[#7F0404] mb-4">BOR Document</h3>
-                                        <div className="space-y-4">
+                                        <div className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Section Title</label>
                                                 <input
@@ -176,17 +220,119 @@ export default function LayoutExhibitBor({ borContent }: Props) {
                                                 />
                                             </div>
 
-                                            <FileUpload
-                                                label="BOR Document"
-                                                value={borDocument}
-                                                onChange={(file) => setBorDocument(file || '')}
-                                                accept="image/*,.pdf,.doc,.docx"
-                                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                                maxSize={10}
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Upload BOR document (Image, PDF, DOC, or DOCX)
-                                            </p>
+                                            {/* BTLED Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BTLED Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program1Title}
+                                                            onChange={(e) => setProgram1Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BTLED program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program1Image}
+                                                        onChange={(file) => setProgram1Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="BOR Document"
+                                                        value={program1Document}
+                                                        onChange={(file) => setProgram1Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload BOR document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* BSIT Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BSIT Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program2Title}
+                                                            onChange={(e) => setProgram2Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BSIT program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program2Image}
+                                                        onChange={(file) => setProgram2Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="BOR Document"
+                                                        value={program2Document}
+                                                        onChange={(file) => setProgram2Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload BOR document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* BSENT Document */}
+                                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <h4 className="text-md font-semibold text-[#7F0404] mb-3">BSENT Document</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1 text-[#7F0404]">Program Title</label>
+                                                        <input
+                                                            type="text"
+                                                            value={program3Title}
+                                                            onChange={(e) => setProgram3Title(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#C46B02] focus:border-transparent"
+                                                            placeholder="Enter BSENT program title"
+                                                        />
+                                                    </div>
+
+                                                    <FileUpload
+                                                        label="Program Image"
+                                                        value={program3Image}
+                                                        onChange={(file) => setProgram3Image(file || '')}
+                                                        accept="image/*"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                                                        maxSize={5}
+                                                    />
+
+                                                    <FileUpload
+                                                        label="BOR Document"
+                                                        value={program3Document}
+                                                        onChange={(file) => setProgram3Document(file || '')}
+                                                        accept="image/*,.pdf,.doc,.docx"
+                                                        allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                                        maxSize={10}
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Upload BOR document (Image, PDF, DOC, or DOCX)
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
