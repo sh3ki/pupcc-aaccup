@@ -1,13 +1,16 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, memo } from 'react';
 import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
 import { VideoNavigation } from '@/components/VideoNavigation';
 import PDFThumbnail from '@/components/PDFThumbnail';
+import OptimizedImage from '@/components/OptimizedImage';
+import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
+import { preloadProgramResources } from '@/utils/resourcePreloader';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -101,42 +104,174 @@ interface Props {
     sidebar?: Program[];
 }
 
-// Scroll animation hook
-function useScrollAnimation() {
-    const [isVisible, setIsVisible] = useState(false);
-    const [hasAnimated, setHasAnimated] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
+// Memoized components for better performance
+const OptimizedActionImage = memo(({ img, idx, isVisible }: { img: string; idx: number; isVisible: boolean }) => (
+    <div 
+        className={`group transform transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ transitionDelay: `${idx * 0.1}s` }}
+    >
+        <OptimizedImage 
+            src={img}
+            alt={`Action Image ${idx + 1}`}
+            className="w-full h-48 sm:h-56 lg:h-64 object-cover rounded-lg shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105"
+            lazy={idx > 3}
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+        />
+    </div>
+));
+OptimizedActionImage.displayName = 'OptimizedActionImage';
 
-    useEffect(() => {
-        const currentRef = ref.current;
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
-                    setIsVisible(true);
-                    setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
-                }
-            },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
-        );
-        if (currentRef) observer.observe(currentRef);
-        return () => { if (currentRef) observer.unobserve(currentRef); };
-    }, [hasAnimated]);
-    return [ref, isVisible] as const;
-}
+const OptimizedGraduateCard = memo(({ graduate, index, isVisible }: { 
+    graduate: GraduateItem; 
+    index: number; 
+    isVisible: boolean; 
+}) => (
+    <div 
+        className={`group transform transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ transitionDelay: `${index * 0.2}s` }}
+    >
+        <div className="flex flex-col items-center">
+            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2 group-hover:shadow-xl transition-shadow duration-300" style={{ height: 280 }}>
+                {graduate.video_type === 'youtube' ? (
+                    <iframe
+                        src={`https://www.youtube.com/embed/${graduate.video}`}
+                        title={graduate.name}
+                        frameBorder={0}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                        loading={index > 2 ? "lazy" : "eager"}
+                    ></iframe>
+                ) : (
+                    <video
+                        src={typeof graduate.video === 'string' ? graduate.video : ''}
+                        controls
+                        className="w-full h-full object-cover"
+                        preload={index > 2 ? "none" : "metadata"}
+                    >
+                        Your browser does not support the video tag.
+                    </video>
+                )}
+            </div>
+            <span className="font-semibold text-lg transition-colors duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+                {graduate.name}
+            </span>
+        </div>
+    </div>
+));
+OptimizedGraduateCard.displayName = 'OptimizedGraduateCard';
+
+const OptimizedAccreditationArea = memo(({ area, index, isVisible, availableAreas, onDocumentClick }: { 
+    area: AccreditationArea; 
+    index: number; 
+    isVisible: boolean;
+    availableAreas: Area[];
+    onDocumentClick: (areaId: number) => void;
+}) => {
+    const correspondingDocArea = availableAreas.find(docArea => 
+        docArea.name?.toLowerCase().includes(area.title?.toLowerCase()?.replace(/area\s+[ivx]+:\s*/i, '')) ||
+        area.title?.toLowerCase().includes(docArea.name?.toLowerCase())
+    );
+
+    return (
+        <div 
+            className={`bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-500 hover:scale-105 hover:-translate-y-2 group ${
+                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+            }`}
+            style={{ 
+                borderTopColor: COLORS.primaryMaroon, 
+                transitionDelay: `${index * 0.1}s` 
+            }}
+        >
+            <OptimizedImage 
+                src={area.image || '/api/placeholder/300/200'}
+                alt={area.title} 
+                className="w-full h-28 object-cover transition-transform duration-500 group-hover:scale-110"
+                lazy={index > 4}
+                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            />
+            <div className="p-4 flex flex-col items-center">
+                <h3 className="text-base font-bold text-center mb-2 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+                    {area.title}
+                </h3>
+                
+                {correspondingDocArea && (
+                    <button 
+                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        style={{ backgroundColor: COLORS.primaryMaroon }}
+                        onClick={() => onDocumentClick(correspondingDocArea.id)}
+                    >
+                        View Documents
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+});
+OptimizedAccreditationArea.displayName = 'OptimizedAccreditationArea';
 
 export default function BSITProgramPage({ bsitContent, accreditationAreas, sidebar }: Props) {
     // Debug: Log the accreditation areas data
     console.log('BSIT bsitContent.accreditation_areas:', bsitContent.accreditation_areas);
     console.log('BSIT accreditationAreas prop:', accreditationAreas);
     
-    const [overviewRef, overviewVisible] = useScrollAnimation();
-    const [objectivesRef, objectivesVisible] = useScrollAnimation();
-    const [areasRef, areasVisible] = useScrollAnimation();
+    // Preload critical resources on component mount
+    useEffect(() => {
+        if (bsitContent) {
+            preloadProgramResources(bsitContent);
+        }
+    }, [bsitContent]);
+    
+    // Scroll direction tracking
+    const [scrollDirection, setScrollDirection] = useState('down');
+    const [lastScrollY, setLastScrollY] = useState(0);
+    
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
+            setLastScrollY(currentScrollY);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [lastScrollY]);
+    
+    // Use optimized scroll animations
+    const overviewAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const objectivesAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const avpAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const actionAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const graduatesAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const areasAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -100px 0px',
+        triggerOnce: false
+    });
 
     // Document Management State - exactly like BTLED
     const [documentMode, setDocumentMode] = useState(false);
@@ -145,7 +280,6 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
         parameterId?: number; 
         category?: string 
     }>({});
-    const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
     
     // Document states
     const [approvedDocs, setApprovedDocs] = useState<DocumentItem[]>([]);
@@ -166,11 +300,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     const [gridOpen, setGridOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    // Video Navigation state
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    // Video Navigation state  
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const videoPlayerRef = useRef<VideoPlayerRef>(null);
@@ -208,7 +338,6 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     }, [bsitProgram?.areas, fetchedAreas, accreditationAreas]);
     
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
-    const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
     // Remove the parameter fetching logic - use sidebar data directly like admin
     // No separate parameter fetching needed
@@ -219,8 +348,8 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
         if (selected.areaId && selected.parameterId && selected.category) {
             setLoadingDocs(true);
             
-            // Use same URL pattern as admin: /programs/bsent/documents with query params
-            fetch(`/programs/bsent/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            // Use same URL pattern as admin: /programs/bsit/documents with query params
+            fetch(`/programs/bsit/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -262,7 +391,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                 }))
             );
         }
-    }, [bsitProgram?.areas, accreditationAreas]);    // Filtered docs for preview - exactly like admin
+    }, [bsitProgram?.areas, accreditationAreas]);    // Navigation functions - like admin
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
         // Filter by current parameter and category if both are selected
@@ -277,17 +406,6 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
-
-    // Navigation functions - like admin
-    const goTo = (idx: number) => {
-        if (filteredDocs.length === 0) return;
-        const doc = filteredDocs[idx];
-        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
-        if (realIdx !== -1) {
-            setViewerIndex(realIdx);
-            setViewingDocIndex(realIdx);
-        }
-    };
 
     // Reset viewingDocIndex when navigation changes - like admin
     useEffect(() => {
@@ -355,18 +473,43 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
 
     return (
         <>
-            <Head title="Bachelor of Science in Information Technology (BSIT) - PUP Calapan Campus" />
+            <Head title="Bachelor of Science in Information Technology (BSIT) - PUP Calapan Campus">
+                {/* Critical resource hints for better performance */}
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+                <link rel="dns-prefetch" href="//api.placeholder" />
+                
+                {/* Preload critical images */}
+                {bsitContent?.hero_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={bsitContent.hero_image}
+                        fetchPriority="high"
+                    />
+                )}
+                {bsitContent?.program_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={bsitContent.program_image}
+                        fetchPriority="high"
+                    />
+                )}
+            </Head>
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="bsit-program" />
 
                 <main className="pt-16 sm:pt-20">
                     {/* Hero */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
-                        <img
+                        <OptimizedImage
                             src={bsitContent.hero_image || '/api/placeholder/1600/600'}
                             alt={bsitContent.hero_title}
-                            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                            style={{ minHeight: 400, maxHeight: 700 }}
+                            className="w-full h-full object-cover"
+                            priority={true}
+                            lazy={false}
+                            sizes="100vw"
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
@@ -383,54 +526,54 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
 
                     {/* Overview */}
                     <section
-                        ref={overviewRef}
-                        className={`py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            overviewVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                        }`}
+                        ref={overviewAnimation.ref}
+                        className={`transition-all duration-1200 ${getAnimationClasses(overviewAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')}`}
                         style={{ 
                             background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
                         }}
                     >
-                        {/* Background Pattern */}
-                        <div className="absolute inset-0 opacity-5 pointer-events-none">
-                            <div className="absolute inset-0" style={{
-                                backgroundImage: `radial-gradient(circle at 25% 25%, ${COLORS.primaryMaroon} 2px, transparent 2px)`,
-                                backgroundSize: '50px 50px'
-                            }}></div>
-                        </div>
-                        <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
-                            <div className="flex-1">
-                                <h2 className="text-4xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
-                                    {bsitContent.overview_section_title}
-                                </h2>
-                                <p className="text-lg sm:text-xl text-gray-700 mb-4">{bsitContent.program_description}</p>
+                        <div className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 relative overflow-hidden">
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 opacity-5 pointer-events-none">
+                                <div className="absolute inset-0" style={{
+                                    backgroundImage: `radial-gradient(circle at 25% 25%, ${COLORS.primaryMaroon} 2px, transparent 2px)`,
+                                    backgroundSize: '50px 50px'
+                                }}></div>
                             </div>
-                            <div className="flex-1">
-                                <img 
-                                    src={bsitContent.program_image || '/api/placeholder/500/400'} 
-                                    alt="BSIT Overview" 
-                                    className="rounded-2xl shadow-lg w-full object-cover" 
-                                    style={{ minHeight: 260, maxHeight: 400 }} 
-                                />
+                            <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
+                                <div className="flex-1">
+                                    <h2 className="text-4xl font-bold mb-6 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
+                                        {bsitContent.overview_section_title}
+                                    </h2>
+                                    <p className="text-lg sm:text-xl text-gray-700 mb-4 leading-relaxed">{bsitContent.program_description}</p>
+                                </div>
+                                <div className="flex-1">
+                                    <OptimizedImage 
+                                        src={bsitContent.program_image || '/api/placeholder/500/400'} 
+                                        alt="BSIT Overview" 
+                                        className="rounded-2xl shadow-lg w-full object-cover transition-transform duration-500 hover:scale-105"
+                                        priority={true}
+                                        lazy={false}
+                                        sizes="(max-width: 768px) 100vw, 50vw"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </section>
 
                     {/* Objectives */}
                     <section
-                        ref={objectivesRef}
-                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${
-                            objectivesVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                        }`}
+                        ref={objectivesAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${getAnimationClasses(objectivesAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')}`}
                     >
                         <div className="w-full max-w-4xl mx-auto">
-                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                            <h2 className="text-3xl font-bold mb-6 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.objectives_section_title}
                             </h2>
                             <ol className="list-decimal ml-6 space-y-3 text-lg text-gray-800">
                                 {bsitContent.objectives_data && bsitContent.objectives_data.length > 0 ? (
                                     bsitContent.objectives_data.map((obj: string, idx: number) => (
-                                        <li key={idx}>{obj}</li>
+                                        <li key={idx} className="leading-relaxed">{obj}</li>
                                     ))
                                 ) : (
                                     <li>No objectives available</li>
@@ -440,22 +583,25 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                     </section>
 
                     {/* AVP Section */}
-                    {/* AVP Section */}
-                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
+                    <section 
+                        ref={avpAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1200 ${getAnimationClasses(avpAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')}`}
+                    >
                         <div className="w-full max-w-5xl mx-auto text-center">
-                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                            <h2 className="text-3xl font-bold mb-6 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.avp_section_title}
                             </h2>
                             <div className="w-full max-w-4xl mx-auto mb-4">
                                 {bsitContent.program_video_type === 'youtube' ? (
-                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto" style={{ maxWidth: 800, height: 450 }}>
+                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mx-auto group hover:shadow-xl transition-shadow duration-300" style={{ maxWidth: 800, height: 450 }}>
                                         <iframe
                                             src={`https://www.youtube.com/embed/${bsitContent.program_video}`}
                                             title="Program AVP"
                                             frameBorder={0}
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                             allowFullScreen
-                                            className="w-full h-full"
+                                            className="w-full h-full transition-transform duration-300 group-hover:scale-105"
+                                            loading="lazy"
                                         ></iframe>
                                     </div>
                                 ) : (
@@ -485,22 +631,30 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                             </div>
                         </div>
                     </section>                    {/* Program in Action */}
-                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12" style={{ backgroundColor: '#f8fafc' }}>
-                        <div className="w-full max-w-6xl mx-auto">
-                            <h2 className="text-3xl text-center font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                    <section 
+                        ref={actionAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative ${getAnimationClasses(actionAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')}`}
+                        style={{ backgroundColor: '#f8fafc' }}
+                    >
+                        {/* Geometric Background */}
+                        <div className="absolute inset-0 overflow-hidden">
+                            <div className="absolute -top-20 sm:-top-40 -right-20 sm:-right-40 w-40 h-40 sm:w-80 sm:h-80 rounded-full opacity-5" style={{ backgroundColor: COLORS.primaryMaroon }}></div>
+                            <div className="absolute -bottom-20 sm:-bottom-40 -left-20 sm:-left-40 w-48 h-48 sm:w-96 sm:h-96 rounded-full opacity-5" style={{ backgroundColor: COLORS.burntOrange }}></div>
+                        </div>
+                        
+                        <div className="w-full max-w-6xl mx-auto relative z-10">
+                            <h2 className="text-3xl text-center font-bold mb-6 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.action_section_title}
                             </h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {bsitContent.action_images && bsitContent.action_images.length > 0 ? (
                                     bsitContent.action_images.map((img: string, idx: number) => (
-                                        <div key={idx} className="rounded-xl overflow-hidden shadow-md transition-transform duration-300 hover:scale-105">
-                                            <img 
-                                                src={img || '/api/placeholder/400/300'} 
-                                                alt={`Activity ${idx + 1}`} 
-                                                className="w-full h-36 object-cover" 
-                                                style={{ minHeight: 200, maxHeight: 200 }} 
-                                            />
-                                        </div>
+                                        <OptimizedActionImage 
+                                            key={idx} 
+                                            img={img} 
+                                            idx={idx} 
+                                            isVisible={actionAnimation.isVisible}
+                                        />
                                     ))
                                 ) : (
                                     <div className="col-span-2 md:col-span-4 text-center text-gray-500">
@@ -512,37 +666,35 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                     </section>
 
                     {/* Notable Graduates */}
-                    <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white">
-                        <div className="w-full max-w-6xl mx-auto text-center">
-                            <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primaryMaroon }}>
+                    <section 
+                        ref={graduatesAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 bg-white transition-all duration-1200 relative ${getAnimationClasses(graduatesAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')}`}
+                    >
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 opacity-5">
+                            <div className="absolute inset-0" style={{
+                                backgroundImage: `linear-gradient(45deg, transparent 25%, rgba(127, 4, 4, 0.05) 25%), 
+                                                linear-gradient(-45deg, transparent 25%, rgba(196, 107, 2, 0.05) 25%),
+                                                linear-gradient(45deg, transparent 75%, rgba(127, 4, 4, 0.05) 75%), 
+                                                linear-gradient(-45deg, transparent 75%, rgba(196, 107, 2, 0.05) 75%)`,
+                                backgroundSize: '40px 40px',
+                                backgroundPosition: '0 0, 0 20px, 20px -20px, -20px 0px'
+                            }}></div>
+                        </div>
+                        
+                        <div className="w-full max-w-6xl mx-auto text-center relative z-10">
+                            <h2 className="text-3xl font-bold mb-6 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.graduates_section_title}
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {bsitContent.graduates_data && bsitContent.graduates_data.length > 0 ? (
                                     bsitContent.graduates_data.map((grad: GraduateItem, idx: number) => (
-                                        <div key={idx} className="flex flex-col items-center">
-                                            <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ height: 280 }}>
-                                                {grad.video_type === 'youtube' ? (
-                                                    <iframe
-                                                        src={`https://www.youtube.com/embed/${grad.video}`}
-                                                        title={grad.name}
-                                                        frameBorder={0}
-                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                        allowFullScreen
-                                                        className="w-full h-full"
-                                                    ></iframe>
-                                                ) : (
-                                                    <video
-                                                        src={typeof grad.video === 'string' ? grad.video : ''}
-                                                        controls
-                                                        className="w-full h-full object-cover"
-                                                    >
-                                                        Your browser does not support the video tag.
-                                                    </video>
-                                                )}
-                                            </div>
-                                            <span className="font-semibold text-lg" style={{ color: COLORS.primaryMaroon }}>{grad.name}</span>
-                                        </div>
+                                        <OptimizedGraduateCard
+                                            key={idx}
+                                            graduate={grad}
+                                            index={idx}
+                                            isVisible={graduatesAnimation.isVisible}
+                                        />
                                     ))
                                 ) : (
                                     <div className="col-span-full text-center text-gray-500">
@@ -555,104 +707,75 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
 
                     {/* Accreditation Areas */}
                     <section
-                        ref={areasRef}
-                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 ${
-                            areasVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                        ref={areasAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative ${
+                            getAnimationClasses(areasAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: '#f8fafc' }}
                     >
-                        <div className="w-full max-w-7xl mx-auto">
-                            <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: COLORS.primaryMaroon }}>
+                        {/* Decorative Elements */}
+                        <div className="absolute top-5 sm:top-10 left-5 sm:left-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full opacity-10" style={{ backgroundColor: COLORS.softYellow }}></div>
+                        <div className="absolute bottom-5 sm:bottom-10 right-5 sm:right-10 w-20 h-20 sm:w-32 sm:h-32 rounded-full opacity-10" style={{ backgroundColor: COLORS.burntOrange }}></div>
+                        
+                        <div className="w-full max-w-7xl mx-auto relative z-10">
+                            <h2 className="text-3xl font-bold mb-8 text-center transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                 {bsitContent.accreditation_section_title}
                             </h2>
+                            
+                            {/* Toggle Button */}
+                            <div className="flex justify-center mb-8">
+                                <button
+                                    onClick={() => setDocumentMode(!documentMode)}
+                                    className="px-6 py-3 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                                    style={{ backgroundColor: documentMode ? COLORS.burntOrange : COLORS.primaryMaroon }}
+                                >
+                                    {documentMode ? 'View Areas Overview' : 'Access Documents'}
+                                </button>
+                            </div>
                             
                             {/* Show regular area cards when not in document mode */}
                             {!documentMode && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                                    {/* Debug info */}
-                                    {console.log('Checking accreditation areas:', {
-                                        exists: !!bsitContent.accreditation_areas,
-                                        isArray: Array.isArray(bsitContent.accreditation_areas),
-                                        length: bsitContent.accreditation_areas?.length || 0,
-                                        data: bsitContent.accreditation_areas
-                                    })}
-                                    
                                     {/* First show content-based accreditation areas with images */}
                                     {bsitContent.accreditation_areas && bsitContent.accreditation_areas.length > 0 ? (
                                         bsitContent.accreditation_areas.map((area: AccreditationArea, idx: number) => (
-                                            <div key={`content-${idx}`} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                                <img 
-                                                    src={area.image || '/api/placeholder/300/200'}
-                                                    alt={area.title} 
-                                                    className="w-full h-28 object-cover" 
-                                                    style={{ minHeight: 112, maxHeight: 112 }} 
-                                                />
-                                                <div className="p-4 flex flex-col items-center">
-                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.title}</h3>
-                                                    
-                                                    {/* Find corresponding document area if available */}
-                                                    {(() => {
-                                                        const correspondingDocArea = availableAreas.find(docArea => 
-                                                            docArea.name?.toLowerCase().includes(area.title?.toLowerCase()?.replace(/area\s+[ivx]+:\s*/i, '')) ||
-                                                            area.title?.toLowerCase().includes(docArea.name?.toLowerCase())
-                                                        );
-                                                        return correspondingDocArea ? (
-                                                            <button 
-                                                                className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                                style={{ backgroundColor: COLORS.primaryMaroon }}
-                                                                onClick={() => {
-                                                                    setDocumentMode(true);
-                                                                    setSelected({ areaId: correspondingDocArea.id });
-                                                                    setAreaExpanded(prev => ({ ...prev, [correspondingDocArea.id]: true }));
-                                                                }}
-                                                            >
-                                                                View Documents
-                                                            </button>
-                                                        ) : (
-                                                            <div className="px-4 py-1 rounded-lg text-gray-500 font-bold text-sm">
-                                                                No Documents
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            </div>
+                                            <OptimizedAccreditationArea
+                                                key={`content-${idx}`}
+                                                area={area}
+                                                index={idx}
+                                                isVisible={areasAnimation.isVisible}
+                                                availableAreas={availableAreas}
+                                                onDocumentClick={(areaId) => {
+                                                    setDocumentMode(true);
+                                                    setSelected({ areaId });
+                                                }}
+                                            />
                                         ))
                                     ) : availableAreas && availableAreas.length > 0 ? (
-                                        /* Fallback to regular database areas if no content areas */
                                         availableAreas.map((area: Area, idx: number) => (
-                                            <div key={area.id || idx} className="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 transition-all duration-300 hover:scale-105 hover:-translate-y-2 group"
-                                                style={{ borderTopColor: COLORS.primaryMaroon, transitionDelay: `${idx * 0.1}s` }}>
-                                                <img 
-                                                    src="/api/placeholder/300/200"
-                                                    alt={area.name} 
-                                                    className="w-full h-28 object-cover" 
-                                                    style={{ minHeight: 112, maxHeight: 112 }} 
-                                                />
-                                                <div className="p-4 flex flex-col items-center">
-                                                    <h3 className="text-base font-bold text-center mb-2" style={{ color: COLORS.primaryMaroon }}>{area.name}</h3>
-                                                   
-                                                    <button 
-                                                        className="px-4 py-1 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105"
-                                                        style={{ backgroundColor: COLORS.primaryMaroon }}
-                                                        onClick={() => {
-                                                            setDocumentMode(true);
-                                                            setSelected({ areaId: area.id });
-                                                            setAreaExpanded(prev => ({ ...prev, [area.id]: true }));
-                                                        }}
-                                                    >
-                                                        View Parameters
-                                                    </button>
-                                                </div>
-                                            </div>
+                                            <OptimizedAccreditationArea
+                                                key={`area-${idx}`}
+                                                area={{
+                                                    title: area.name,
+                                                    image: '/api/placeholder/300/200',
+                                                    id: area.id,
+                                                    name: area.name,
+                                                    code: area.code,
+                                                    parameters: area.parameters,
+                                                    approved_count: area.approved_count
+                                                }}
+                                                index={idx}
+                                                isVisible={areasAnimation.isVisible}
+                                                availableAreas={availableAreas}
+                                                onDocumentClick={(areaId) => {
+                                                    setDocumentMode(true);
+                                                    setSelected({ areaId });
+                                                }}
+                                            />
                                         ))
                                     ) : (
-                                        <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-5 text-center text-gray-500">
-                                            <p>No accreditation areas available</p>
-                                            <p className="text-xs mt-2">
-                                                Debug: Content areas: {bsitContent.accreditation_areas ? `${bsitContent.accreditation_areas.length} items` : 'null'}, 
-                                                Available areas: {availableAreas ? `${availableAreas.length} items` : 'null'}
-                                            </p>
+                                        <div className="col-span-full text-center text-gray-500">
+                                            No accreditation areas available
                                         </div>
                                     )}
                                 </div>
@@ -1040,17 +1163,19 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                     </section>
 
                     {/* Mula Sayo, Para Sa Bayan */}
-                    <section className="relative py-16 sm:py-20 lg:py-24 px-0">
+                    <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
                         <div className="absolute inset-0 w-full h-full">
-                            <img
+                            <OptimizedImage
                                 src={bsitContent.mula_sayo_image || '/api/placeholder/1600/400'}
                                 alt={bsitContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
+                                lazy={true}
+                                sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
+                            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up transition-all duration-300 hover:scale-102">
                                 {bsitContent.mula_sayo_title}
                             </h2>
                         </div>
@@ -1058,6 +1183,30 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                 </main>
                 <Footer />
             </div>
+
+            <style>{`
+                @keyframes fade-in-up {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                
+                .animate-fade-in-up {
+                    animation: fade-in-up 0.8s ease-out forwards;
+                }
+                
+                .hover\\:scale-102:hover {
+                    transform: scale(1.02);
+                }
+                .text-shadow-lg {
+                    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+                }
+            `}</style>
         </>
     );
 }

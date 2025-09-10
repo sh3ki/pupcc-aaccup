@@ -130,6 +130,11 @@ function useScrollAnimation() {
 }
 
 export default function BSENTProgramPage({ bsentContent, accreditationAreas, sidebar }: Props) {
+    // Debug: Log the sidebar and accreditation areas data
+    console.log('BSENT bsentContent.accreditation_areas:', bsentContent.accreditation_areas);
+    console.log('BSENT accreditationAreas prop:', accreditationAreas);
+    console.log('BSENT sidebar prop:', sidebar);
+    
     const [overviewRef, overviewVisible] = useScrollAnimation();
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
@@ -181,17 +186,22 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
     // Use sidebar data if available, otherwise fallback to fetched data
     // Since we only have BSENT program, get the first (and only) program from sidebar
     const bsentProgram = sidebar?.[0];
+    console.log('BSENT bsentProgram from sidebar:', bsentProgram);
+    
     const availableAreas = useMemo(() => {
         // Prioritize bsentProgram areas (from backend)
         if (bsentProgram?.areas && bsentProgram.areas.length > 0) {
+            console.log('BSENT: Using sidebar areas:', bsentProgram.areas);
             return bsentProgram.areas;
         }
         // Then use fetched areas
         if (fetchedAreas && fetchedAreas.length > 0) {
+            console.log('BSENT: Using fetched areas:', fetchedAreas);
             return fetchedAreas;
         }
         // Finally fall back to accreditationAreas, convert to Area type
         if (accreditationAreas && accreditationAreas.length > 0) {
+            console.log('BSENT: Using accreditation areas:', accreditationAreas);
             return accreditationAreas.map(area => ({
                 id: area.id || 0,
                 name: area.name || area.title,
@@ -213,6 +223,11 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
     useEffect(() => {
         // Only fetch when all three are selected: area, parameter, and category
         if (selected.areaId && selected.parameterId && selected.category) {
+            console.log('BSENT: Fetching documents with:', { 
+                areaId: selected.areaId, 
+                parameterId: selected.parameterId, 
+                category: selected.category 
+            });
             setLoadingDocs(true);
             
             // Use same URL pattern as admin: /programs/bsent/documents with query params
@@ -220,24 +235,31 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('BSENT: Response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('BSENT: Received data:', data);
                     if (data.success) {
                         setApprovedDocs(data.documents || []);
                         setViewerIndex(0);
+                        console.log('BSENT: Set documents:', data.documents?.length || 0, 'items');
                     } else {
+                        console.log('BSENT: Request failed:', data.message);
                         setApprovedDocs([]);
                     }
                     setLoadingDocs(false);
                     setViewingDocIndex(null); // Reset document viewing
                 })
                 .catch(error => {
-                    console.error('Error fetching documents:', error);
+                    console.error('BSENT: Error fetching documents:', error);
                     setApprovedDocs([]);
                     setLoadingDocs(false);
                 });
         } else {
             // Clear documents when navigation changes
+            console.log('BSENT: Clearing documents - incomplete selection');
             setApprovedDocs([]);
             setViewerIndex(0);
         }

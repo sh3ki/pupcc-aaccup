@@ -1,7 +1,10 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, memo, useMemo } from 'react';
+import OptimizedImage from '@/components/OptimizedImage';
+import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
+import { preloadLandingResources } from '@/utils/resourcePreloader';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -35,6 +38,43 @@ interface AboutData {
 interface Props {
     aboutContent: AboutData;
 }
+
+// Memoized components for better performance
+const OptimizedFacultyCard = memo(({ faculty, index, isVisible, color }: { 
+    faculty: { image: string; name: string; description: string; }; 
+    index: number; 
+    isVisible: boolean; 
+    color: string;
+}) => (
+    <div
+        className={`group block transform transition-all duration-700 hover:scale-105 hover:-translate-y-3 ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ transitionDelay: `${index * 0.15}s` }}
+    >
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 group-hover:-translate-y-2 h-full flex flex-col" style={{ borderTopColor: color }}>
+            <div className="relative overflow-hidden">
+                <OptimizedImage
+                    src={faculty.image || "/api/placeholder/400/300"}
+                    alt={faculty.name}
+                    className="w-full h-48 sm:h-52 lg:h-56 object-cover transition-transform duration-500 group-hover:scale-110"
+                    lazy={index > 3}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </div>
+            <div className="p-6 sm:p-8 flex-1 flex flex-col">
+                <h3 className="text-xl sm:text-2xl lg:text-2xl font-bold mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-105" style={{ color }}>
+                    {faculty.name}
+                </h3>
+                <p className="text-gray-700 text-sm sm:text-base leading-relaxed flex-1">
+                    {faculty.description}
+                </p>
+            </div>
+        </div>
+    </div>
+));
+OptimizedFacultyCard.displayName = 'OptimizedFacultyCard';
 
 // Enhanced scroll animation hook with directional detection (same as welcome page)
 function useScrollAnimation() {
@@ -80,14 +120,91 @@ function useScrollAnimation() {
 }
 
 export default function About({ aboutContent }: Props) {
-    const [aboutRef, aboutVisible, aboutScrollDirection] = useScrollAnimation();
-    const [missionRef, missionVisible, missionScrollDirection] = useScrollAnimation();
-    const [visionRef, visionVisible, visionScrollDirection] = useScrollAnimation();
-    const [facultyRef, facultyVisible, facultyScrollDirection] = useScrollAnimation();
+    // Preload critical resources on component mount
+    useEffect(() => {
+        if (aboutContent) {
+            preloadLandingResources(aboutContent);
+        }
+    }, [aboutContent]);
+
+    // Use optimized scroll animations
+    const aboutAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const missionAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const visionAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const facultyAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+
+    // Scroll direction detection
+    const [scrollDirection, setScrollDirection] = useState('down');
+    const [lastScrollY, setLastScrollY] = useState(0);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
+            setLastScrollY(currentScrollY);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [lastScrollY]);
 
     return (
         <>
-            <Head title="About" />
+            <Head title="About - PUP Calauan Campus">
+                {/* Critical resource hints for better performance */}
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+                <link rel="dns-prefetch" href="//api.placeholder" />
+                
+                {/* Preload hero image */}
+                {aboutContent?.hero_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={aboutContent.hero_image}
+                        fetchPriority="high"
+                    />
+                )}
+                
+                {/* Preload faculty images */}
+                {aboutContent?.faculty_data?.slice(0, 4).map((faculty, index) => (
+                    faculty.image && (
+                        <link 
+                            key={index}
+                            rel="preload" 
+                            as="image" 
+                            href={faculty.image}
+                            fetchPriority="low"
+                        />
+                    )
+                )) || []}
+                
+                {/* Preload mula sayo image */}
+                {aboutContent?.mula_sayo_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={aboutContent.mula_sayo_image}
+                        fetchPriority="low"
+                    />
+                )}
+            </Head>
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="about" />
 
@@ -95,10 +212,13 @@ export default function About({ aboutContent }: Props) {
                     {/* Hero Section with Background Image */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <div className="absolute inset-0">
-                            <img
+                            <OptimizedImage
                                 src={aboutContent.hero_image || "/api/placeholder/1600/800"}
                                 alt="PUP Calauan Campus"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                priority={true}
+                                lazy={false}
+                                sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80 flex items-center justify-center transition-all duration-300 hover:from-black/35 hover:via-black/55 hover:to-black/75"></div>
                         </div>
@@ -114,13 +234,9 @@ export default function About({ aboutContent }: Props) {
 
                     {/* Story Section - Enhanced with patterns and animations */}
                     <section
-                        ref={aboutRef}
+                        ref={aboutAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            aboutVisible 
-                                ? 'opacity-100 translate-y-0 translate-x-0' 
-                                : aboutScrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-20 translate-x-10' 
-                                    : 'opacity-0 -translate-y-20 -translate-x-10'
+                            getAnimationClasses(aboutAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: '#f8fafc' }}
                     >
@@ -154,13 +270,9 @@ export default function About({ aboutContent }: Props) {
                             <div className="grid lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16">
                                 {/* Mission */}
                                 <div
-                                    ref={missionRef}
+                                    ref={missionAnimation.ref}
                                     className={`transition-all duration-1200 ${
-                                        missionVisible 
-                                            ? 'opacity-100 translate-x-0' 
-                                            : missionScrollDirection === 'down' 
-                                                ? 'opacity-0 -translate-x-32' 
-                                                : 'opacity-0 translate-x-32'
+                                        missionAnimation.isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-32'
                                     }`}
                                 >
                                     <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 lg:p-12 border-l-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 group" style={{ borderLeftColor: COLORS.primaryMaroon }}>
@@ -180,13 +292,9 @@ export default function About({ aboutContent }: Props) {
 
                                 {/* Vision */}
                                 <div
-                                    ref={visionRef}
+                                    ref={visionAnimation.ref}
                                     className={`transition-all duration-1200 delay-200 ${
-                                        visionVisible 
-                                            ? 'opacity-100 translate-x-0' 
-                                            : visionScrollDirection === 'down' 
-                                                ? 'opacity-0 translate-x-32' 
-                                                : 'opacity-0 -translate-x-32'
+                                        visionAnimation.isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-32'
                                     }`}
                                 >
                                     <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 lg:p-12 border-l-4 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 group" style={{ borderLeftColor: COLORS.burntOrange }}>
@@ -209,13 +317,9 @@ export default function About({ aboutContent }: Props) {
 
                     {/* Faculty Section - Enhanced with dynamic faculty cards */}
                     <section
-                        ref={facultyRef}
+                        ref={facultyAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            facultyVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : facultyScrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-28' 
-                                    : 'opacity-0 -translate-y-28'
+                            getAnimationClasses(facultyAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: 'white' }}
                     >
@@ -235,32 +339,13 @@ export default function About({ aboutContent }: Props) {
                                     const color = colors[index % colors.length];
                                     
                                     return (
-                                        <div
+                                        <OptimizedFacultyCard
                                             key={index}
-                                            className={`group block transform transition-all duration-700 hover:scale-105 hover:-translate-y-3 ${
-                                                facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                            }`}
-                                            style={{ transitionDelay: `${index * 0.15}s` }}
-                                        >
-                                            <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg overflow-hidden border-t-4 hover:shadow-2xl transition-all duration-500 group-hover:-translate-y-2 h-full flex flex-col" style={{ borderTopColor: color }}>
-                                                <div className="relative overflow-hidden">
-                                                    <img
-                                                        src={faculty.image || "/api/placeholder/400/300"}
-                                                        alt={faculty.name}
-                                                        className="w-full h-48 sm:h-52 lg:h-56 object-cover transition-transform duration-500 group-hover:scale-110"
-                                                    />
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                </div>
-                                                <div className="p-6 sm:p-8 flex-1 flex flex-col">
-                                                    <h3 className="text-xl sm:text-2xl lg:text-2xl font-bold mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-105" style={{ color }}>
-                                                        {faculty.name}
-                                                    </h3>
-                                                    <p className="text-base sm:text-lg text-gray-600 leading-relaxed transition-all duration-300 group-hover:text-gray-800 mb-4 flex-1">
-                                                        {faculty.description}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
+                                            faculty={faculty}
+                                            index={index}
+                                            isVisible={facultyAnimation.isVisible}
+                                            color={color}
+                                        />
                                     );
                                 })}
                             </div>
@@ -274,6 +359,8 @@ export default function About({ aboutContent }: Props) {
                                 src={aboutContent.mula_sayo_image || "/api/placeholder/1600/400"}
                                 alt="Mula Sayo, Para Sa Bayan"
                                 className="w-full h-full object-cover object-center opacity-70"
+                                loading="lazy"
+                                decoding="async"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
@@ -287,7 +374,7 @@ export default function About({ aboutContent }: Props) {
 
                 <Footer />
             </div>
-            <style jsx>{`
+            <style>{`
                 .text-shadow-lg {
                     text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
                 }

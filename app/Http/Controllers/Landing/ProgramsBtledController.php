@@ -467,6 +467,11 @@ class ProgramsBtledController extends Controller
      */
     public function getApprovedDocuments(Request $request)
     {
+        Log::info('BTLED getApprovedDocuments called', [
+            'request_params' => $request->all(),
+            'url' => $request->fullUrl()
+        ]);
+
         $type = $request->get('type', 'documents');
 
         // Get BTLED program
@@ -474,6 +479,8 @@ class ProgramsBtledController extends Controller
             ->orWhere('name', 'like', '%BTLED%')
             ->orWhere('name', 'like', '%Bachelor of Technology and Livelihood Education%')
             ->first();
+
+        Log::info('BTLED program found', ['program' => $btledProgram]);
 
         if (!$btledProgram) {
             return response()->json(['success' => false, 'message' => 'BTLED program not found']);
@@ -564,6 +571,13 @@ class ProgramsBtledController extends Controller
 
     private function getDocumentsForApi($request, $btledProgram)
     {
+        Log::info('BTLED getDocumentsForApi called', [
+            'area_id' => $request->area_id,
+            'parameter_id' => $request->parameter_id,
+            'category' => $request->category,
+            'program_id' => $btledProgram->id
+        ]);
+
         $request->validate([
             'area_id' => 'required|exists:areas,id',
             'parameter_id' => 'nullable|exists:parameters,id',
@@ -584,6 +598,11 @@ class ProgramsBtledController extends Controller
         }
 
         $documents = $query->orderBy('updated_at', 'desc')->get();
+        
+        Log::info('BTLED Documents found', [
+            'count' => $documents->count(),
+            'documents' => $documents->toArray()
+        ]);
 
         $transformedDocuments = $documents->map(function ($doc) {
             return [
@@ -599,6 +618,8 @@ class ProgramsBtledController extends Controller
                 'category' => $doc->category,
             ];
         });
+
+        Log::info('BTLED Transformed documents', ['transformed' => $transformedDocuments->toArray()]);
 
         return response()->json([
             'success' => true,

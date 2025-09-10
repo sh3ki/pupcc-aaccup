@@ -1,8 +1,11 @@
 import { Head } from '@inertiajs/react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Play, ExternalLink } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import OptimizedImage from '@/components/OptimizedImage';
+import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
+import { preloadLandingResources } from '@/utils/resourcePreloader';
 
 // Color palette - Maroon as primary
 const COLORS = {
@@ -57,21 +60,168 @@ interface Props {
     landingContent: LandingData;
 }
 
+// Memoized components for better performance
+const OptimizedAccreditorCard = memo(({ accreditor, index, isVisible }: { 
+    accreditor: { image: string; name: string; position: string; }; 
+    index: number; 
+    isVisible: boolean; 
+}) => (
+    <div 
+        className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ transitionDelay: `${index * 0.15}s` }}
+    >
+        <OptimizedImage 
+            src={accreditor.image || '/api/placeholder/200/200'}
+            alt={accreditor.name}
+            className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 xl:w-56 xl:h-56 rounded-full mx-auto mb-4 sm:mb-6 object-cover shadow-lg border-4 group-hover:scale-105 transition-transform duration-500"
+            style={{ borderColor: COLORS.softYellow }}
+            lazy={index > 2}
+            sizes="(max-width: 640px) 128px, (max-width: 1024px) 160px, (max-width: 1280px) 192px, 224px"
+        />
+        <h3 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2" style={{ color: COLORS.primaryMaroon }}>
+            {accreditor.name}
+        </h3>
+        <p className="text-sm sm:text-base lg:text-lg text-gray-600">
+            {accreditor.position}
+        </p>
+    </div>
+));
+OptimizedAccreditorCard.displayName = 'OptimizedAccreditorCard';
+
+const OptimizedVideoCard = memo(({ video, index, isVisible, onVideoClick }: { 
+    video: { title: string; video: string; video_type: 'youtube' | 'upload'; thumbnail?: string; }; 
+    index: number; 
+    isVisible: boolean; 
+    onVideoClick: (video: { title: string; video: string; video_type: 'youtube' | 'upload'; thumbnail?: string; }) => void;
+}) => (
+    <div 
+        className={`group cursor-pointer transform transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ transitionDelay: `${index * 0.2}s` }}
+        onClick={() => onVideoClick(video)}
+    >
+        <div className="relative overflow-hidden rounded-2xl shadow-lg bg-gray-800 group-hover:shadow-2xl transition-shadow duration-300">
+            {video.video_type === 'youtube' ? (
+                <OptimizedImage 
+                    src={video.thumbnail || `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`}
+                    alt={video.title}
+                    className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-300 group-hover:scale-110"
+                    lazy={index > 1}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                />
+            ) : (
+                <div className="relative">
+                    <OptimizedImage 
+                        src={video.thumbnail || '/api/placeholder/400/225'}
+                        alt={video.title}
+                        className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-300 group-hover:scale-110"
+                        lazy={index > 1}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+                </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <Play className="w-12 h-12 sm:w-16 sm:h-16 text-white drop-shadow-lg" fill="white" />
+            </div>
+        </div>
+        <h3 className="text-lg sm:text-xl font-bold mt-4 text-white group-hover:text-opacity-90 transition-colors duration-300">
+            {video.title}
+        </h3>
+    </div>
+));
+OptimizedVideoCard.displayName = 'OptimizedVideoCard';
+
+const OptimizedProgramCard = memo(({ program, index, isVisible }: { 
+    program: { image: string; name: string; description: string; }; 
+    index: number; 
+    isVisible: boolean; 
+}) => (
+    <div 
+        className={`bg-white rounded-2xl shadow-lg overflow-hidden transform transition-all duration-500 hover:scale-105 hover:-translate-y-3 border-t-4 hover:shadow-2xl group ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ 
+            borderTopColor: COLORS.primaryMaroon,
+            transitionDelay: `${index * 0.2}s`
+        }}
+    >
+        <div className="relative overflow-hidden">
+            <OptimizedImage 
+                src={program.image || '/api/placeholder/400/300'}
+                alt={program.name}
+                className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-500 group-hover:scale-110"
+                lazy={index > 2}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        </div>
+        <div className="p-6 sm:p-8">
+            <h3 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 transition-colors duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+                {program.name}
+            </h3>
+            <p className="text-gray-700 text-base sm:text-lg leading-relaxed">
+                {program.description}
+            </p>
+        </div>
+    </div>
+));
+OptimizedProgramCard.displayName = 'OptimizedProgramCard';
+
+const OptimizedQuickLinkCard = memo(({ link, index, isVisible }: { 
+    link: { url: string; title: string; }; 
+    index: number; 
+    isVisible: boolean; 
+}) => (
+    <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`group bg-white rounded-2xl shadow-lg p-6 sm:p-8 lg:p-10 text-center transform transition-all duration-500 hover:scale-105 hover:-translate-y-3 border-l-4 hover:shadow-xl ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+        }`}
+        style={{ 
+            borderLeftColor: COLORS.primaryMaroon,
+            transitionDelay: `${index * 0.2}s`
+        }}
+    >
+        <div className="text-4xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6 group-hover:scale-110 transition-transform duration-300">
+            {link.title.includes('Website') ? '🎓' : 
+             link.title.includes('SIS') ? '📚' : 
+             link.title.includes('Facebook') ? '📘' : '🔗'}
+        </div>
+        <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
+            {link.title}
+        </h3>
+        <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6 mx-auto group-hover:scale-110 transition-transform duration-300" style={{ color: COLORS.burntOrange }} />
+    </a>
+));
+OptimizedQuickLinkCard.displayName = 'OptimizedQuickLinkCard';
+
 export default function Welcome({ landingContent }: Props) {
+    // Preload critical resources on component mount
+    useEffect(() => {
+        if (landingContent) {
+            preloadLandingResources(landingContent);
+        }
+    }, [landingContent]);
+
     const [scrollDirection, setScrollDirection] = useState('down');
     const [lastScrollY, setLastScrollY] = useState(0);
 
     // For seamless infinite slider
     const [slideIndex, setSlideIndex] = useState(1); // Start at 1 (first real slide)
     const [isSliding, setIsSliding] = useState(false);
-    const [isPaused, setIsPaused] = useState(false); // Add pause state for user interactions
     const [isTabActive, setIsTabActive] = useState(true); // Track tab visibility
     const sliderRef = useRef<HTMLDivElement>(null);
     const autoSlideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Slider images derived from landing data
-    const getSliderImages = () => {
-        if (!landingContent) return [];
+    // Slider images derived from landing data - memoized for performance
+    const sliderImages = useMemo(() => {
+        if (!landingContent?.carousel_data) return [];
         
         const originalImages = landingContent.carousel_data.map((item, index) => ({
             id: index + 1,
@@ -87,47 +237,34 @@ export default function Welcome({ landingContent }: Props) {
             ...originalImages,
             originalImages[0], // Clone first image at the end
         ];
-    };
+    }, [landingContent?.carousel_data]);
 
-    const sliderImages = getSliderImages();
-
-    // Enhanced scroll animation hook with directional detection
-    const useScrollAnimation = () => {
-        const [isVisible, setIsVisible] = useState(false);
-        const [hasAnimated, setHasAnimated] = useState(false);
-        const ref = useRef<HTMLDivElement>(null);
-
-        useEffect(() => {
-            const currentRef = ref.current; // Store ref value to avoid cleanup issues
-            const observer = new IntersectionObserver(
-                ([entry]) => {
-                    if (entry.isIntersecting && !hasAnimated) {
-                        setIsVisible(true);
-                        setHasAnimated(true);
-                    } else if (!entry.isIntersecting && hasAnimated) {
-                        // Re-trigger animation when scrolling back
-                        setTimeout(() => {
-                            setIsVisible(false);
-                            setHasAnimated(false);
-                        }, 100);
-                    }
-                },
-                { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
-            );
-
-            if (currentRef) {
-                observer.observe(currentRef);
-            }
-
-            return () => {
-                if (currentRef) {
-                    observer.unobserve(currentRef);
-                }
-            };
-        }, [hasAnimated]);
-
-        return [ref, isVisible] as const;
-    };
+    // Use optimized scroll animations
+    const welcomeAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const messageAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const videoAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const programsAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+    const linksAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
 
     // Scroll direction detection
     useEffect(() => {
@@ -146,10 +283,7 @@ export default function Welcome({ landingContent }: Props) {
         if (isSliding) return; // Prevent multiple transitions
         setSlideIndex(idx);
         setIsSliding(true);
-        
-        // Pause auto-slide temporarily when user manually navigates
-        setIsPaused(true);
-        setTimeout(() => setIsPaused(false), 5000); // Resume after 5 seconds
+        // Removed manual pause logic - carousel always continues moving
     };
 
     // Handle tab visibility change to pause carousel when tab is not active
@@ -162,10 +296,10 @@ export default function Welcome({ landingContent }: Props) {
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
-    // Auto-slide functionality with seamless loop
+    // Auto-slide functionality with seamless loop - Always runs at 2 seconds
     useEffect(() => {
-        // Only start auto-slide if we have landing data and images and not paused and tab is active
-        if (!landingContent || sliderImages.length === 0 || isPaused || !isTabActive) {
+        // Only stop if no content, no images, or tab not active
+        if (!landingContent || sliderImages.length === 0 || !isTabActive) {
             return;
         }
 
@@ -175,7 +309,7 @@ export default function Welcome({ landingContent }: Props) {
                 setIsSliding(true);
                 return nextIndex;
             });
-        }, 2000); // Increased from 2000 to 4000ms for better user experience
+        }, 2000); // Always 2 seconds - never pauses for mouse hover
 
         return () => {
             if (autoSlideTimerRef.current) {
@@ -183,7 +317,7 @@ export default function Welcome({ landingContent }: Props) {
                 autoSlideTimerRef.current = null;
             }
         };
-    }, [landingContent, sliderImages.length, isPaused, isTabActive]); // Include tab visibility in dependencies
+    }, [landingContent, sliderImages.length, isTabActive]); // Removed isPaused dependency
 
     // Cleanup on component unmount
     useEffect(() => {
@@ -230,16 +364,40 @@ export default function Welcome({ landingContent }: Props) {
         };
     }, [slideIndex, sliderImages.length]);
 
-    // Scroll animation refs
-    const [welcomeRef, welcomeVisible] = useScrollAnimation();
-    const [messageRef, messageVisible] = useScrollAnimation();
-    const [videoRef, videoVisible] = useScrollAnimation();
-    const [programsRef, programsVisible] = useScrollAnimation();
-    const [linksRef, linksVisible] = useScrollAnimation();
+    // (Old scroll animation refs removed - using optimized animations instead)
 
     return (
         <>
-            <Head title="Welcome" />
+            <Head title="Welcome - PUP Calauan Campus">
+                {/* Critical resource hints for better performance */}
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+                <link rel="dns-prefetch" href="//api.placeholder" />
+                <link rel="dns-prefetch" href="//img.youtube.com" />
+                
+                {/* Preload ALL carousel images for instant loading */}
+                {landingContent?.carousel_data?.map((item, index) => (
+                    item.image && (
+                        <link 
+                            key={index}
+                            rel="preload" 
+                            as="image" 
+                            href={item.image}
+                            fetchPriority={index === 0 ? "high" : "low"}
+                        />
+                    )
+                )) || []}
+                
+                {/* Preload director image */}
+                {landingContent?.director_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={landingContent.director_image}
+                        fetchPriority="low"
+                    />
+                )}
+            </Head>
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="home" />
 
@@ -248,8 +406,6 @@ export default function Welcome({ landingContent }: Props) {
                     {/* Image Slider */}
                     <section 
                         className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden"
-                        onMouseEnter={() => setIsPaused(true)}
-                        onMouseLeave={() => setIsPaused(false)}
                     >
                         <div 
                             ref={sliderRef}
@@ -260,10 +416,13 @@ export default function Welcome({ landingContent }: Props) {
                         >
                             {sliderImages.map((image, index) => (
                                 <div key={`${image.id}-${index}`} className="w-full h-full flex-shrink-0 relative">
-                                    <img
+                                    <OptimizedImage
                                         src={image.src}
                                         alt={image.alt}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                        priority={index === 0}
+                                        lazy={false}
+                                        sizes="100vw"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 flex items-center justify-center transition-all duration-300 hover:from-black/25 hover:via-black/45 hover:to-black/65">
                                         <div className="text-center text-white px-4 max-w-6xl mx-auto">
@@ -320,13 +479,9 @@ export default function Welcome({ landingContent }: Props) {
 
                     {/* Welcome Section - Light Gray Background with Pattern */}
                     <section 
-                        ref={welcomeRef}
+                        ref={welcomeAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            welcomeVisible 
-                                ? 'opacity-100 translate-y-0 translate-x-0' 
-                                : scrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-20 translate-x-10' 
-                                    : 'opacity-0 -translate-y-20 -translate-x-10'
+                            getAnimationClasses(welcomeAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: '#f8fafc' }}
                     >
@@ -344,25 +499,12 @@ export default function Welcome({ landingContent }: Props) {
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 lg:gap-12">
                                 {landingContent?.accreditors_data.map((accreditor, index) => (
-                                    <div 
-                                        key={index} 
-                                        className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
-                                            welcomeVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
-                                        style={{ transitionDelay: `${index * 0.15}s` }}
-                                    >
-                                        <div className="relative mb-4 sm:mb-6 group">
-                                            <img
-                                                src={accreditor.image || '/api/placeholder/200/200'}
-                                                alt={accreditor.name}
-                                                className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-48 xl:h-48 mx-auto rounded-full shadow-lg border-4 group-hover:shadow-xl transition-all duration-300 group-hover:scale-105"
-                                                style={{ borderColor: COLORS.softYellow }}
-                                            />
-                                            <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                        </div>
-                                        <h3 className="font-bold text-lg sm:text-xl lg:text-2xl text-gray-900 mb-1 sm:mb-2 transition-all duration-300 hover:scale-105" style={{ color: COLORS.darkMaroon }}>{accreditor.name}</h3>
-                                        <p className="text-base sm:text-lg lg:text-xl transition-all duration-300 hover:font-medium" style={{ color: COLORS.burntOrange }}>{accreditor.position}</p>
-                                    </div>
+                                    <OptimizedAccreditorCard
+                                        key={index}
+                                        accreditor={accreditor}
+                                        index={index}
+                                        isVisible={welcomeAnimation.isVisible}
+                                    />
                                 )) || []}
                             </div>
                         </div>
@@ -370,13 +512,9 @@ export default function Welcome({ landingContent }: Props) {
 
                     {/* Message from Director - Gradient Background */}
                     <section 
-                        ref={messageRef}
+                        ref={messageAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            messageVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : scrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-32' 
-                                    : 'opacity-0 -translate-y-32'
+                            getAnimationClasses(messageAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ 
                             background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
@@ -389,7 +527,7 @@ export default function Welcome({ landingContent }: Props) {
                         <div className="w-full max-w-8xl mx-auto relative z-10">
                             <div className="grid lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16 items-center">
                                 <div className={`order-2 lg:order-1 transition-all duration-1200 delay-200 ${
-                                    messageVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-32'
+                                    messageAnimation.isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-32'
                                 }`}>
                                     <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 sm:mb-8 transition-all duration-300 hover:scale-102" style={{ color: COLORS.primaryMaroon }}>
                                         {landingContent?.director_section_title || 'Message from the Director'}
@@ -405,14 +543,17 @@ export default function Welcome({ landingContent }: Props) {
                                     </div>
                                 </div>
                                 <div className={`order-1 lg:order-2 text-center transition-all duration-1200 delay-400 ${
-                                    messageVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-32'
+                                    messageAnimation.isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-32'
                                 }`}>
                                     <div className="relative group">
-                                        <img
+                                        <OptimizedImage
                                             src={landingContent?.director_image || '/api/placeholder/600/800'}
                                             alt={landingContent?.director_name || 'Campus Director'}
                                             className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto rounded-2xl shadow-xl border-4 hover:scale-105 transition-transform duration-500 hover:shadow-2xl"
                                             style={{ borderColor: COLORS.softYellow, height: 'auto', aspectRatio: '3/4', objectFit: 'cover' }}
+                                            priority={false}
+                                            lazy={true}
+                                            sizes="(max-width: 640px) 384px, (max-width: 768px) 448px, (max-width: 1024px) 512px, 576px"
                                         />
                                     </div>
                                 </div>
@@ -422,13 +563,9 @@ export default function Welcome({ landingContent }: Props) {
 
                     {/* Video Section - Maroon Theme */}
                     <section 
-                        ref={videoRef}
+                        ref={videoAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative ${
-                            videoVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : scrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-24' 
-                                    : 'opacity-0 -translate-y-24'
+                            getAnimationClasses(videoAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: COLORS.primaryMaroon }}
                     >
@@ -441,49 +578,19 @@ export default function Welcome({ landingContent }: Props) {
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
                                 {landingContent?.videos_data.map((video, index) => (
-                                    <div 
-                                        key={index} 
-                                        className={`group cursor-pointer transform transition-all duration-500 hover:scale-105 hover:-translate-y-2 ${
-                                            videoVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
-                                        style={{ transitionDelay: `${index * 0.2}s` }}
-                                        onClick={() => {
+                                    <OptimizedVideoCard
+                                        key={index}
+                                        video={video}
+                                        index={index}
+                                        isVisible={videoAnimation.isVisible}
+                                        onVideoClick={(video) => {
                                             if (video.video_type === 'youtube') {
                                                 window.open(`https://www.youtube.com/watch?v=${video.video}`, '_blank');
                                             } else {
-                                                // For uploaded videos, open the video file directly
                                                 window.open(video.video, '_blank');
                                             }
                                         }}
-                                    >
-                                        <div className="relative rounded-2xl overflow-hidden shadow-lg group-hover:shadow-2xl transition-all duration-500">
-                                            {video.video_type === 'youtube' ? (
-                                                <img
-                                                    src={video.thumbnail || `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`}
-                                                    alt={video.title}
-                                                    className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
-                                                />
-                                            ) : (
-                                                <video
-                                                    className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
-                                                    poster={video.thumbnail}
-                                                    preload="metadata"
-                                                >
-                                                    <source src={video.video} type="video/mp4" />
-                                                    Your browser does not support the video tag.
-                                                </video>
-                                            )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex items-center justify-center group-hover:from-black/50 group-hover:via-black/25 transition-all duration-300">
-                                                <div 
-                                                    className="w-16 h-16 sm:w-18 sm:h-18 lg:w-20 lg:h-20 rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-all duration-300 shadow-lg"
-                                                    style={{ backgroundColor: COLORS.almostWhite }}
-                                                >
-                                                    <Play className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 ml-1 text-black" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <h3 className="mt-4 sm:mt-6 text-lg sm:text-xl lg:text-2xl font-bold text-white transition-all duration-300 group-hover:scale-105">{video.title}</h3>
-                                    </div>
+                                    />
                                 )) || []}
                             </div>
                         </div>
@@ -491,14 +598,10 @@ export default function Welcome({ landingContent }: Props) {
 
                     {/* Programs Under Survey - Card Style with Shadow */}
                     <section 
-                        ref={programsRef}
+                        ref={programsAnimation.ref}
                         id="programs" 
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative ${
-                            programsVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : scrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-28' 
-                                    : 'opacity-0 -translate-y-28'
+                            getAnimationClasses(programsAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: 'white' }}
                     >
@@ -514,39 +617,12 @@ export default function Welcome({ landingContent }: Props) {
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
                                 {landingContent?.programs_data.map((program, index) => (
-                                    <div 
-                                        key={index} 
-                                        className={`bg-white rounded-2xl shadow-lg overflow-hidden transform transition-all duration-500 hover:scale-105 hover:-translate-y-3 border-t-4 hover:shadow-2xl group ${
-                                            programsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
-                                        style={{ 
-                                            borderTopColor: COLORS.primaryMaroon,
-                                            transitionDelay: `${index * 0.2}s`
-                                        }}
-                                    >
-                                        <div className="relative overflow-hidden">
-                                            <img
-                                                src={program.image || '/api/placeholder/400/250'}
-                                                alt={program.name}
-                                                className="w-full h-48 sm:h-56 lg:h-60 object-cover transition-transform duration-500 group-hover:scale-110"
-                                            />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                        </div>
-                                        <div className="p-6 sm:p-8">
-                                            <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
-                                                {program.name}
-                                            </h3>
-                                            <p className="text-base sm:text-lg text-gray-600 mb-4 sm:mb-6 leading-relaxed transition-all duration-300 group-hover:text-gray-800">
-                                                {program.description}
-                                            </p>
-                                            <button 
-                                                className="px-5 sm:px-6 py-2 sm:py-3 rounded-lg text-white font-bold transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-md hover:shadow-lg"
-                                                style={{ backgroundColor: COLORS.burntOrange }}
-                                            >
-                                                Learn More
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <OptimizedProgramCard
+                                        key={index}
+                                        program={program}
+                                        index={index}
+                                        isVisible={programsAnimation.isVisible}
+                                    />
                                 )) || []}
                             </div>
                         </div>
@@ -554,13 +630,9 @@ export default function Welcome({ landingContent }: Props) {
 
                     {/* Quick Links - Textured Background */}
                     <section 
-                        ref={linksRef}
+                        ref={linksAnimation.ref}
                         className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative ${
-                            linksVisible 
-                                ? 'opacity-100 translate-y-0' 
-                                : scrollDirection === 'down' 
-                                    ? 'opacity-0 translate-y-20' 
-                                    : 'opacity-0 -translate-y-20'
+                            getAnimationClasses(linksAnimation.isVisible, scrollDirection as 'up' | 'down', 'slideUp')
                         }`}
                         style={{ backgroundColor: '#f3f4f6' }}
                     >
@@ -580,29 +652,12 @@ export default function Welcome({ landingContent }: Props) {
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
                                 {landingContent?.quick_links_data.map((link, index) => (
-                                    <a
+                                    <OptimizedQuickLinkCard
                                         key={index}
-                                        href={link.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`group bg-white rounded-2xl shadow-lg p-6 sm:p-8 lg:p-10 text-center transform transition-all duration-500 hover:scale-105 hover:-translate-y-3 border-l-4 hover:shadow-xl ${
-                                            linksVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
-                                        style={{ 
-                                            borderLeftColor: COLORS.primaryMaroon,
-                                            transitionDelay: `${index * 0.2}s`
-                                        }}
-                                    >
-                                        <div className="text-4xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                            {link.title.includes('Website') ? '🎓' : 
-                                             link.title.includes('SIS') ? '📚' : 
-                                             link.title.includes('Facebook') ? '📘' : '🔗'}
-                                        </div>
-                                        <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-105" style={{ color: COLORS.primaryMaroon }}>
-                                            {link.title}
-                                        </h3>
-                                        <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6 mx-auto group-hover:scale-110 transition-transform duration-300" style={{ color: COLORS.burntOrange }} />
-                                    </a>
+                                        link={link}
+                                        index={index}
+                                        isVisible={linksAnimation.isVisible}
+                                    />
                                 )) || []}
                             </div>
                         </div>
@@ -617,6 +672,8 @@ export default function Welcome({ landingContent }: Props) {
                                 src={landingContent?.mula_sayo_image || '/api/placeholder/1600/400'}
                                 alt={landingContent?.mula_sayo_title || 'Mula Sayo, Para Sa Bayan'}
                                 className="w-full h-full object-cover object-center opacity-70"
+                                loading="lazy"
+                                decoding="async"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>

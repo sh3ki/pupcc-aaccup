@@ -130,6 +130,11 @@ function useScrollAnimation() {
 }
 
 export default function BTLEDProgramPage({ btledContent, accreditationAreas, sidebar }: Props) {
+    // Debug: Log the sidebar and accreditation areas data
+    console.log('BTLED btledContent.accreditation_areas:', btledContent.accreditation_areas);
+    console.log('BTLED accreditationAreas prop:', accreditationAreas);
+    console.log('BTLED sidebar prop:', sidebar);
+    
     const [overviewRef, overviewVisible] = useScrollAnimation();
     const [objectivesRef, objectivesVisible] = useScrollAnimation();
     const [areasRef, areasVisible] = useScrollAnimation();
@@ -142,7 +147,6 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
         category?: string 
     }>({});
     const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
-    const [paramExpanded, setParamExpanded] = useState<{ [paramId: number]: boolean }>({});
     
     // Document states
     const [approvedDocs, setApprovedDocs] = useState<DocumentItem[]>([]);
@@ -152,7 +156,6 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
     
     // Store fetched data - use sidebar data if available, fallback to accreditationAreas
-    const [fetchedParameters, setFetchedParameters] = useState<Parameter[]>([]);
     const [fetchedAreas, setFetchedAreas] = useState<Area[]>([]);
 
     // PDF Navigation state
@@ -184,17 +187,22 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     // Use sidebar data if available, otherwise fallback to fetched data
     // Since we only have BTLED program, get the first (and only) program from sidebar
     const btledProgram = sidebar?.[0];
+    console.log('BTLED btledProgram from sidebar:', btledProgram);
+    
     const availableAreas = useMemo(() => {
         // Prioritize btledProgram areas (from backend)
         if (btledProgram?.areas && btledProgram.areas.length > 0) {
+            console.log('BTLED: Using sidebar areas:', btledProgram.areas);
             return btledProgram.areas;
         }
         // Then use fetched areas
         if (fetchedAreas && fetchedAreas.length > 0) {
+            console.log('BTLED: Using fetched areas:', fetchedAreas);
             return fetchedAreas;
         }
         // Finally fall back to accreditationAreas, convert to Area type
         if (accreditationAreas && accreditationAreas.length > 0) {
+            console.log('BTLED: Using accreditation areas:', accreditationAreas);
             return accreditationAreas.map(area => ({
                 id: area.id || 0,
                 name: area.name || area.title,
@@ -209,102 +217,69 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
-    const toggleAreaExpand = (areaId: number) => {
-        setAreaExpanded(prev => ({ ...prev, [areaId]: !prev[areaId] }));
-    };
+    // Remove the parameter fetching logic - use sidebar data directly like admin
+    // No separate parameter fetching needed
 
-    // Fetch parameters when area is selected
+    // Fetch approved documents - EXACTLY like admin panel and BSENT
     useEffect(() => {
-        if (selected.areaId && !selected.parameterId) {
-            const currentArea = availableAreas.find(a => a.id === selected.areaId);
-            
-            // Only fetch if parameters are not already available
-            if (!currentArea?.parameters || currentArea.parameters.length === 0) {
-                setLoadingDocs(true);
-                
-                // Fetch parameters from backend
-                fetch(`/programs/btled/documents?type=parameters&area_id=${selected.areaId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        setFetchedParameters(data.parameters || []);
-                        setFetchedAreas(prev => {
-                            const existing = prev.find(a => a.id === selected.areaId);
-                            if (existing) {
-                                return prev.map(a => a.id === selected.areaId ? { ...a, parameters: data.parameters || [] } : a);
-                            } else {
-                                const areaFromProps = accreditationAreas?.find(a => a.id === selected.areaId);
-                                if (areaFromProps) {
-                                    const newArea: Area = {
-                                        id: areaFromProps.id || 0,
-                                        name: areaFromProps.name || areaFromProps.title,
-                                        code: areaFromProps.code,
-                                        parameters: data.parameters || [],
-                                        approved_count: areaFromProps.approved_count
-                                    };
-                                    return [...prev, newArea];
-                                }
-                                return prev;
-                            }
-                        });
-                        setLoadingDocs(false);
-                    })
-                    .catch(error => {
-                        console.error('Error fetching parameters:', error);
-                        setLoadingDocs(false);
-                    });
-            }
-        }
-    }, [selected.areaId, selected.parameterId, availableAreas, accreditationAreas]);
-
-    // Fetch approved documents
-    useEffect(() => {
+        // Only fetch when all three are selected: area, parameter, and category
         if (selected.areaId && selected.parameterId && selected.category) {
+            console.log('BTLED: Fetching documents with:', { 
+                areaId: selected.areaId, 
+                parameterId: selected.parameterId, 
+                category: selected.category 
+            });
             setLoadingDocs(true);
             
-            // Fetch documents from backend
-            fetch(`/programs/btled/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`)
-                .then(response => response.json())
+            // Use same URL pattern as BSENT: /programs/btled/documents with query params (no type parameter)
+            fetch(`/programs/btled/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then(response => {
+                    console.log('BTLED: Response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
+                    console.log('BTLED: Received data:', data);
+                    if (data.success) {
+                        setApprovedDocs(data.documents || []);
+                        setViewerIndex(0);
+                        console.log('BTLED: Set documents:', data.documents?.length || 0, 'items');
+                    } else {
+                        console.log('BTLED: Request failed:', data.message);
+                        setApprovedDocs([]);
+                    }
                     setLoadingDocs(false);
+                    setViewingDocIndex(null); // Reset document viewing
                 })
                 .catch(error => {
-                    console.error('Error fetching documents:', error);
-                    setLoadingDocs(false);
-                });
-            
-        } else if (selected.areaId && selected.parameterId) {
-            // Fetch all docs for the parameter to get category counts
-            setLoadingDocs(true);
-            fetch(`/programs/btled/documents?type=documents&area_id=${selected.areaId}&parameter_id=${selected.parameterId}`)
-                .then(response => response.json())
-                .then(data => {
-                    setApprovedDocs(data.documents || []);
-                    setViewerIndex(0);
-                    setLoadingDocs(false);
-                })
-                .catch(error => {
-                    console.error('Error fetching parameter documents:', error);
+                    console.error('BTLED: Error fetching documents:', error);
+                    setApprovedDocs([]);
                     setLoadingDocs(false);
                 });
         } else {
+            // Clear documents when navigation changes
+            console.log('BTLED: Clearing documents - incomplete selection');
             setApprovedDocs([]);
             setViewerIndex(0);
         }
     }, [selected.areaId, selected.parameterId, selected.category]);
 
-    // Initial fetch of areas when component loads
+    // Sync btledProgram areas to state when sidebar data loads - like BSENT
     useEffect(() => {
-        if (!btledProgram?.areas && (!accreditationAreas || accreditationAreas.length === 0)) {
-            fetch('/programs/btled/documents?type=areas')
-                .then(response => response.json())
-                .then(data => {
-                    setFetchedAreas(data.areas || []);
-                })
-                .catch(error => {
-                    console.error('Error fetching areas:', error);
-                });
+        if (btledProgram?.areas && btledProgram.areas.length > 0) {
+            setFetchedAreas(btledProgram.areas);
+        } else if (accreditationAreas && accreditationAreas.length > 0) {
+            // Convert accreditationAreas to Area format as fallback
+            const convertedAreas: Area[] = accreditationAreas.map(area => ({
+                id: area.id || 0,
+                name: area.name || area.title,
+                code: area.code,
+                parameters: area.parameters || [],
+                approved_count: area.approved_count
+            }));
+            setFetchedAreas(convertedAreas);
         }
     }, [btledProgram?.areas, accreditationAreas]);
 

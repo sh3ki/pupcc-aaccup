@@ -1,9 +1,12 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import OptimizedImage from '@/components/OptimizedImage';
+import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
+import { preloadLandingResources } from '@/utils/resourcePreloader';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -35,44 +38,95 @@ interface Props {
 }
 
 // Enhanced scroll animation hook
-function useScrollAnimation() {
-    const [isVisible, setIsVisible] = useState(false);
-    const [hasAnimated, setHasAnimated] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
-                    setIsVisible(true);
-                    setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
-                }
-            },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
-        );
-        
-        const currentRef = ref.current;
-        if (currentRef) observer.observe(currentRef);
-        
-        return () => { 
-            if (currentRef) observer.unobserve(currentRef); 
-        };
-    }, [hasAnimated]);
-    
-    return [ref, isVisible] as const;
-}
+
+// Memoized Faculty Card Component
+const OptimizedFacultyCard = memo(({ faculty, index }: { faculty: FacultyMember; index: number }) => (
+    <div
+        key={index}
+        className={`
+            group relative h-80 rounded-2xl overflow-hidden shadow-xl 
+            transition-all duration-500 hover:scale-105 hover:shadow-2xl
+            animate-fade-in-up
+        `}
+        style={{ animationDelay: `${index * 100}ms` }}
+    >
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-10"></div>
+        <OptimizedImage
+            src={faculty.image || '/api/placeholder/300/400'}
+            alt={faculty.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            priority={index < 3}
+            placeholder="blur"
+            style={{
+                filter: 'brightness(0.8) contrast(1.1)'
+            }}
+        />
+        <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+            <h3 className="text-white text-xl font-bold mb-2 group-hover:text-yellow-400 transition-colors duration-300">
+                {faculty.name}
+            </h3>
+        </div>
+        <div className="absolute top-4 right-4 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+            <span className="text-white text-xs font-bold">{index + 1}</span>
+        </div>
+    </div>
+));
+
+OptimizedFacultyCard.displayName = 'OptimizedFacultyCard';
 
 export default function BSITFaculty({ bsitContent }: Props) {
-    const [facultyRef, facultyVisible] = useScrollAnimation();
+    // Preload critical resources on component mount
+    useEffect(() => {
+        if (bsitContent) {
+            preloadLandingResources(bsitContent);
+        }
+    }, [bsitContent]);
+
+    // Use optimized scroll animations
+    const facultyAnimation = useOptimizedScrollAnimation({ 
+        threshold: 0.15, 
+        rootMargin: '0px 0px -50px 0px',
+        triggerOnce: false
+    });
+
+    // Scroll direction detection
+    const [scrollDirection, setScrollDirection] = useState('down');
+    const [lastScrollY, setLastScrollY] = useState(0);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
+            setLastScrollY(currentScrollY);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [lastScrollY]);
 
     return (
         <>
-            <Head title="BSIT Faculty" />
+            <Head title="BSIT Faculty">
+                <meta name="description" content="Meet our dedicated BSIT faculty members" />
+                
+                {/* Preload critical resources */}
+                <link rel="preload" href={bsitContent.hero_image || "/api/placeholder/1600/800"} as="image" />
+                {bsitContent.faculty_data?.slice(0, 4).map((faculty, index) => (
+                    <link
+                        key={`preload-faculty-${index}`}
+                        rel="preload" 
+                        href={faculty.image || "/api/placeholder/300/400"} 
+                        as="image"
+                    />
+                ))}
+                <link rel="preload" href={bsitContent.mula_sayo_image} as="image" />
+                
+                {/* Performance hints */}
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+                <link rel="dns-prefetch" href="//api.placeholder" />
+            </Head>
             <div className="min-h-screen bg-white overflow-x-hidden">
                 <Header currentPage="bsit" />
 
@@ -80,10 +134,13 @@ export default function BSITFaculty({ bsitContent }: Props) {
                     {/* Hero Section */}
                     <section className="relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
                         <div className="absolute inset-0">
-                            <img
+                            <OptimizedImage
                                 src={bsitContent.hero_image || "/api/placeholder/1600/800"}
                                 alt="BSIT Faculty"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                priority={true}
+                                lazy={false}
+                                sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
                         </div>
@@ -106,10 +163,8 @@ export default function BSITFaculty({ bsitContent }: Props) {
 
                     {/* Faculty Members Section */}
                     <section
-                        ref={facultyRef}
-                        className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${
-                            facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-28'
-                        }`}
+                        ref={facultyAnimation.ref}
+                        className={`py-12 sm:py-16 lg:py-20 xl:py-24 px-4 sm:px-6 lg:px-8 xl:px-12 transition-all duration-1200 relative overflow-hidden ${getAnimationClasses(facultyAnimation.isVisible, scrollDirection as 'up' | 'down')}`}
                         style={{ 
                             background: `linear-gradient(135deg, ${COLORS.almostWhite} 0%, #f1f5f9 50%, ${COLORS.almostWhite} 100%)`
                         }}
@@ -129,19 +184,19 @@ export default function BSITFaculty({ bsitContent }: Props) {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 lg:gap-10">
                                 {bsitContent.faculty_data?.map((member, index) => (
                                     <div
-                                        key={index}
-                                        className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${
-                                            facultyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-                                        }`}
+                                        key={`faculty-${index}`}
+                                        className={`text-center transform transition-all duration-700 hover:scale-105 hover:-translate-y-2 ${getAnimationClasses(facultyAnimation.isVisible, scrollDirection as 'up' | 'down')}`}
                                         style={{ transitionDelay: `${index * 0.1}s` }}
                                     >
                                         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border-t-4 hover:shadow-xl transition-all duration-500 group h-full flex flex-col" style={{ borderTopColor: COLORS.primaryMaroon }}>
                                             <div className="relative mb-4 sm:mb-6 group/image">
-                                                <img
+                                                <OptimizedImage
                                                     src={member.image || "/api/placeholder/300/400"}
                                                     alt={member.name}
                                                     className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto rounded-full shadow-lg border-4 group-hover/image:shadow-xl transition-all duration-300 group-hover/image:scale-105"
                                                     style={{ borderColor: COLORS.primaryMaroon }}
+                                                    priority={index < 4}
+                                                    placeholder="blur"
                                                 />
                                                 <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-300"></div>
                                             </div>
@@ -158,12 +213,14 @@ export default function BSITFaculty({ bsitContent }: Props) {
                     </section>
 
                     {/* Mula Sayo, Para Sa Bayan Section */}
-                    <section className="relative py-16 sm:py-20 lg:py-24 px-0">
+                    <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
                         <div className="absolute inset-0 w-full h-full">
                             <img
                                 src={bsitContent.mula_sayo_image || "/api/placeholder/1600/400"}
-                                alt="Mula Sayo, Para Sa Bayan"
+                                alt={bsitContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
+                                loading="lazy"
+                                decoding="async"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>

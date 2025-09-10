@@ -535,6 +535,11 @@ class ProgramsBsitController extends Controller
      */
     public function getApprovedDocuments(Request $request)
     {
+        Log::info('BSIT getApprovedDocuments called', [
+            'request_params' => $request->all(),
+            'url' => $request->fullUrl()
+        ]);
+
         $type = $request->get('type', 'documents');
 
         // Get BSIT program
@@ -542,6 +547,8 @@ class ProgramsBsitController extends Controller
             ->orWhere('name', 'like', '%BSIT%')
             ->orWhere('name', 'like', '%Bachelor of Science in Information Technology%')
             ->first();
+
+        Log::info('BSIT program found', ['program' => $bsitProgram]);
 
         if (!$bsitProgram) {
             return response()->json(['success' => false, 'message' => 'BSIT program not found']);
@@ -632,6 +639,13 @@ class ProgramsBsitController extends Controller
 
     private function getDocumentsForApi($request, $bsitProgram)
     {
+        Log::info('getDocumentsForApi called', [
+            'area_id' => $request->area_id,
+            'parameter_id' => $request->parameter_id,
+            'category' => $request->category,
+            'program_id' => $bsitProgram->id
+        ]);
+
         $request->validate([
             'area_id' => 'required|exists:areas,id',
             'parameter_id' => 'nullable|exists:parameters,id',
@@ -652,6 +666,11 @@ class ProgramsBsitController extends Controller
         }
 
         $documents = $query->orderBy('updated_at', 'desc')->get();
+        
+        Log::info('Documents found', [
+            'count' => $documents->count(),
+            'documents' => $documents->toArray()
+        ]);
 
         $transformedDocuments = $documents->map(function ($doc) {
             return [
@@ -667,6 +686,8 @@ class ProgramsBsitController extends Controller
                 'category' => $doc->category,
             ];
         });
+
+        Log::info('Transformed documents', ['transformed' => $transformedDocuments->toArray()]);
 
         return response()->json([
             'success' => true,
