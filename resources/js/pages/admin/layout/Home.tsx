@@ -111,6 +111,22 @@ export default function LayoutHome({ landingContent }: Props) {
         }
     };
 
+    const moveCarouselSlideUp = (idx: number) => {
+        if (idx > 0) {
+            const updated = [...carousel];
+            [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
+            setCarousel(updated);
+        }
+    };
+
+    const moveCarouselSlideDown = (idx: number) => {
+        if (idx < carousel.length - 1) {
+            const updated = [...carousel];
+            [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
+            setCarousel(updated);
+        }
+    };
+
     // Accreditor handlers
     const handleAccreditorChange = (idx: number, field: keyof AccreditorItem, value: string | File | null) => {
         const updated = [...accreditors];
@@ -345,14 +361,49 @@ export default function LayoutHome({ landingContent }: Props) {
                                                 <div key={index} className="border rounded-lg p-4 bg-gray-50">
                                                     <div className="flex justify-between items-center mb-3">
                                                         <span className="text-sm font-medium text-gray-700">Slide {index + 1}</span>
-                                                        {carousel.length > 1 && (
-                                                            <button
-                                                                onClick={() => removeCarouselSlide(index)}
-                                                                className="text-red-600 hover:text-red-800 text-xs"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        )}
+                                                        <div className="flex items-center space-x-2">
+                                                            {/* Arrow buttons for reordering */}
+                                                            {carousel.length > 1 && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => moveCarouselSlideUp(index)}
+                                                                        disabled={index === 0}
+                                                                        className={`p-1 rounded ${
+                                                                            index === 0 
+                                                                                ? 'text-gray-300 cursor-not-allowed' 
+                                                                                : 'text-[#7F0404] hover:bg-[#7F0404] hover:text-white'
+                                                                        } transition-colors`}
+                                                                        title="Move up"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => moveCarouselSlideDown(index)}
+                                                                        disabled={index === carousel.length - 1}
+                                                                        className={`p-1 rounded ${
+                                                                            index === carousel.length - 1 
+                                                                                ? 'text-gray-300 cursor-not-allowed' 
+                                                                                : 'text-[#7F0404] hover:bg-[#7F0404] hover:text-white'
+                                                                        } transition-colors`}
+                                                                        title="Move down"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {carousel.length > 1 && (
+                                                                <button
+                                                                    onClick={() => removeCarouselSlide(index)}
+                                                                    className="text-red-600 hover:text-red-800 text-xs"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     
                                                     <FileUpload

@@ -1,14 +1,97 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PagePreview from '@/components/PagePreview';
 import FileUpload from '@/components/FileUpload';
 
 interface Document {
+    id?: string;
     title: string;
     file: string | File;
     oldFile?: string;
 }
+
+// Move DocumentManager outside the main component to prevent recreation on every render
+const DocumentManager = ({ title, documents, onAdd, onRemove, onUpdateTitle, onUpdateFile }: {
+    program: 1 | 2 | 3;
+    title: string;
+    documents: Document[];
+    onAdd: () => void;
+    onRemove: (index: number) => void;
+    onUpdateTitle: (index: number, title: string) => void;
+    onUpdateFile: (index: number, file: File | string) => void;
+}) => {
+    console.log(`[DEBUG IM] DocumentManager rendering - title: ${title}, documents count: ${documents.length}`);
+    console.log('[DEBUG IM] Documents:', documents);
+    
+    return (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div className="flex justify-between items-center mb-3">
+                <h4 className="text-md font-semibold text-[#7F0404]">{title}</h4>
+                <button
+                    type="button"
+                    onClick={onAdd}
+                    className="text-sm bg-[#7F0404] text-white px-3 py-1 rounded hover:bg-[#6B0303] transition-colors"
+                >
+                    Add Material
+                </button>
+            </div>
+            
+            <div className="space-y-4">
+                {documents.map((document, index) => {
+                    console.log(`[DEBUG IM] Rendering material ${index} with key: ${document.id || `mat_stable_${index}`}`);
+                    return (
+                        <div key={document.id || `mat_stable_${index}`} className="border border-gray-300 rounded p-3 bg-white">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-sm font-medium text-gray-700">Material {index + 1}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => onRemove(index)}
+                                    className="text-red-600 hover:text-red-800 text-sm"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Material Title</label>
+                                    <input
+                                        type="text"
+                                        value={document.title}
+                                        onChange={(e) => {
+                                            console.log(`[DEBUG IM] Input onChange - index: ${index}, value: "${e.target.value}"`);
+                                            onUpdateTitle(index, e.target.value);
+                                        }}
+                                        onFocus={() => console.log(`[DEBUG IM] Input focused - index: ${index}`)}
+                                        onBlur={() => console.log(`[DEBUG IM] Input blurred - index: ${index}`)}
+                                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-[#C46B02] focus:border-transparent"
+                                        placeholder="Enter material title"
+                                    />
+                                </div>
+                                
+                                <FileUpload
+                                    label="Material File"
+                                    value={document.file}
+                                    onChange={(file) => onUpdateFile(index, file || '')}
+                                    accept="image/*,.pdf,.doc,.docx"
+                                    allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                                    maxSize={10}
+                                />
+                            </div>
+                        </div>
+                    );
+                })}
+                
+                {documents.length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                        No materials added yet. Click "Add Material" to start.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 interface InstructionalMaterialsContent {
     hero_image: string | File;
@@ -33,6 +116,7 @@ interface Props {
 }
 
 export default function LayoutExhibitInstructionalMaterials({ instructionalMaterialsContent }: Props) {
+
     const [activeSection, setActiveSection] = useState('hero');
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -49,25 +133,77 @@ export default function LayoutExhibitInstructionalMaterials({ instructionalMater
     // BTLED Program State
     const [program1Title, setProgram1Title] = useState(instructionalMaterialsContent.program1_title || 'Bachelor of Technology and Livelihood Education');
     const [program1Image, setProgram1Image] = useState<string | File>(instructionalMaterialsContent.program1_image || '');
-    const [program1Documents, setProgram1Documents] = useState<Document[]>(instructionalMaterialsContent.program1_documents || []);
+    const [program1Documents, setProgram1Documents] = useState<Document[]>(
+        (instructionalMaterialsContent.program1_documents || []).filter(doc => doc.title.trim() !== '' || doc.file !== '')
+    );
 
     // BSENT Program State
     const [program2Title, setProgram2Title] = useState(instructionalMaterialsContent.program2_title || 'Bachelor of Science in Entrepreneurship');
     const [program2Image, setProgram2Image] = useState<string | File>(instructionalMaterialsContent.program2_image || '');
-    const [program2Documents, setProgram2Documents] = useState<Document[]>(instructionalMaterialsContent.program2_documents || []);
+    const [program2Documents, setProgram2Documents] = useState<Document[]>(
+        (instructionalMaterialsContent.program2_documents || []).filter(doc => doc.title.trim() !== '' || doc.file !== '')
+    );
 
     // BSIT Program State
     const [program3Title, setProgram3Title] = useState(instructionalMaterialsContent.program3_title || 'Bachelor of Science in Information Technology');
     const [program3Image, setProgram3Image] = useState<string | File>(instructionalMaterialsContent.program3_image || '');
-    const [program3Documents, setProgram3Documents] = useState<Document[]>(instructionalMaterialsContent.program3_documents || []);
+    const [program3Documents, setProgram3Documents] = useState<Document[]>(
+        (instructionalMaterialsContent.program3_documents || []).filter(doc => doc.title.trim() !== '' || doc.file !== '')
+    );
 
     // Footer Section State
     const [footerSectionTitle, setFooterSectionTitle] = useState(instructionalMaterialsContent.footer_section_title || 'Mula Sayo, Para Sa Bayan');
     const [footerImage, setFooterImage] = useState<string | File>(instructionalMaterialsContent.footer_image || '');
 
+    // Initialize IDs for existing documents that don't have them
+    useEffect(() => {
+        console.log('[DEBUG IM] useEffect for ID initialization running');
+        const addIdToDocuments = (docs: Document[]) => 
+            docs.map((doc, index) => doc.id ? doc : { 
+                ...doc, 
+                id: `doc_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
+            });
+
+        // Only update if there are documents without IDs
+        setProgram1Documents(prev => {
+            const hasDocsWithoutId = prev.some(doc => !doc.id);
+            console.log('[DEBUG IM] Program 1 - has docs without ID:', hasDocsWithoutId);
+            if (hasDocsWithoutId) {
+                console.log('[DEBUG IM] Program 1 - adding IDs to documents');
+                return addIdToDocuments(prev);
+            }
+            return prev;
+        });
+        setProgram2Documents(prev => {
+            const hasDocsWithoutId = prev.some(doc => !doc.id);
+            console.log('[DEBUG IM] Program 2 - has docs without ID:', hasDocsWithoutId);
+            if (hasDocsWithoutId) {
+                console.log('[DEBUG IM] Program 2 - adding IDs to documents');
+                return addIdToDocuments(prev);
+            }
+            return prev;
+        });
+        setProgram3Documents(prev => {
+            const hasDocsWithoutId = prev.some(doc => !doc.id);
+            console.log('[DEBUG IM] Program 3 - has docs without ID:', hasDocsWithoutId);
+            if (hasDocsWithoutId) {
+                console.log('[DEBUG IM] Program 3 - adding IDs to documents');
+                return addIdToDocuments(prev);
+            }
+            return prev;
+        });
+    }, []); // Run only once on mount
+
     // Helper functions for managing documents
     const addDocument = (program: 1 | 2 | 3) => {
-        const newDocument: Document = { title: '', file: '', oldFile: '' };
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substr(2, 9);
+        const newDocument: Document = { 
+            id: `doc_${program}_${timestamp}_${randomId}`,
+            title: '', 
+            file: '', 
+            oldFile: '' 
+        };
         
         switch (program) {
             case 1: {
@@ -103,22 +239,29 @@ export default function LayoutExhibitInstructionalMaterials({ instructionalMater
     };
 
     const updateDocumentTitle = (program: 1 | 2 | 3, index: number, title: string) => {
+        console.log(`[DEBUG IM] updateDocumentTitle called - program: ${program}, index: ${index}, title: "${title}"`);
         switch (program) {
             case 1: {
+                console.log('[DEBUG IM] Updating program 1 documents');
                 const newProgram1Docs = [...program1Documents];
                 newProgram1Docs[index] = { ...newProgram1Docs[index], title };
+                console.log('[DEBUG IM] New program 1 docs:', newProgram1Docs);
                 setProgram1Documents(newProgram1Docs);
                 break;
             }
             case 2: {
+                console.log('[DEBUG IM] Updating program 2 documents');
                 const newProgram2Docs = [...program2Documents];
                 newProgram2Docs[index] = { ...newProgram2Docs[index], title };
+                console.log('[DEBUG IM] New program 2 docs:', newProgram2Docs);
                 setProgram2Documents(newProgram2Docs);
                 break;
             }
             case 3: {
+                console.log('[DEBUG IM] Updating program 3 documents');
                 const newProgram3Docs = [...program3Documents];
                 newProgram3Docs[index] = { ...newProgram3Docs[index], title };
+                console.log('[DEBUG IM] New program 3 docs:', newProgram3Docs);
                 setProgram3Documents(newProgram3Docs);
                 break;
             }
@@ -238,74 +381,6 @@ export default function LayoutExhibitInstructionalMaterials({ instructionalMater
         { id: 'materials', name: 'Instructional Materials' },
         { id: 'footer', name: 'Mula Sayo' }
     ];
-
-    const DocumentManager = ({ title, documents, onAdd, onRemove, onUpdateTitle, onUpdateFile }: {
-        program: 1 | 2 | 3;
-        title: string;
-        documents: Document[];
-        onAdd: () => void;
-        onRemove: (index: number) => void;
-        onUpdateTitle: (index: number, title: string) => void;
-        onUpdateFile: (index: number, file: File | string) => void;
-    }) => (
-        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <div className="flex justify-between items-center mb-3">
-                <h4 className="text-md font-semibold text-[#7F0404]">{title}</h4>
-                <button
-                    type="button"
-                    onClick={onAdd}
-                    className="text-sm bg-[#7F0404] text-white px-3 py-1 rounded hover:bg-[#6B0303] transition-colors"
-                >
-                    Add Material
-                </button>
-            </div>
-            
-            <div className="space-y-4">
-                {documents.map((document, index) => (
-                    <div key={index} className="border border-gray-300 rounded p-3 bg-white">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-sm font-medium text-gray-700">Material {index + 1}</span>
-                            <button
-                                type="button"
-                                onClick={() => onRemove(index)}
-                                className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Material Title</label>
-                                <input
-                                    type="text"
-                                    value={document.title}
-                                    onChange={(e) => onUpdateTitle(index, e.target.value)}
-                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-[#C46B02] focus:border-transparent"
-                                    placeholder="Enter material title"
-                                />
-                            </div>
-                            
-                            <FileUpload
-                                label="Material File"
-                                value={document.file}
-                                onChange={(file) => onUpdateFile(index, file || '')}
-                                accept="image/*,.pdf,.doc,.docx"
-                                allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                maxSize={10}
-                            />
-                        </div>
-                    </div>
-                ))}
-                
-                {documents.length === 0 && (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                        No materials added yet. Click "Add Material" to start.
-                    </div>
-                )}
-            </div>
-        </div>
-    );
 
     return (
         <>
