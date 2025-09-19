@@ -607,6 +607,52 @@ class ResourcePreloader {
     }
 
     /**
+     * Preload about page resources - ALL faculty images as critical for instant display
+     */
+    preloadAboutPageResources(aboutData: Record<string, unknown>): void {
+        const resources: PreloadResource[] = [];
+
+        // Preload hero image as CRITICAL - must load before page display
+        if (aboutData?.hero_image && typeof aboutData.hero_image === 'string') {
+            resources.push({
+                url: aboutData.hero_image,
+                type: 'image',
+                priority: 'critical',
+                crossorigin: true
+            });
+        }
+
+        // Preload ALL faculty images as CRITICAL - no lazy loading for instant display
+        if (aboutData?.faculty_data && Array.isArray(aboutData.faculty_data)) {
+            aboutData.faculty_data.forEach((faculty: unknown) => {
+                if (typeof faculty === 'object' && faculty !== null) {
+                    const facultyObj = faculty as Record<string, unknown>;
+                    if (facultyObj.image && typeof facultyObj.image === 'string') {
+                        resources.push({
+                            url: facultyObj.image,
+                            type: 'image',
+                            priority: 'critical', // ALL faculty images are critical for instant display
+                            crossorigin: true
+                        });
+                    }
+                }
+            });
+        }
+
+        // Preload mula sayo image as high priority
+        if (aboutData?.mula_sayo_image && typeof aboutData.mula_sayo_image === 'string') {
+            resources.push({
+                url: aboutData.mula_sayo_image,
+                type: 'image',
+                priority: 'high',
+                crossorigin: true
+            });
+        }
+
+        this.preloadBatch(resources);
+    }
+
+    /**
      * Check if resource is already preloaded
      */
     isPreloaded(url: string): boolean {
@@ -697,8 +743,46 @@ export const preloadCriticalLandingResources = async (landingData: Record<string
     return resourcePreloader.preloadCriticalResources(resources);
 };
 
+// Add method to preload only critical about page resources and return promise  
+export const preloadCriticalAboutResources = async (aboutData: Record<string, unknown>): Promise<void> => {
+    const resources: PreloadResource[] = [];
+
+    // Hero image is critical - must load before page display
+    if (aboutData?.hero_image && typeof aboutData.hero_image === 'string') {
+        resources.push({
+            url: aboutData.hero_image,
+            type: 'image',
+            priority: 'critical',
+            crossorigin: true
+        });
+    }
+
+    // ALL faculty images are critical - must ALL load before page display for instant experience
+    if (aboutData?.faculty_data && Array.isArray(aboutData.faculty_data)) {
+        aboutData.faculty_data.forEach((faculty: unknown) => {
+            if (typeof faculty === 'object' && faculty !== null) {
+                const facultyObj = faculty as Record<string, unknown>;
+                if (facultyObj.image && typeof facultyObj.image === 'string') {
+                    resources.push({
+                        url: facultyObj.image,
+                        type: 'image',
+                        priority: 'critical',
+                        crossorigin: true
+                    });
+                }
+            }
+        });
+    }
+
+    return resourcePreloader.preloadCriticalResources(resources);
+};
+
 export const preloadLandingResources = (landingData: Record<string, unknown>) => {
     resourcePreloader.preloadLandingPageResources(landingData);
+};
+
+export const preloadAboutResources = (aboutData: Record<string, unknown>) => {
+    resourcePreloader.preloadAboutPageResources(aboutData);
 };
 
 export const preloadProgramResources = (programData: Record<string, unknown>) => {

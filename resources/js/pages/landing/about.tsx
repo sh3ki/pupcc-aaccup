@@ -1,10 +1,12 @@
 import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useRef, useEffect, useState, memo, useMemo } from 'react';
+import { useEffect, useState, memo } from 'react';
 import OptimizedImage from '@/components/OptimizedImage';
 import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
-import { preloadLandingResources } from '@/utils/resourcePreloader';
+import { preloadCriticalAboutResources, preloadAboutResources, onPreloadProgress } from '@/utils/resourcePreloader';
+import LoadingScreen from '@/components/LoadingScreen';
+import type { PreloadProgress } from '@/utils/resourcePreloader';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -58,7 +60,9 @@ const OptimizedFacultyCard = memo(({ faculty, index, isVisible, color }: {
                     src={faculty.image || "/api/placeholder/400/300"}
                     alt={faculty.name}
                     className="w-full h-48 sm:h-52 lg:h-56 object-cover transition-transform duration-500 group-hover:scale-110"
-                    lazy={index > 3}
+                    critical={true} // ALL faculty images are critical for instant display
+                    lazy={false} // No lazy loading - preload ALL faculty images
+                    priority={true}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -76,55 +80,58 @@ const OptimizedFacultyCard = memo(({ faculty, index, isVisible, color }: {
 ));
 OptimizedFacultyCard.displayName = 'OptimizedFacultyCard';
 
-// Enhanced scroll animation hook with directional detection (same as welcome page)
-function useScrollAnimation() {
-    const [isVisible, setIsVisible] = useState(false);
-    const [hasAnimated, setHasAnimated] = useState(false);
-    const [scrollDirection, setScrollDirection] = useState('down');
-    const [lastScrollY, setLastScrollY] = useState(0);
-    const ref = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const handleScroll = () => {
-            const currentScrollY = window.scrollY;
-            setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
-            setLastScrollY(currentScrollY);
-        };
-
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
-
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting && !hasAnimated) {
-                    setIsVisible(true);
-                    setHasAnimated(true);
-                } else if (!entry.isIntersecting && hasAnimated) {
-                    setTimeout(() => {
-                        setIsVisible(false);
-                        setHasAnimated(false);
-                    }, 100);
-                }
-            },
-            { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
-        );
-        
-        const currentRef = ref.current;
-        if (currentRef) observer.observe(currentRef);
-        return () => { if (currentRef) observer.unobserve(currentRef); };
-    }, [hasAnimated]);
-    
-    return [ref, isVisible, scrollDirection] as const;
-}
 
 export default function About({ aboutContent }: Props) {
-    // Preload critical resources on component mount
+    // Loading state management
+    const [isPreloading, setIsPreloading] = useState(true);
+    const [preloadProgress, setPreloadProgress] = useState<PreloadProgress>({
+        loaded: 0,
+        total: 0,
+        percentage: 0,
+        currentResource: '',
+        isComplete: false
+    });
+
+
+    // Preload critical resources and show loading screen
     useEffect(() => {
-        if (aboutContent) {
-            preloadLandingResources(aboutContent);
-        }
+        const initializeLoading = async () => {
+            // Subscribe to preload progress
+            const unsubscribe = onPreloadProgress((progress) => {
+                setPreloadProgress(progress);
+            });
+
+            try {
+                // Preload ALL critical images first - must complete before page shows
+                if (aboutContent) {
+                    console.log('🚀 Starting about page critical image preloading...');
+                    await preloadCriticalAboutResources(aboutContent as unknown as Record<string, unknown>);
+                    console.log('✅ All critical about page images loaded successfully!');
+                    
+                    // Then start preloading all other resources in background
+                    preloadAboutResources(aboutContent as unknown as Record<string, unknown>);
+                }
+                
+                // Hide loading screen after ensuring all critical images are ready
+                setTimeout(() => {
+                    setIsPreloading(false);
+                }, 500); // Slightly longer to ensure smooth transition
+                
+            } catch (error) {
+                console.warn('Resource preloading failed:', error);
+                // Still allow page to display even if preloading fails
+                setIsPreloading(false);
+            }
+
+            return unsubscribe;
+        };
+
+        const cleanup = initializeLoading();
+        
+        return () => {
+            cleanup.then(unsubscribe => unsubscribe?.());
+        };
     }, [aboutContent]);
 
     // Use optimized scroll animations
@@ -166,31 +173,41 @@ export default function About({ aboutContent }: Props) {
 
     return (
         <>
+            {/* Loading Screen - Shows until ALL critical images are loaded */}
+            <LoadingScreen 
+                isVisible={isPreloading}
+                progress={preloadProgress}
+                onComplete={() => setIsPreloading(false)}
+                title="Loading PUP Calauan About"
+                subtitle={preloadProgress.currentResource ? `${preloadProgress.currentResource}` : "Loading hero and faculty images..."}
+                minimumDisplayTime={1000}
+            />
+
             <Head title="About - PUP Calauan Campus">
                 {/* Critical resource hints for better performance */}
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
                 <link rel="dns-prefetch" href="//api.placeholder" />
                 
-                {/* Preload hero image */}
+                {/* Preload hero image with HIGH priority */}
                 {aboutContent?.hero_image && (
                     <link 
                         rel="preload" 
                         as="image" 
                         href={aboutContent.hero_image}
-                        fetchPriority="high"
+                        fetchPriority="high" // Hero image is critical
                     />
                 )}
                 
-                {/* Preload faculty images */}
-                {aboutContent?.faculty_data?.slice(0, 4).map((faculty, index) => (
+                {/* Preload ALL faculty images with HIGH priority for instant display */}
+                {aboutContent?.faculty_data?.map((faculty, index) => (
                     faculty.image && (
                         <link 
                             key={index}
                             rel="preload" 
                             as="image" 
                             href={faculty.image}
-                            fetchPriority="low"
+                            fetchPriority="high" // ALL faculty images are critical
                         />
                     )
                 )) || []}
@@ -216,8 +233,9 @@ export default function About({ aboutContent }: Props) {
                                 src={aboutContent.hero_image || "/api/placeholder/1600/800"}
                                 alt="PUP Calauan Campus"
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                critical={true} // Hero image is critical for instant display
                                 priority={true}
-                                lazy={false}
+                                lazy={false} // No lazy loading for hero image
                                 sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80 flex items-center justify-center transition-all duration-300 hover:from-black/35 hover:via-black/55 hover:to-black/75"></div>

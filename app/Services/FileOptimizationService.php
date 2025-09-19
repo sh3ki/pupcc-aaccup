@@ -35,9 +35,18 @@ class FileOptimizationService
             $compressionMethod = 'none';
             
             if ($file->getMimeType() === 'application/pdf') {
-                // Use SAFE PDF compression only if tools are available
-                $compressed = $this->safePDFCompression($tempOriginalPath, $tempCompressedPath);
-                $compressionMethod = 'pdf_safe';
+                if ($this->isPDFCompressionEnabled()) {
+                    // Use SAFE PDF compression only if enabled and tools are available
+                    $compressed = $this->safePDFCompression($tempOriginalPath, $tempCompressedPath);
+                    $compressionMethod = 'pdf_safe';
+                } else {
+                    // Skip compression for PDFs to prevent corruption
+                    $compressed = false;
+                    $compressionMethod = 'pdf_skipped';
+                    Log::info('PDF compression skipped - not enabled or tools unavailable', [
+                        'filename' => $file->getClientOriginalName()
+                    ]);
+                }
             } elseif (in_array($file->getMimeType(), ['image/jpeg', 'image/png', 'image/jpg'])) {
                 $compressed = $this->optimizeImage($tempOriginalPath, $tempCompressedPath, $file->getMimeType());
                 $compressionMethod = 'image';
@@ -362,6 +371,33 @@ class FileOptimizationService
     {
         $thresholdBytes = $thresholdMB * 1024 * 1024;
         return $file->getSize() > $thresholdBytes;
+    }
+
+    /**
+     * Check if PDF compression is enabled and tools are available
+     */
+    public function isPDFCompressionEnabled(): bool
+    {
+        // Return false to disable PDF compression until tools are verified
+        // TODO: Change to true after verifying Ghostscript/qpdf are available
+        return false;
+    }
+
+    /**
+     * Enable PDF compression by checking tool availability
+     */
+    public function enablePDFCompressionIfToolsAvailable(): bool
+    {
+        if ($this->isGhostscriptAvailable() || $this->isQpdfAvailable()) {
+            Log::info('PDF compression tools available', [
+                'ghostscript' => $this->isGhostscriptAvailable(),
+                'qpdf' => $this->isQpdfAvailable()
+            ]);
+            return true;
+        }
+        
+        Log::warning('PDF compression tools not available');
+        return false;
     }
 
     /**
