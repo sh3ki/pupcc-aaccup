@@ -13,6 +13,8 @@ interface OptimizedImageProps {
     onError?: () => void;
     webpSrc?: string; // WebP version if available
     avifSrc?: string; // AVIF version if available (future-proofing)
+    critical?: boolean; // For critical images that must load before page display
+    preloadHint?: boolean; // Add resource hints for this image
 }
 
 const OptimizedImage = memo(({
@@ -27,17 +29,45 @@ const OptimizedImage = memo(({
     onLoad,
     onError,
     webpSrc,
-    avifSrc
+    avifSrc,
+    critical = false,
+    preloadHint = false
 }: OptimizedImageProps) => {
     const [isLoaded, setIsLoaded] = useState(false);
-    const [isInView, setIsInView] = useState(!lazy || priority);
+    const [isInView, setIsInView] = useState(!lazy || priority || critical);
     const [error, setError] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
-    const [imageSrc, setImageSrc] = useState(priority ? src : placeholder || '');
+    const [imageSrc, setImageSrc] = useState(priority || critical ? src : placeholder || '');
+    const [hasAddedPreloadHint, setHasAddedPreloadHint] = useState(false);
 
-    // Intersection Observer for lazy loading
+    // Add preload hint to document head for critical/priority images
     useEffect(() => {
-        if (!lazy || priority || isInView) return;
+        if ((preloadHint || critical || priority) && !hasAddedPreloadHint && src) {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'image';
+            link.href = src;
+            link.crossOrigin = 'anonymous';
+            
+            if (critical) {
+                link.fetchPriority = 'high';
+            }
+
+            document.head.appendChild(link);
+            setHasAddedPreloadHint(true);
+
+            return () => {
+                // Clean up the preload link when component unmounts
+                if (document.head.contains(link)) {
+                    document.head.removeChild(link);
+                }
+            };
+        }
+    }, [src, preloadHint, critical, priority, hasAddedPreloadHint]);
+
+    // Enhanced Intersection Observer for lazy loading
+    useEffect(() => {
+        if (!lazy || priority || critical || isInView) return;
 
         const observer = new IntersectionObserver(
             ([entry]) => {
@@ -47,7 +77,8 @@ const OptimizedImage = memo(({
                 }
             },
             {
-                rootMargin: '50px', // Start loading 50px before image comes into view
+                // More aggressive loading for better UX
+                rootMargin: critical ? '200px' : priority ? '100px' : '50px',
                 threshold: 0.01
             }
         );
@@ -57,41 +88,67 @@ const OptimizedImage = memo(({
         }
 
         return () => observer.disconnect();
-    }, [lazy, priority, isInView]);
+    }, [lazy, priority, critical, isInView]);
 
-    // Load image when in view
+    // Enhanced image loading for critical/priority images
     useEffect(() => {
-        if (!isInView && !priority) return;
+        if (!isInView && !priority && !critical) return;
 
         const img = new Image();
         
-        // Handle load
+        // Enhanced loading attributes for critical images
+        if (critical) {
+            img.decoding = 'sync'; // Synchronous decoding for critical images
+            img.loading = 'eager';
+            img.fetchPriority = 'high';
+        } else if (priority) {
+            img.decoding = 'async';
+            img.loading = 'eager';
+            img.fetchPriority = 'high';
+        } else {
+            img.decoding = 'async';
+            img.loading = 'lazy';
+        }
+
+        // Handle successful load
         img.onload = () => {
             setIsLoaded(true);
             setImageSrc(src);
             onLoad?.();
         };
 
-        // Handle error
+        // Handle load error with retry logic for critical images
         img.onerror = () => {
-            setError(true);
-            onError?.();
+            if (critical) {
+                // Retry critical images once
+                console.warn(`Retrying critical image: ${src}`);
+                setTimeout(() => {
+                    const retryImg = new Image();
+                    retryImg.onload = () => {
+                        setIsLoaded(true);
+                        setImageSrc(src);
+                        onLoad?.();
+                    };
+                    retryImg.onerror = () => {
+                        setError(true);
+                        onError?.();
+                    };
+                    retryImg.src = src;
+                }, 100);
+            } else {
+                setError(true);
+                onError?.();
+            }
         };
 
-        // Set source with format detection
+        // Start loading
         img.src = src;
 
-        // Preload for priority images
-        if (priority) {
-            img.decoding = 'async';
-            img.loading = 'eager';
-        }
-
-    }, [isInView, priority, src, onLoad, onError]);
+    }, [isInView, priority, critical, src, onLoad, onError]);
 
     // Create optimized sources for modern formats
     const renderPicture = () => {
-        if (!isInView && !priority) {
+        if (!isInView && !priority && !critical) {
             return (
                 <div 
                     ref={imgRef}
@@ -122,8 +179,8 @@ const OptimizedImage = memo(({
                         isLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
                     style={style}
-                    loading={priority ? 'eager' : 'lazy'}
-                    decoding="async"
+                    loading={critical || priority ? 'eager' : 'lazy'}
+                    decoding={critical ? 'sync' : 'async'}
                     sizes={sizes}
                     onLoad={() => {
                         setIsLoaded(true);

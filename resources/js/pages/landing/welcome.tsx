@@ -4,8 +4,9 @@ import { ChevronLeft, ChevronRight, Play, ExternalLink } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import OptimizedImage from '@/components/OptimizedImage';
+import LoadingScreen from '@/components/LoadingScreen';
 import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
-import { preloadLandingResources } from '@/utils/resourcePreloader';
+import { preloadLandingResources, preloadCriticalLandingResources, onPreloadProgress, PreloadProgress } from '@/utils/resourcePreloader';
 
 // Color palette - Maroon as primary
 const COLORS = {
@@ -202,11 +203,57 @@ const OptimizedQuickLinkCard = memo(({ link, index, isVisible }: {
 OptimizedQuickLinkCard.displayName = 'OptimizedQuickLinkCard';
 
 export default function Welcome({ landingContent }: Props) {
-    // Preload critical resources on component mount
+    // Loading state management
+    const [isPreloading, setIsPreloading] = useState(true);
+    const [preloadProgress, setPreloadProgress] = useState<PreloadProgress>({
+        loaded: 0,
+        total: 0,
+        percentage: 0,
+        currentResource: '',
+        isComplete: false
+    });
+    const [isPageReady, setIsPageReady] = useState(false);
+
+    // Preload critical resources and show loading screen
     useEffect(() => {
-        if (landingContent) {
-            preloadLandingResources(landingContent);
-        }
+        const initializeLoading = async () => {
+            // Subscribe to preload progress
+            const unsubscribe = onPreloadProgress((progress) => {
+                setPreloadProgress(progress);
+            });
+
+            try {
+                // First, preload only critical above-the-fold resources
+                if (landingContent) {
+                    await preloadCriticalLandingResources(landingContent as unknown as Record<string, unknown>);
+                    
+                    // Then start preloading all other resources in background
+                    preloadLandingResources(landingContent as unknown as Record<string, unknown>);
+                }
+                
+                // Mark as ready to display content
+                setIsPageReady(true);
+                
+                // Hide loading screen after a short delay
+                setTimeout(() => {
+                    setIsPreloading(false);
+                }, 300);
+                
+            } catch (error) {
+                console.warn('Resource preloading failed:', error);
+                // Still allow page to display even if preloading fails
+                setIsPageReady(true);
+                setIsPreloading(false);
+            }
+
+            return unsubscribe;
+        };
+
+        const cleanup = initializeLoading();
+        
+        return () => {
+            cleanup.then(unsubscribe => unsubscribe?.());
+        };
     }, [landingContent]);
 
     const [scrollDirection, setScrollDirection] = useState('down');
@@ -368,6 +415,16 @@ export default function Welcome({ landingContent }: Props) {
 
     return (
         <>
+            {/* Loading Screen - Only show during initial preloading */}
+            <LoadingScreen 
+                isVisible={isPreloading}
+                progress={preloadProgress}
+                onComplete={() => setIsPreloading(false)}
+                title="Loading PUP Calauan"
+                subtitle="Preparing your experience..."
+                minimumDisplayTime={800}
+            />
+
             <Head title="Welcome - PUP Calauan Campus">
                 {/* Critical resource hints for better performance */}
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -420,9 +477,11 @@ export default function Welcome({ landingContent }: Props) {
                                         src={image.src}
                                         alt={image.alt}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                                        priority={index === 0}
+                                        priority={index <= 2} // First 3 images are priority
+                                        critical={index === 1} // The actual first slide (not clone) is critical
                                         lazy={false}
                                         sizes="100vw"
+                                        preloadHint={index <= 1}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 flex items-center justify-center transition-all duration-300 hover:from-black/25 hover:via-black/45 hover:to-black/65">
                                         <div className="text-center text-white px-4 max-w-6xl mx-auto">
@@ -551,8 +610,9 @@ export default function Welcome({ landingContent }: Props) {
                                             alt={landingContent?.director_name || 'Campus Director'}
                                             className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto rounded-2xl shadow-xl border-4 hover:scale-105 transition-transform duration-500 hover:shadow-2xl"
                                             style={{ borderColor: COLORS.softYellow, height: 'auto', aspectRatio: '3/4', objectFit: 'cover' }}
-                                            priority={false}
-                                            lazy={true}
+                                            priority={true} // Director is usually above the fold
+                                            lazy={false}
+                                            preloadHint={true}
                                             sizes="(max-width: 640px) 384px, (max-width: 768px) 448px, (max-width: 1024px) 512px, 576px"
                                         />
                                     </div>

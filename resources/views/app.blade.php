@@ -37,12 +37,35 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
+        {{-- Critical Resource Hints for Performance --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="dns-prefetch" href="//img.youtube.com">
+        <link rel="dns-prefetch" href="//via.placeholder.com">
+        <link rel="dns-prefetch" href="//api.placeholder.com">
+        
+        {{-- Early loading script for better performance --}}
+        <script>
+            // Early performance optimization
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => {
+                    // Prefetch likely next pages
+                    const links = ['/about', '/programs', '/exhibit'];
+                    links.forEach(href => {
+                        const link = document.createElement('link');
+                        link.rel = 'prefetch';
+                        link.href = href;
+                        document.head.appendChild(link);
+                    });
+                });
+            }
+        </script>
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
         @routes
         @viteReactRefresh
-        @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
+        @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
