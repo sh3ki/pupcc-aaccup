@@ -6,7 +6,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use App\Services\PDFCompressor;
 
 class FileOptimizationService
 {
@@ -36,8 +35,9 @@ class FileOptimizationService
             $compressionMethod = 'none';
             
             if ($file->getMimeType() === 'application/pdf') {
-                $compressed = $this->compressPDFFile($tempOriginalPath, $tempCompressedPath);
-                $compressionMethod = 'pdf';
+                // Use SAFE PDF compression only if tools are available
+                $compressed = $this->safePDFCompression($tempOriginalPath, $tempCompressedPath);
+                $compressionMethod = 'pdf_safe';
             } elseif (in_array($file->getMimeType(), ['image/jpeg', 'image/png', 'image/jpg'])) {
                 $compressed = $this->optimizeImage($tempOriginalPath, $tempCompressedPath, $file->getMimeType());
                 $compressionMethod = 'image';
@@ -102,41 +102,44 @@ class FileOptimizationService
     }
 
     /**
-     * Compress PDF file using available methods
+     * Compress PDF file using safe compression methods
      */
     private function compressPDFFile(string $inputPath, string $outputPath): bool
     {
-        // Try Ghostscript first (best compression)
-        if ($this->optimizePDF($inputPath, $outputPath)) {
-            return true;
-        }
-        
-        // Fallback to basic compression
-        return $this->compressPDFBasic($inputPath, $outputPath);
+        // Use the new safe PDF compression method that preserves file integrity
+        return $this->safePDFCompression($inputPath, $outputPath);
     }
 
     /**
-     * Compress general files using gzip compression
+     * Compress general files - only for specific file types that can be safely compressed
      */
     private function compressGeneralFile(string $inputPath, string $outputPath): bool
     {
         try {
-            $content = file_get_contents($inputPath);
-            if ($content === false) {
-                return false;
+            // Only compress text-based files that won't be corrupted by gzip
+            $extension = strtolower(pathinfo($inputPath, PATHINFO_EXTENSION));
+            $textFormats = ['txt', 'csv', 'json', 'xml', 'html', 'css', 'js'];
+            
+            if (in_array($extension, $textFormats)) {
+                $content = file_get_contents($inputPath);
+                if ($content === false) {
+                    return false;
+                }
+                
+                // Use gzip compression for text files only
+                $compressed = gzencode($content, 9);
+                
+                if ($compressed !== false) {
+                    return file_put_contents($outputPath, $compressed) !== false;
+                }
             }
             
-            // Use gzip compression for general files
-            $compressed = gzencode($content, 9); // Maximum compression
-            
-            if ($compressed !== false) {
-                return file_put_contents($outputPath, $compressed) !== false;
-            }
-            
-            return false;
+            // For all other file types, just copy without compression
+            // to avoid corruption
+            return copy($inputPath, $outputPath);
         } catch (\Exception $e) {
             Log::warning('General file compression failed', ['error' => $e->getMessage()]);
-            return false;
+            return copy($inputPath, $outputPath);
         }
     }
 
@@ -148,13 +151,12 @@ class FileOptimizationService
         try {
             // Check if Ghostscript is available
             if (!$this->isGhostscriptAvailable()) {
-                // Try alternative PDF optimization using basic file compression
-                return $this->compressPDFBasic($inputPath, $outputPath);
+                return false;
             }
 
-            // Ghostscript command for PDF optimization
+            // Use conservative Ghostscript settings to avoid corruption
             $command = sprintf(
-                'gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile="%s" "%s"',
+                'gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.6 -dPDFSETTINGS=/printer -dNOPAUSE -dQUIET -dBATCH -dDetectDuplicateImages=true -dCompressFonts=true -r150 -sOutputFile="%s" "%s"',
                 escapeshellarg($outputPath),
                 escapeshellarg($inputPath)
             );
@@ -163,7 +165,17 @@ class FileOptimizationService
             $returnCode = 0;
             exec($command, $output, $returnCode);
 
-            return $returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0;
+            $success = $returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0;
+            
+            if ($success) {
+                Log::info('PDF compressed with Ghostscript', [
+                    'input_size' => filesize($inputPath),
+                    'output_size' => filesize($outputPath),
+                    'compression_ratio' => filesize($outputPath) / filesize($inputPath)
+                ]);
+            }
+
+            return $success;
         } catch (\Exception $e) {
             Log::warning('PDF optimization failed', ['error' => $e->getMessage()]);
             return false;
@@ -175,36 +187,62 @@ class FileOptimizationService
      */
     private function compressPDFBasic(string $inputPath, string $outputPath): bool
     {
+        // REMOVED: Custom PHP PDF compression that was corrupting files
+        // Only use proven external tools
+        return $this->compressPDFWithQpdf($inputPath, $outputPath);
+    }
+
+    /**
+     * Compress PDF using qpdf
+     */
+    private function compressPDFWithQpdf(string $inputPath, string $outputPath): bool
+    {
         try {
-            // Try different compression methods in order of preference
-            
-            // 1. Use qpdf if available (best compression)
-            if ($this->isQpdfAvailable()) {
-                $command = sprintf(
-                    'qpdf --linearize --optimize-images --compress-streams=y "%s" "%s"',
-                    escapeshellarg($inputPath),
-                    escapeshellarg($outputPath)
-                );
-                
-                $output = [];
-                $returnCode = 0;
-                exec($command, $output, $returnCode);
-                
-                if ($returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0) {
-                    return true;
-                }
+            if (!$this->isQpdfAvailable()) {
+                return false;
             }
             
-            // 2. Use custom PHP PDF compressor
-            if (PDFCompressor::compress($inputPath, $outputPath, 0.5)) {
-                return true;
-            }
+            $command = sprintf(
+                'qpdf --linearize --optimize-images --compress-streams=y "%s" "%s"',
+                escapeshellarg($inputPath),
+                escapeshellarg($outputPath)
+            );
             
-            // 3. Fallback: Just copy the file
-            return copy($inputPath, $outputPath);
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+            
+            return $returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0;
         } catch (\Exception $e) {
-            Log::warning('Basic PDF compression failed', ['error' => $e->getMessage()]);
-            return copy($inputPath, $outputPath);
+            Log::warning('qpdf compression failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Verify PDF integrity by checking file headers and structure
+     */
+    private function verifyPDFIntegrity(string $filePath): bool
+    {
+        try {
+            if (!file_exists($filePath) || filesize($filePath) < 100) {
+                return false;
+            }
+            
+            $handle = fopen($filePath, 'rb');
+            if (!$handle) {
+                return false;
+            }
+            
+            // Check PDF header
+            $header = fread($handle, 8);
+            fclose($handle);
+            
+            // PDF files should start with %PDF-
+            return strpos($header, '%PDF-') === 0;
+        } catch (\Exception $e) {
+            Log::warning('PDF integrity check failed', ['error' => $e->getMessage()]);
+            return false;
         }
     }
 
@@ -324,5 +362,53 @@ class FileOptimizationService
     {
         $thresholdBytes = $thresholdMB * 1024 * 1024;
         return $file->getSize() > $thresholdBytes;
+    }
+
+    /**
+     * Safe PDF compression that preserves file integrity
+     */
+    private function safePDFCompression(string $inputPath, string $outputPath): bool
+    {
+        try {
+            // First, try Ghostscript with conservative settings
+            if ($this->isGhostscriptAvailable()) {
+                $command = sprintf(
+                    'gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.6 -dPDFSETTINGS=/default -dNOPAUSE -dQUIET -dBATCH -sOutputFile="%s" "%s"',
+                    escapeshellarg($outputPath),
+                    escapeshellarg($inputPath)
+                );
+
+                $output = [];
+                $returnCode = 0;
+                exec($command, $output, $returnCode);
+
+                if ($returnCode === 0 && file_exists($outputPath) && $this->verifyPDFIntegrity($outputPath)) {
+                    return true;
+                }
+            }
+
+            // If Ghostscript fails, try qpdf
+            if ($this->isQpdfAvailable()) {
+                $command = sprintf(
+                    'qpdf --linearize "%s" "%s"',
+                    escapeshellarg($inputPath),
+                    escapeshellarg($outputPath)
+                );
+
+                $output = [];
+                $returnCode = 0;
+                exec($command, $output, $returnCode);
+
+                if ($returnCode === 0 && file_exists($outputPath) && $this->verifyPDFIntegrity($outputPath)) {
+                    return true;
+                }
+            }
+
+            // If both fail, just copy the original file
+            return copy($inputPath, $outputPath);
+        } catch (\Exception $e) {
+            Log::warning('Safe PDF compression failed', ['error' => $e->getMessage()]);
+            return copy($inputPath, $outputPath);
+        }
     }
 }

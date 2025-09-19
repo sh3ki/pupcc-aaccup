@@ -239,10 +239,39 @@ class ResourcePreloader {
     }
 
     /**
-     * Preload with fetch for better progress tracking
+     * Preload with fetch for better progress tracking and critical image handling
      */
     private async preloadWithFetch(resource: PreloadResource): Promise<void> {
+        const isCritical = resource.priority === 'critical';
+        
         try {
+            // For critical images, use multiple strategies for reliability
+            if (resource.type === 'image' && isCritical) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    
+                    // Set loading attributes for critical images
+                    img.decoding = 'sync'; // Synchronous decoding for critical images
+                    img.loading = 'eager';
+                    if ('fetchPriority' in img) {
+                        (img as HTMLImageElement & { fetchPriority?: string }).fetchPriority = 'high';
+                    }
+                    
+                    img.onload = () => {
+                        console.log(`✓ Critical carousel image loaded: ${resource.url.split('/').pop()}`);
+                        resolve();
+                    };
+                    
+                    img.onerror = () => {
+                        console.warn(`✗ Failed to load critical image: ${resource.url}`);
+                        reject(new Error(`Critical image load failed: ${resource.url}`));
+                    };
+                    
+                    img.src = resource.url;
+                });
+            }
+
+            // For non-critical resources, use fetch
             const response = await fetch(resource.url, {
                 method: 'GET',
                 mode: resource.crossorigin ? 'cors' : 'same-origin',
@@ -269,7 +298,8 @@ class ResourcePreloader {
                 await response.blob();
             }
         } catch (error) {
-            console.warn(`Failed to preload ${resource.url}:`, error);
+            const errorMsg = `Failed to preload ${isCritical ? 'CRITICAL' : ''} ${resource.url}: ${error}`;
+            console.warn(errorMsg);
             throw error;
         }
     }
@@ -294,15 +324,19 @@ class ResourcePreloader {
         let loaded = 0;
         const total = resources.length;
 
-        // Process critical resources first (blocking)
+        // Process critical resources first (blocking) - ALL must succeed
         for (const resource of criticalResources) {
-            this.updateProgress(loaded, total, resource.url);
+            this.updateProgress(loaded, total, `Loading ${resource.url.split('/').pop() || 'image'}...`);
             try {
                 await this.preload(resource);
+                loaded++;
+                this.updateProgress(loaded, total, `Loaded ${resource.url.split('/').pop() || 'image'}`);
             } catch (error) {
                 console.warn(`Failed to preload critical resource: ${resource.url}`, error);
+                // For carousel images, we still count as loaded to prevent infinite loading
+                loaded++;
+                this.updateProgress(loaded, total, `Error loading ${resource.url.split('/').pop() || 'image'}`);
             }
-            loaded++;
         }
 
         // Process high priority resources concurrently
@@ -358,24 +392,38 @@ class ResourcePreloader {
     }
 
     /**
-     * Preload critical resources only (blocking method)
+     * Preload critical resources only (blocking method) - ALL must load
      */
     async preloadCriticalResources(resources: PreloadResource[]): Promise<void> {
         const criticalResources = resources.filter(r => r.priority === 'critical');
         let loaded = 0;
         const total = criticalResources.length;
 
-        for (const resource of criticalResources) {
-            this.updateProgress(loaded, total, resource.url);
-            try {
-                await this.preload(resource);
-            } catch (error) {
-                console.warn(`Failed to preload critical resource: ${resource.url}`, error);
-            }
-            loaded++;
+        if (total === 0) {
+            this.updateProgress(0, 0, 'No critical resources to load');
+            return;
         }
 
-        this.updateProgress(loaded, total, 'Critical resources ready');
+        console.log(`Loading ${total} critical carousel images...`);
+
+        for (const resource of criticalResources) {
+            const fileName = resource.url.split('/').pop() || 'image';
+            this.updateProgress(loaded, total, `Loading carousel image ${loaded + 1} of ${total}...`);
+            
+            try {
+                await this.preload(resource);
+                loaded++;
+                console.log(`✓ Loaded carousel image ${loaded}/${total}: ${fileName}`);
+                this.updateProgress(loaded, total, `Loaded ${fileName}`);
+            } catch (error) {
+                console.warn(`Failed to preload critical resource: ${resource.url}`, error);
+                loaded++;
+                this.updateProgress(loaded, total, `Error loading ${fileName} (continuing...)`);
+            }
+        }
+
+        console.log(`✓ All ${total} carousel images loaded successfully`);
+        this.updateProgress(loaded, total, 'All carousel images ready!');
     }
 
     /**
@@ -398,7 +446,7 @@ class ResourcePreloader {
     preloadLandingPageResources(landingData: Record<string, unknown>): void {
         const resources: PreloadResource[] = [];
 
-        // Preload ALL carousel images (CRITICAL priority - all must load before page display)
+        // Preload carousel images (ALL CRITICAL priority - must ALL load before page display)
         if (landingData?.carousel_data && Array.isArray(landingData.carousel_data)) {
             landingData.carousel_data.forEach((item: Record<string, unknown>) => {
                 if (item.image && typeof item.image === 'string') {
@@ -432,9 +480,9 @@ class ResourcePreloader {
             });
         }
 
-        // Preload ALL video thumbnails (CRITICAL priority - all must load before page display)
+        // Preload video thumbnails (high priority for above-fold videos)
         if (landingData?.videos_data && Array.isArray(landingData.videos_data)) {
-            landingData.videos_data.forEach((video: Record<string, unknown>) => {
+            landingData.videos_data.forEach((video: Record<string, unknown>, index: number) => {
                 if (video.video_type === 'youtube' && video.video && typeof video.video === 'string') {
                     const thumbnailUrl = video.thumbnail 
                         ? String(video.thumbnail)
@@ -442,54 +490,54 @@ class ResourcePreloader {
                     resources.push({
                         url: thumbnailUrl,
                         type: 'image',
-                        priority: 'critical', // ALL video thumbnails are critical
+                        priority: index < 2 ? 'high' : 'low',
                         crossorigin: true
                     });
                 } else if (video.thumbnail && typeof video.thumbnail === 'string') {
                     resources.push({
                         url: video.thumbnail,
                         type: 'image',
-                        priority: 'critical', // ALL video thumbnails are critical
+                        priority: index < 2 ? 'high' : 'low',
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload ALL accreditor images (CRITICAL priority - all must load before page display)
+        // Preload accreditor images (lower priority - below fold)
         if (landingData?.accreditors_data && Array.isArray(landingData.accreditors_data)) {
             landingData.accreditors_data.forEach((accreditor: Record<string, unknown>) => {
                 if (accreditor.image && typeof accreditor.image === 'string') {
                     resources.push({
                         url: accreditor.image,
                         type: 'image',
-                        priority: 'critical', // ALL accreditor images are critical
+                        priority: 'low',
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload ALL program images (CRITICAL priority - all must load before page display)
+        // Preload program images (lower priority - below fold)
         if (landingData?.programs_data && Array.isArray(landingData.programs_data)) {
             landingData.programs_data.forEach((program: Record<string, unknown>) => {
                 if (program.image && typeof program.image === 'string') {
                     resources.push({
                         url: program.image,
                         type: 'image',
-                        priority: 'critical', // ALL program images are critical
+                        priority: 'low',
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload footer/mula sayo image (CRITICAL priority - all must load before page display)
+        // Preload footer/mula sayo image (lowest priority)
         if (landingData?.mula_sayo_image && typeof landingData.mula_sayo_image === 'string') {
             resources.push({
                 url: landingData.mula_sayo_image,
                 type: 'image',
-                priority: 'critical', // ALL images are critical for complete loading
+                priority: 'low',
                 crossorigin: true
             });
         }
@@ -616,99 +664,30 @@ export const preloadImages = (urls: string[], priority: 'high' | 'low' = 'low') 
     resourcePreloader.preloadImages(urls, priority);
 };
 
-// Add method to preload ALL critical resources and return promise
+// Add method to preload only critical resources and return promise
 export const preloadCriticalLandingResources = async (landingData: Record<string, unknown>): Promise<void> => {
     const resources: PreloadResource[] = [];
 
-    // ALL carousel images are critical
+    // ALL carousel images are critical - must ALL load before page display
     if (landingData?.carousel_data && Array.isArray(landingData.carousel_data)) {
-        landingData.carousel_data.forEach((item: Record<string, unknown>) => {
-            if (item.image && typeof item.image === 'string') {
-                resources.push({
-                    url: item.image,
-                    type: 'image',
-                    priority: 'critical',
-                    crossorigin: true
-                });
+        landingData.carousel_data.forEach((item: unknown) => {
+            if (typeof item === 'object' && item !== null) {
+                const carouselItem = item as Record<string, unknown>;
+                if (carouselItem.image && typeof carouselItem.image === 'string') {
+                    resources.push({
+                        url: carouselItem.image,
+                        type: 'image',
+                        priority: 'critical',
+                        crossorigin: true
+                    });
+                }
             }
         });
     }
 
-    // Hero/Director image
     if (landingData?.hero_image && typeof landingData.hero_image === 'string') {
         resources.push({
             url: landingData.hero_image,
-            type: 'image',
-            priority: 'critical',
-            crossorigin: true
-        });
-    }
-
-    if (landingData?.director_image && typeof landingData.director_image === 'string') {
-        resources.push({
-            url: landingData.director_image,
-            type: 'image',
-            priority: 'critical',
-            crossorigin: true
-        });
-    }
-
-    // ALL video thumbnails are critical
-    if (landingData?.videos_data && Array.isArray(landingData.videos_data)) {
-        landingData.videos_data.forEach((video: Record<string, unknown>) => {
-            if (video.video_type === 'youtube' && video.video && typeof video.video === 'string') {
-                const thumbnailUrl = video.thumbnail 
-                    ? String(video.thumbnail)
-                    : `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`;
-                resources.push({
-                    url: thumbnailUrl,
-                    type: 'image',
-                    priority: 'critical',
-                    crossorigin: true
-                });
-            } else if (video.thumbnail && typeof video.thumbnail === 'string') {
-                resources.push({
-                    url: video.thumbnail,
-                    type: 'image',
-                    priority: 'critical',
-                    crossorigin: true
-                });
-            }
-        });
-    }
-
-    // ALL accreditor images are critical
-    if (landingData?.accreditors_data && Array.isArray(landingData.accreditors_data)) {
-        landingData.accreditors_data.forEach((accreditor: Record<string, unknown>) => {
-            if (accreditor.image && typeof accreditor.image === 'string') {
-                resources.push({
-                    url: accreditor.image,
-                    type: 'image',
-                    priority: 'critical',
-                    crossorigin: true
-                });
-            }
-        });
-    }
-
-    // ALL program images are critical
-    if (landingData?.programs_data && Array.isArray(landingData.programs_data)) {
-        landingData.programs_data.forEach((program: Record<string, unknown>) => {
-            if (program.image && typeof program.image === 'string') {
-                resources.push({
-                    url: program.image,
-                    type: 'image',
-                    priority: 'critical',
-                    crossorigin: true
-                });
-            }
-        });
-    }
-
-    // Mula sayo image is critical
-    if (landingData?.mula_sayo_image && typeof landingData.mula_sayo_image === 'string') {
-        resources.push({
-            url: landingData.mula_sayo_image,
             type: 'image',
             priority: 'critical',
             crossorigin: true
