@@ -398,14 +398,14 @@ class ResourcePreloader {
     preloadLandingPageResources(landingData: Record<string, unknown>): void {
         const resources: PreloadResource[] = [];
 
-        // Preload carousel images (CRITICAL priority - must load before page display)
+        // Preload ALL carousel images (CRITICAL priority - all must load before page display)
         if (landingData?.carousel_data && Array.isArray(landingData.carousel_data)) {
-            landingData.carousel_data.forEach((item: Record<string, unknown>, index: number) => {
+            landingData.carousel_data.forEach((item: Record<string, unknown>) => {
                 if (item.image && typeof item.image === 'string') {
                     resources.push({
                         url: item.image,
                         type: 'image',
-                        priority: index === 0 ? 'critical' : 'high', // First image is critical
+                        priority: 'critical', // ALL carousel images are critical
                         crossorigin: true
                     });
                 }
@@ -432,9 +432,9 @@ class ResourcePreloader {
             });
         }
 
-        // Preload video thumbnails (high priority for above-fold videos)
+        // Preload ALL video thumbnails (CRITICAL priority - all must load before page display)
         if (landingData?.videos_data && Array.isArray(landingData.videos_data)) {
-            landingData.videos_data.forEach((video: Record<string, unknown>, index: number) => {
+            landingData.videos_data.forEach((video: Record<string, unknown>) => {
                 if (video.video_type === 'youtube' && video.video && typeof video.video === 'string') {
                     const thumbnailUrl = video.thumbnail 
                         ? String(video.thumbnail)
@@ -442,54 +442,54 @@ class ResourcePreloader {
                     resources.push({
                         url: thumbnailUrl,
                         type: 'image',
-                        priority: index < 2 ? 'high' : 'low',
+                        priority: 'critical', // ALL video thumbnails are critical
                         crossorigin: true
                     });
                 } else if (video.thumbnail && typeof video.thumbnail === 'string') {
                     resources.push({
                         url: video.thumbnail,
                         type: 'image',
-                        priority: index < 2 ? 'high' : 'low',
+                        priority: 'critical', // ALL video thumbnails are critical
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload accreditor images (lower priority - below fold)
+        // Preload ALL accreditor images (CRITICAL priority - all must load before page display)
         if (landingData?.accreditors_data && Array.isArray(landingData.accreditors_data)) {
             landingData.accreditors_data.forEach((accreditor: Record<string, unknown>) => {
                 if (accreditor.image && typeof accreditor.image === 'string') {
                     resources.push({
                         url: accreditor.image,
                         type: 'image',
-                        priority: 'low',
+                        priority: 'critical', // ALL accreditor images are critical
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload program images (lower priority - below fold)
+        // Preload ALL program images (CRITICAL priority - all must load before page display)
         if (landingData?.programs_data && Array.isArray(landingData.programs_data)) {
             landingData.programs_data.forEach((program: Record<string, unknown>) => {
                 if (program.image && typeof program.image === 'string') {
                     resources.push({
                         url: program.image,
                         type: 'image',
-                        priority: 'low',
+                        priority: 'critical', // ALL program images are critical
                         crossorigin: true
                     });
                 }
             });
         }
 
-        // Preload footer/mula sayo image (lowest priority)
+        // Preload footer/mula sayo image (CRITICAL priority - all must load before page display)
         if (landingData?.mula_sayo_image && typeof landingData.mula_sayo_image === 'string') {
             resources.push({
                 url: landingData.mula_sayo_image,
                 type: 'image',
-                priority: 'low',
+                priority: 'critical', // ALL images are critical for complete loading
                 crossorigin: true
             });
         }
@@ -616,26 +616,99 @@ export const preloadImages = (urls: string[], priority: 'high' | 'low' = 'low') 
     resourcePreloader.preloadImages(urls, priority);
 };
 
-// Add method to preload only critical resources and return promise
+// Add method to preload ALL critical resources and return promise
 export const preloadCriticalLandingResources = async (landingData: Record<string, unknown>): Promise<void> => {
     const resources: PreloadResource[] = [];
 
-    // Only critical above-the-fold resources
+    // ALL carousel images are critical
     if (landingData?.carousel_data && Array.isArray(landingData.carousel_data)) {
-        const firstCarouselItem = landingData.carousel_data[0] as Record<string, unknown>;
-        if (firstCarouselItem?.image && typeof firstCarouselItem.image === 'string') {
-            resources.push({
-                url: firstCarouselItem.image,
-                type: 'image',
-                priority: 'critical',
-                crossorigin: true
-            });
-        }
+        landingData.carousel_data.forEach((item: Record<string, unknown>) => {
+            if (item.image && typeof item.image === 'string') {
+                resources.push({
+                    url: item.image,
+                    type: 'image',
+                    priority: 'critical',
+                    crossorigin: true
+                });
+            }
+        });
     }
 
+    // Hero/Director image
     if (landingData?.hero_image && typeof landingData.hero_image === 'string') {
         resources.push({
             url: landingData.hero_image,
+            type: 'image',
+            priority: 'critical',
+            crossorigin: true
+        });
+    }
+
+    if (landingData?.director_image && typeof landingData.director_image === 'string') {
+        resources.push({
+            url: landingData.director_image,
+            type: 'image',
+            priority: 'critical',
+            crossorigin: true
+        });
+    }
+
+    // ALL video thumbnails are critical
+    if (landingData?.videos_data && Array.isArray(landingData.videos_data)) {
+        landingData.videos_data.forEach((video: Record<string, unknown>) => {
+            if (video.video_type === 'youtube' && video.video && typeof video.video === 'string') {
+                const thumbnailUrl = video.thumbnail 
+                    ? String(video.thumbnail)
+                    : `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`;
+                resources.push({
+                    url: thumbnailUrl,
+                    type: 'image',
+                    priority: 'critical',
+                    crossorigin: true
+                });
+            } else if (video.thumbnail && typeof video.thumbnail === 'string') {
+                resources.push({
+                    url: video.thumbnail,
+                    type: 'image',
+                    priority: 'critical',
+                    crossorigin: true
+                });
+            }
+        });
+    }
+
+    // ALL accreditor images are critical
+    if (landingData?.accreditors_data && Array.isArray(landingData.accreditors_data)) {
+        landingData.accreditors_data.forEach((accreditor: Record<string, unknown>) => {
+            if (accreditor.image && typeof accreditor.image === 'string') {
+                resources.push({
+                    url: accreditor.image,
+                    type: 'image',
+                    priority: 'critical',
+                    crossorigin: true
+                });
+            }
+        });
+    }
+
+    // ALL program images are critical
+    if (landingData?.programs_data && Array.isArray(landingData.programs_data)) {
+        landingData.programs_data.forEach((program: Record<string, unknown>) => {
+            if (program.image && typeof program.image === 'string') {
+                resources.push({
+                    url: program.image,
+                    type: 'image',
+                    priority: 'critical',
+                    crossorigin: true
+                });
+            }
+        });
+    }
+
+    // Mula sayo image is critical
+    if (landingData?.mula_sayo_image && typeof landingData.mula_sayo_image === 'string') {
+        resources.push({
+            url: landingData.mula_sayo_image,
             type: 'image',
             priority: 'critical',
             crossorigin: true

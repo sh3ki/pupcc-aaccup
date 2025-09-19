@@ -78,7 +78,10 @@ const OptimizedAccreditorCard = memo(({ accreditor, index, isVisible }: {
             alt={accreditor.name}
             className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 xl:w-56 xl:h-56 rounded-full mx-auto mb-4 sm:mb-6 object-cover shadow-lg border-4 group-hover:scale-105 transition-transform duration-500"
             style={{ borderColor: COLORS.softYellow }}
-            lazy={index > 2}
+            priority={true} // ALL accreditor images are critical
+            critical={true}
+            lazy={false}
+            preloadHint={true}
             sizes="(max-width: 640px) 128px, (max-width: 1024px) 160px, (max-width: 1280px) 192px, 224px"
         />
         <h3 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2" style={{ color: COLORS.primaryMaroon }}>
@@ -110,7 +113,10 @@ const OptimizedVideoCard = memo(({ video, index, isVisible, onVideoClick }: {
                     src={video.thumbnail || `https://img.youtube.com/vi/${video.video}/maxresdefault.jpg`}
                     alt={video.title}
                     className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-300 group-hover:scale-110"
-                    lazy={index > 1}
+                    priority={true} // ALL video thumbnails are critical
+                    critical={true}
+                    lazy={false}
+                    preloadHint={true}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 />
             ) : (
@@ -119,7 +125,10 @@ const OptimizedVideoCard = memo(({ video, index, isVisible, onVideoClick }: {
                         src={video.thumbnail || '/api/placeholder/400/225'}
                         alt={video.title}
                         className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-300 group-hover:scale-110"
-                        lazy={index > 1}
+                        priority={true} // ALL video thumbnails are critical
+                        critical={true}
+                        lazy={false}
+                        preloadHint={true}
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
@@ -155,7 +164,10 @@ const OptimizedProgramCard = memo(({ program, index, isVisible }: {
                 src={program.image || '/api/placeholder/400/300'}
                 alt={program.name}
                 className="w-full h-48 sm:h-56 lg:h-64 object-cover transition-transform duration-500 group-hover:scale-110"
-                lazy={index > 2}
+                priority={true} // ALL program images are critical
+                critical={true}
+                lazy={false}
+                preloadHint={true}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -234,10 +246,10 @@ export default function Welcome({ landingContent }: Props) {
                 // Mark as ready to display content
                 setIsPageReady(true);
                 
-                // Hide loading screen after a short delay
+                // Hide loading screen after a short delay to ensure smooth transition
                 setTimeout(() => {
                     setIsPreloading(false);
-                }, 300);
+                }, 500);
                 
             } catch (error) {
                 console.warn('Resource preloading failed:', error);
@@ -455,10 +467,19 @@ export default function Welcome({ landingContent }: Props) {
                     />
                 )}
             </Head>
-            <div className="min-h-screen bg-white overflow-x-hidden">
-                <Header currentPage="home" />
+            
+            {/* Main Page Content - Only show when all assets are loaded */}
+            {isPageReady && (
+                <div 
+                    className="min-h-screen bg-white overflow-x-hidden"
+                    style={{ 
+                        opacity: isPreloading ? 0 : 1, 
+                        transition: 'opacity 0.5s ease-in-out' 
+                    }}
+                >
+                    <Header currentPage="home" />
 
-                {/* Main Content */}
+                    {/* Main Content */}
                 <main className="pt-16 sm:pt-20">
                     {/* Image Slider */}
                     <section 
@@ -477,11 +498,11 @@ export default function Welcome({ landingContent }: Props) {
                                         src={image.src}
                                         alt={image.alt}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                                        priority={index <= 2} // First 3 images are priority
-                                        critical={index === 1} // The actual first slide (not clone) is critical
+                                        priority={true} // ALL carousel images are critical
+                                        critical={true} // ALL carousel images must load before page display
                                         lazy={false}
                                         sizes="100vw"
-                                        preloadHint={index <= 1}
+                                        preloadHint={true} // Add preload hints for all carousel images
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 flex items-center justify-center transition-all duration-300 hover:from-black/25 hover:via-black/45 hover:to-black/65">
                                         <div className="text-center text-white px-4 max-w-6xl mx-auto">
@@ -746,7 +767,8 @@ export default function Welcome({ landingContent }: Props) {
                 </main>
 
                 <Footer />
-            </div>
+                </div>
+            )}
 
             <style>{`
                 @keyframes fade-in-up {
