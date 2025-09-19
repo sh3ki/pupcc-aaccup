@@ -2,9 +2,7 @@ import { Head } from '@inertiajs/react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
-import PdfViewer from '@/components/PdfViewer';
 import VideoViewer, { VideoPlayerRef } from '@/components/VideoViewer';
 import { VideoNavigation } from '@/components/VideoNavigation';
 import PDFThumbnail from '@/components/PDFThumbnail';
@@ -146,33 +144,17 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
         parameterId?: number; 
         category?: string 
     }>({});
-    const [areaExpanded, setAreaExpanded] = useState<{ [areaId: number]: boolean }>({});
-    
     // Document states
     const [approvedDocs, setApprovedDocs] = useState<DocumentItem[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
-    const [search, setSearch] = useState('');
+    const [search] = useState('');
     const [viewingDocIndex, setViewingDocIndex] = useState<number | null>(null);
     
     // Store fetched data - use sidebar data if available, fallback to accreditationAreas
     const [fetchedAreas, setFetchedAreas] = useState<Area[]>([]);
 
-    // PDF Navigation state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(0);
-    const [fitMode, setFitMode] = useState<'width' | 'height' | null>(null);
-    const [rotate, setRotate] = useState(0);
-    const [infoOpen, setInfoOpen] = useState(false);
-    const [zoom, setZoom] = useState(0.9);
-    const [gridOpen, setGridOpen] = useState(false);
-    const [isFullscreen, setIsFullscreen] = useState(false);
-
-    // Video Navigation state
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    // Video player state (for video documents only) - used in onTimeUpdate callback
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const videoPlayerRef = useRef<VideoPlayerRef>(null);
@@ -215,7 +197,6 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     }, [btledProgram?.areas, fetchedAreas, accreditationAreas]);
     
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
-    const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
     // Remove the parameter fetching logic - use sidebar data directly like admin
     // No separate parameter fetching needed
@@ -293,77 +274,11 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     }, [approvedDocs, search]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
-    const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
-
-    // Navigation functions
-    const goTo = (idx: number) => {
-        if (filteredDocs.length === 0) return;
-        const doc = filteredDocs[idx];
-        const realIdx = approvedDocs.findIndex(d => d.id === doc.id);
-        if (realIdx !== -1) {
-            setViewerIndex(realIdx);
-            setViewingDocIndex(realIdx);
-        }
-    };
-
-    // Document viewer handlers
-    const handleDownload = () => {
-        if (!currentDoc) return;
-        const link = document.createElement('a');
-        link.href = currentDoc.url;
-        link.download = currentDoc.filename;
-        link.click();
-    };
-
-    const handleRotate = (dir: 'left' | 'right') => {
-        setRotate(r => (dir === 'left' ? (r - 90 + 360) % 360 : (r + 90) % 360));
-    };
-
-    const toggleFitMode = () => {
-        setFitMode(f => {
-            if (f === null) {
-                setZoom(1.0);
-                return 'width';
-            } else if (f === 'width') {
-                setZoom(0.5);
-                return 'height';
-            } else {
-                setZoom(0.9);
-                return null;
-            }
-        });
-    };
-
-    const handleZoom = (dir: 'in' | 'out') => {
-        setZoom(z => {
-            const newZoom = dir === 'in' ? Math.min(z + 0.1, 1.0) : Math.max(z - 0.1, 0.5);
-            
-            if (Math.abs(newZoom - 1.0) < 0.01) {
-                setFitMode('width');
-            } else if (Math.abs(newZoom - 0.5) < 0.01) {
-                setFitMode('height');
-            } else {
-                setFitMode(null);
-            }
-            
-            return newZoom;
-        });
-    };
 
     // Reset states when navigation changes
     useEffect(() => {
         setViewingDocIndex(null);
-        setCurrentPage(1);
-        setTotalPages(1);
-        setRotate(0);
-        setZoom(0.9);
-        setFitMode(null);
     }, [selected.areaId, selected.parameterId, selected.category]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (filteredDocs.length > 0) goTo(0);
-    };
 
     return (
         <>
@@ -600,7 +515,6 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                         onClick={() => {
                                                             setDocumentMode(true);
                                                             setSelected({ areaId: area.id || idx + 1 });
-                                                            setAreaExpanded(prev => ({ ...prev, [area.id || idx + 1]: true }));
                                                         }}
                                                     >
                                                         View Parameters
@@ -782,7 +696,6 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                     });
                                                 }}
                                                 renderCardContent={(cat) => {
-                                                    const approvedCount = selectedParameter?.category_approved_counts?.[cat.value] || 0;
                                                     // Get the area image from btledContent.accreditation_areas or fallback
                                                     const areaImage = (() => {
                                                         if (btledContent.accreditation_areas && btledContent.accreditation_areas.length > 0) {
@@ -830,42 +743,7 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
 
                                             {/* Document Navigation */}
                                             {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] && (
-                                                <div className="w-full flex flex-col items-center pb-4">
-                                                    <div className="w-full max-w-4xl mx-auto">
-                                                        <DocumentNavigation
-                                                            currentDocument={currentDoc}
-                                                            currentPage={currentPage}
-                                                            totalPages={totalPages}
-                                                            onPageChange={setCurrentPage}
-                                                            onDownload={handleDownload}
-                                                            onPrint={() => {
-                                                                if (!currentDoc) return;
-                                                                const win = window.open(currentDoc.url, '_blank');
-                                                                if (win) win.print();
-                                                            }}
-                                                            onRotate={handleRotate}
-                                                            onFitMode={toggleFitMode}
-                                                            onZoom={handleZoom}
-                                                            onInfo={() => setInfoOpen(true)}
-                                                            onGrid={() => setGridOpen(true)}
-                                                            onFullscreen={() => {
-                                                                if (!isFullscreen) {
-                                                                    document.documentElement.requestFullscreen?.();
-                                                                } else {
-                                                                    document.exitFullscreen?.();
-                                                                }
-                                                            }}
-                                                            fitMode={fitMode}
-                                                            rotate={rotate}
-                                                            zoom={zoom}
-                                                            isFullscreen={isFullscreen}
-                                                            infoOpen={infoOpen}
-                                                            setInfoOpen={setInfoOpen}
-                                                            gridOpen={gridOpen}
-                                                            setGridOpen={setGridOpen}
-                                                        />
-                                                    </div>
-                                                    
+                                                <div className="w-full flex flex-col items-center">
                                                     {/* Document viewer */}
                                                     {(() => {
                                                         const doc = filteredDocs[filteredViewerIndex];
@@ -874,14 +752,13 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                         
                                                         if (ext === 'pdf') {
                                                             return (
-                                                                <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
-                                                                    <PdfViewer
-                                                                        url={doc.url}
-                                                                        currentPage={currentPage}
-                                                                        onTotalPagesChange={setTotalPages}
-                                                                        zoom={zoom}
-                                                                        rotate={rotate}
-                                                                        className="w-full h-full"
+                                                                <div className="w-full mx-auto" style={{ height: '85vh' }}>
+                                                                    <embed
+                                                                        src={doc.url}
+                                                                        type="application/pdf"
+                                                                        width="100%"
+                                                                        height="100%"
+                                                                        style={{ border: 'none' }}
                                                                     />
                                                                 </div>
                                                             );

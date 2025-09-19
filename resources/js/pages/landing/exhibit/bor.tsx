@@ -271,7 +271,7 @@ export default function Bor({ borContent }: Props) {
                     {/* Hero Section */}
                     <section 
                         ref={heroRef}
-                        className={`relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden transition-all duration-1000 ${
+                        className={`relative h-[400px] sm:h-[500px] md:h-[600px] lg:h-[450px] overflow-hidden transition-all duration-1000 ${
                             heroVisible 
                                 ? 'opacity-100 transform translate-y-0' 
                                 : 'opacity-0 transform translate-y-8'

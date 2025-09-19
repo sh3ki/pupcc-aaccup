@@ -3,10 +3,8 @@ import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useState, useRef, useMemo, useEffect } from 'react';
 import React from 'react';
-import { DocumentNavigation } from '@/components/DocumentNavigation';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import DocumentUploadModal from '@/components/DocumentUploadModal';
-import PdfViewer from '@/components/PdfViewer';
 import type { VideoPlayerRef } from '@/components/VideoViewer';
 
 import PDFThumbnail from '@/components/PDFThumbnail';
@@ -877,60 +875,9 @@ export default function FacultyDocuments(props: PageProps) {
                                                     : null
                                                 }
                                             </p>
-                                            {/* --- Show DocumentNavigation if a document is selected --- */}
+                                            {/* --- Document viewer --- */}
                                             {viewingDocIndex !== null && filteredDocs[filteredViewerIndex] ? (
-                                                <div className="w-full flex flex-col items-center pb-4">
-                                                    <div className="w-full max-w-4xl mx-auto">
-                                                        {(() => {
-                                                            const currentDoc = filteredDocs[filteredViewerIndex];
-                                                            const isVideoFile = !!(currentDoc?.filename && 
-                                                                ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(
-                                                                    currentDoc.filename.split('.').pop()?.toLowerCase() || ''
-                                                                ));
-                                                        
-                                                            return (
-                                                                <DocumentNavigation
-                                                                    currentDocument={currentDoc}
-                                                                    currentPage={currentPage}
-                                                                    totalPages={totalPages}
-                                                                    onPageChange={setCurrentPage}
-                                                                    onDownload={handleDownload}
-                                                                    onPrint={handlePrint}
-                                                                    onRotate={handleRotate}
-                                                                    onFitMode={toggleFitMode}
-                                                                    onZoom={handleZoom}
-                                                                    onInfo={() => setInfoOpen(true)}
-                                                                    onGrid={openGrid}
-                                                                    onFullscreen={handleFullscreen}
-                                                                    fitMode={fitMode}
-                                                                    rotate={rotate}
-                                                                    zoom={zoom}
-                                                                    isFullscreen={isFullscreen}
-                                                                    infoOpen={infoOpen}
-                                                                    setInfoOpen={setInfoOpen}
-                                                                    gridOpen={gridOpen}
-                                                                    setGridOpen={setGridOpen}
-                                                                    // search UI is handled locally when needed
-                                                                    // Video props - only pass when it's a video file
-                                                                    forceVideoMode={isVideoFile}
-                                                                    onRewind={isVideoFile ? handleRewind : undefined}
-                                                                    onPlayPause={isVideoFile ? handlePlayPause : undefined}
-                                                                    onFastForward={isVideoFile ? handleFastForward : undefined}
-                                                                    onVolumeChange={isVideoFile ? handleVolumeChange : undefined}
-                                                                    onMuteToggle={isVideoFile ? handleMuteToggle : undefined}
-                                                                    onSpeedChange={isVideoFile ? handleSpeedChange : undefined}
-                                                                    onPictureInPicture={isVideoFile ? handlePictureInPicture : undefined}
-                                                                    onTimeUpdate={isVideoFile ? handleTimeUpdate : undefined}
-                                                                    isPlaying={isVideoFile ? isPlaying : undefined}
-                                                                    volume={isVideoFile ? volume : undefined}
-                                                                    isMuted={isVideoFile ? isMuted : undefined}
-                                                                    playbackSpeed={isVideoFile ? playbackSpeed : undefined}
-                                                                    currentTime={isVideoFile ? currentTime : undefined}
-                                                                    duration={isVideoFile ? duration : undefined}
-                                                                />
-                                                            );
-                                                        })()}
-                                                    </div>
+                                                <div className="w-full flex flex-col items-center">
                                                     {(() => {
                                                         const doc = filteredDocs[filteredViewerIndex];
                                                         if (!doc) return null;
@@ -939,14 +886,13 @@ export default function FacultyDocuments(props: PageProps) {
                                                         if (isVideo) return null; // handled by VideoNavigation
                                                         if (ext === 'pdf') {
                                                             return (
-                                                                <div className="w-full max-w-4xl mx-auto rounded-b-lg overflow-hidden" style={{ height: '72vh' }}>
-                                                                    <PdfViewer
-                                                                        url={doc.url}
-                                                                        currentPage={currentPage}
-                                                                        onTotalPagesChange={setTotalPages}
-                                                                        zoom={zoom}
-                                                                        rotate={rotate}
-                                                                        className="w-full h-full"
+                                                                <div className="w-full mx-auto" style={{ height: '85vh' }}>
+                                                                    <embed
+                                                                        src={doc.url}
+                                                                        type="application/pdf"
+                                                                        width="100%"
+                                                                        height="100%"
+                                                                        style={{ border: 'none' }}
                                                                     />
                                                                 </div>
                                                             );
