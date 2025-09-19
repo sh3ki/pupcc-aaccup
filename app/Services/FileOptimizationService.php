@@ -401,50 +401,134 @@ class FileOptimizationService
     }
 
     /**
-     * Safe PDF compression that preserves file integrity
+     * Ultra-safe PDF compression using multiple fallback methods
      */
     private function safePDFCompression(string $inputPath, string $outputPath): bool
     {
         try {
-            // First, try Ghostscript with conservative settings
-            if ($this->isGhostscriptAvailable()) {
-                $command = sprintf(
-                    'gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.6 -dPDFSETTINGS=/default -dNOPAUSE -dQUIET -dBATCH -sOutputFile="%s" "%s"',
-                    escapeshellarg($outputPath),
-                    escapeshellarg($inputPath)
-                );
-
-                $output = [];
-                $returnCode = 0;
-                exec($command, $output, $returnCode);
-
-                if ($returnCode === 0 && file_exists($outputPath) && $this->verifyPDFIntegrity($outputPath)) {
-                    return true;
-                }
+            // Method 1: Try basic PDF optimization with minimal compression
+            if ($this->tryBasicPDFOptimization($inputPath, $outputPath)) {
+                return true;
             }
 
-            // If Ghostscript fails, try qpdf
-            if ($this->isQpdfAvailable()) {
-                $command = sprintf(
-                    'qpdf --linearize "%s" "%s"',
-                    escapeshellarg($inputPath),
-                    escapeshellarg($outputPath)
-                );
-
-                $output = [];
-                $returnCode = 0;
-                exec($command, $output, $returnCode);
-
-                if ($returnCode === 0 && file_exists($outputPath) && $this->verifyPDFIntegrity($outputPath)) {
-                    return true;
-                }
+            // Method 2: Try qpdf linearization (safest option)
+            if ($this->tryQpdfLinearization($inputPath, $outputPath)) {
+                return true;
             }
 
-            // If both fail, just copy the original file
+            // Method 3: Try very conservative Ghostscript settings
+            if ($this->tryConservativeGhostscript($inputPath, $outputPath)) {
+                return true;
+            }
+
+            // Fallback: Copy original file if all compression methods fail
+            Log::info('All PDF compression methods failed, using original file');
             return copy($inputPath, $outputPath);
         } catch (\Exception $e) {
-            Log::warning('Safe PDF compression failed', ['error' => $e->getMessage()]);
+            Log::warning('PDF compression failed', ['error' => $e->getMessage()]);
             return copy($inputPath, $outputPath);
         }
+    }
+
+    /**
+     * Try basic PDF optimization (object stream compression)
+     */
+    private function tryBasicPDFOptimization(string $inputPath, string $outputPath): bool
+    {
+        if (!$this->isQpdfAvailable()) {
+            return false;
+        }
+
+        try {
+            // Use qpdf with object stream compression (very safe)
+            $command = sprintf(
+                'qpdf --object-streams=generate --compress-streams=y "%s" "%s"',
+                escapeshellarg($inputPath),
+                escapeshellarg($outputPath)
+            );
+
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+
+            if ($returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0) {
+                if ($this->verifyPDFIntegrity($outputPath)) {
+                    Log::info('PDF compressed using qpdf object streams');
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug('Basic PDF optimization failed', ['error' => $e->getMessage()]);
+        }
+
+        return false;
+    }
+
+    /**
+     * Try qpdf linearization (web optimization)
+     */
+    private function tryQpdfLinearization(string $inputPath, string $outputPath): bool
+    {
+        if (!$this->isQpdfAvailable()) {
+            return false;
+        }
+
+        try {
+            // Linearize PDF for web viewing (doesn't reduce size much but optimizes loading)
+            $command = sprintf(
+                'qpdf --linearize --object-streams=generate "%s" "%s"',
+                escapeshellarg($inputPath),
+                escapeshellarg($outputPath)
+            );
+
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+
+            if ($returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0) {
+                if ($this->verifyPDFIntegrity($outputPath)) {
+                    Log::info('PDF optimized using qpdf linearization');
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug('Qpdf linearization failed', ['error' => $e->getMessage()]);
+        }
+
+        return false;
+    }
+
+    /**
+     * Try very conservative Ghostscript compression
+     */
+    private function tryConservativeGhostscript(string $inputPath, string $outputPath): bool
+    {
+        if (!$this->isGhostscriptAvailable()) {
+            return false;
+        }
+
+        try {
+            // Use most conservative Ghostscript settings that preserve quality
+            $command = sprintf(
+                'gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -dPDFSETTINGS=/prepress -dEmbedAllFonts=true -dSubsetFonts=true -dColorImageDownsampleType=/Bicubic -dColorImageResolution=150 -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=150 -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=150 -dNOPAUSE -dQUIET -dBATCH -sOutputFile="%s" "%s"',
+                escapeshellarg($outputPath),
+                escapeshellarg($inputPath)
+            );
+
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+
+            if ($returnCode === 0 && file_exists($outputPath) && filesize($outputPath) > 0) {
+                if ($this->verifyPDFIntegrity($outputPath)) {
+                    Log::info('PDF compressed using conservative Ghostscript');
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug('Conservative Ghostscript compression failed', ['error' => $e->getMessage()]);
+        }
+
+        return false;
     }
 }

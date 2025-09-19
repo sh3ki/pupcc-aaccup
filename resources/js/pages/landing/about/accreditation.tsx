@@ -6,7 +6,9 @@ import { Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import OptimizedImage from '@/components/OptimizedImage';
 import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
-import { preloadLandingResources } from '@/utils/resourcePreloader';
+import { preloadCriticalAccreditationResources, preloadAccreditationResources, onPreloadProgress } from '@/utils/resourcePreloader';
+import LoadingScreen from '@/components/LoadingScreen';
+import type { PreloadProgress } from '@/utils/resourcePreloader';
 
 const COLORS = {
     primaryMaroon: '#7F0404',
@@ -35,11 +37,54 @@ interface Props {
 }
 
 export default function AccreditationFaculty({ accreditationContent }: Props) {
-    // Preload critical resources on component mount
+    // Loading state management
+    const [isPreloading, setIsPreloading] = useState(true);
+    const [preloadProgress, setPreloadProgress] = useState<PreloadProgress>({
+        loaded: 0,
+        total: 0,
+        percentage: 0,
+        currentResource: '',
+        isComplete: false
+    });
+
+    // Preload critical resources and show loading screen
     useEffect(() => {
-        if (accreditationContent) {
-            preloadLandingResources(accreditationContent);
-        }
+        const initializeLoading = async () => {
+            // Subscribe to preload progress
+            const unsubscribe = onPreloadProgress((progress) => {
+                setPreloadProgress(progress);
+            });
+
+            try {
+                // Preload ALL critical images first - must complete before page shows
+                if (accreditationContent) {
+                    console.log('🚀 Starting accreditation page critical image preloading...');
+                    await preloadCriticalAccreditationResources(accreditationContent as unknown as Record<string, unknown>);
+                    console.log('✅ All critical accreditation page images loaded successfully!');
+                    
+                    // Then start preloading all other resources in background
+                    preloadAccreditationResources(accreditationContent as unknown as Record<string, unknown>);
+                }
+                
+                // Hide loading screen after ensuring all critical images are ready
+                setTimeout(() => {
+                    setIsPreloading(false);
+                }, 500); // Slightly longer to ensure smooth transition
+                
+            } catch (error) {
+                console.warn('Resource preloading failed:', error);
+                // Still allow page to display even if preloading fails
+                setIsPreloading(false);
+            }
+
+            return unsubscribe;
+        };
+
+        const cleanup = initializeLoading();
+        
+        return () => {
+            cleanup.then(unsubscribe => unsubscribe?.());
+        };
     }, [accreditationContent]);
 
     // Use optimized scroll animations
@@ -66,20 +111,51 @@ export default function AccreditationFaculty({ accreditationContent }: Props) {
 
     return (
         <>
+            {/* Loading Screen - Shows until ALL critical images are loaded */}
+            <LoadingScreen 
+                isVisible={isPreloading}
+                progress={preloadProgress}
+                onComplete={() => setIsPreloading(false)}
+                title="Loading Accreditation"
+                subtitle={preloadProgress.currentResource ? `${preloadProgress.currentResource}` : "Loading hero and faculty images..."}
+                minimumDisplayTime={1000}
+            />
+
             <Head title={accreditationContent.hero_title}>
                 <meta name="description" content="Accreditation Task Force information" />
                 
-                {/* Preload critical resources */}
-                <link rel="preload" href={accreditationContent.hero_image || "/api/placeholder/1600/800"} as="image" />
-                {accreditationContent.faculty_data?.slice(0, 4).map((faculty, index) => (
-                    <link
-                        key={`preload-faculty-${index}`}
+                {/* Preload hero image with HIGH priority */}
+                {accreditationContent?.hero_image && (
+                    <link 
                         rel="preload" 
-                        href={faculty.image || "/api/placeholder/300/400"} 
-                        as="image"
+                        as="image" 
+                        href={accreditationContent.hero_image}
+                        fetchPriority="high" // Hero image is critical
                     />
-                ))}
-                <link rel="preload" href={accreditationContent.mula_sayo_image} as="image" />
+                )}
+                
+                {/* Preload ALL faculty images with HIGH priority for instant display */}
+                {accreditationContent?.faculty_data?.map((faculty, index) => (
+                    faculty.image && (
+                        <link 
+                            key={`preload-faculty-${index}`}
+                            rel="preload" 
+                            as="image" 
+                            href={faculty.image}
+                            fetchPriority="high" // ALL faculty images are critical
+                        />
+                    )
+                )) || []}
+                
+                {/* Preload mula sayo image */}
+                {accreditationContent?.mula_sayo_image && (
+                    <link 
+                        rel="preload" 
+                        as="image" 
+                        href={accreditationContent.mula_sayo_image}
+                        fetchPriority="low"
+                    />
+                )}
                 
                 {/* Performance hints */}
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -97,8 +173,9 @@ export default function AccreditationFaculty({ accreditationContent }: Props) {
                                 src={accreditationContent.hero_image || "/api/placeholder/1600/800"}
                                 alt={accreditationContent.hero_title}
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                critical={true} // Hero image is critical for instant display
                                 priority={true}
-                                lazy={false}
+                                lazy={false} // No lazy loading for hero image
                                 sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80"></div>
@@ -154,7 +231,9 @@ export default function AccreditationFaculty({ accreditationContent }: Props) {
                                                     alt={member.name}
                                                     className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto rounded-full shadow-lg border-4 group-hover/image:shadow-xl transition-all duration-300 group-hover/image:scale-105"
                                                     style={{ borderColor: COLORS.primaryMaroon }}
-                                                    lazy={index > 3}
+                                                    critical={true} // ALL faculty images are critical for instant display
+                                                    lazy={false} // No lazy loading - preload ALL faculty images
+                                                    priority={true}
                                                     sizes="(max-width: 640px) 96px, (max-width: 1024px) 144px, 160px"
                                                 />
                                                 <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-300"></div>

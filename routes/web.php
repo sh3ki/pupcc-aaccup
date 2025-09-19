@@ -97,6 +97,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('admin/messages', fn() => Inertia::render('admin/messages'))->name('admin.messages');
     Route::get('admin/settings', fn() => Inertia::render('admin/settings'))->name('admin.settings');
 
+    // Test route for PDF compression tools
+    Route::get('admin/test-compression', function() {
+        $service = new \App\Services\FileOptimizationService();
+        
+        // Test tool availability
+        $reflection = new \ReflectionClass($service);
+        $isGhostscriptAvailable = $reflection->getMethod('isGhostscriptAvailable');
+        $isGhostscriptAvailable->setAccessible(true);
+        $ghostscriptAvailable = $isGhostscriptAvailable->invoke($service);
+        
+        $isQpdfAvailable = $reflection->getMethod('isQpdfAvailable');
+        $isQpdfAvailable->setAccessible(true);
+        $qpdfAvailable = $isQpdfAvailable->invoke($service);
+        
+        return response()->json([
+            'ghostscript_available' => $ghostscriptAvailable,
+            'qpdf_available' => $qpdfAvailable,
+            'system_info' => [
+                'os' => PHP_OS,
+                'php_version' => PHP_VERSION,
+                'temp_dir' => sys_get_temp_dir(),
+                'storage_path' => storage_path('app/public'),
+            ]
+        ]);
+    })->name('admin.test.compression');
+
     
     Route::prefix('admin/layout')->group(function () {
         Route::get('/home', [HomeController::class, 'index'])->name('admin.layout.home');
