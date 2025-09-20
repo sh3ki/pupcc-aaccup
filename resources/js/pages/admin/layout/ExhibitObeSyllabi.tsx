@@ -76,7 +76,7 @@ const DocumentManager = ({ title, documents, onAdd, onRemove, onUpdateTitle, onU
                                     onChange={(file) => onUpdateFile(index, file || '')}
                                     accept="image/*,.pdf,.doc,.docx"
                                     allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                    maxSize={10}
+                                    maxSize={50}
                                 />
                             </div>
                         </div>
@@ -413,7 +413,7 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                 onChange={(file) => setHeroImage(file || '')}
                                                 accept="image/*"
                                                 allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                maxSize={5}
+                                                maxSize={50}
                                             />
 
                                             <div>
@@ -476,7 +476,7 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                     onChange={(file) => setProgram1Image(file || '')}
                                                     accept="image/*"
                                                     allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                    maxSize={5}
+                                                    maxSize={50}
                                                 />
 
                                                 <DocumentManager
@@ -509,7 +509,7 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                     onChange={(file) => setProgram2Image(file || '')}
                                                     accept="image/*"
                                                     allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                    maxSize={5}
+                                                    maxSize={50}
                                                 />
 
                                                 <DocumentManager
@@ -542,7 +542,7 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                     onChange={(file) => setProgram3Image(file || '')}
                                                     accept="image/*"
                                                     allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                    maxSize={5}
+                                                    maxSize={50}
                                                 />
 
                                                 <DocumentManager
@@ -581,7 +581,7 @@ export default function LayoutExhibitOBESyllabi({ obeSyllabiContent }: Props) {
                                                 onChange={(file) => setFooterImage(file || '')}
                                                 accept="image/*"
                                                 allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
-                                                maxSize={5}
+                                                maxSize={50}
                                             />
                                         </div>
                                     </div>

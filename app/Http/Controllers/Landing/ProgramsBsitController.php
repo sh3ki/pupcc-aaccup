@@ -103,7 +103,7 @@ class ProgramsBsitController extends Controller
             
             if ($request->hasFile('hero_image')) {
                 // Delete old image if exists
-                if ($content->hero_image && Storage::exists($content->hero_image)) {
+                if (!empty($content->hero_image) && Storage::exists($content->hero_image)) {
                     Storage::delete($content->hero_image);
                 }
                 
@@ -122,7 +122,7 @@ class ProgramsBsitController extends Controller
             
             if ($request->hasFile('program_image')) {
                 // Delete old image if exists
-                if ($content->program_image && Storage::exists($content->program_image)) {
+                if (!empty($content->program_image) && Storage::exists($content->program_image)) {
                     Storage::delete($content->program_image);
                 }
                 
@@ -155,7 +155,7 @@ class ProgramsBsitController extends Controller
             
             if ($request->hasFile('program_video_file')) {
                 // Delete old video if exists
-                if ($content->program_video && $content->program_video_type === 'upload' && Storage::exists($content->program_video)) {
+                if (!empty($content->program_video) && $content->program_video_type === 'upload' && Storage::exists($content->program_video)) {
                     Storage::delete($content->program_video);
                 }
                 
@@ -179,7 +179,7 @@ class ProgramsBsitController extends Controller
                         $index = (int) str_replace('action_image_', '', $key);
                         
                         // Delete old image if exists
-                        if (isset($actionImages[$index]) && $actionImages[$index] && Storage::exists($actionImages[$index])) {
+                        if (isset($actionImages[$index]) && !empty($actionImages[$index]) && Storage::exists($actionImages[$index])) {
                             Storage::delete($actionImages[$index]);
                         }
                         
@@ -213,7 +213,7 @@ class ProgramsBsitController extends Controller
                         $index = (int) str_replace('graduate_video_', '', $key);
                         
                         // Delete old video if exists
-                        if (isset($graduates[$index]['video']) && $graduates[$index]['video_type'] === 'upload' && Storage::exists($graduates[$index]['video'])) {
+                        if (isset($graduates[$index]['video']) && !empty($graduates[$index]['video']) && $graduates[$index]['video_type'] === 'upload' && Storage::exists($graduates[$index]['video'])) {
                             Storage::delete($graduates[$index]['video']);
                         }
                         
@@ -243,7 +243,7 @@ class ProgramsBsitController extends Controller
                         $index = (int) str_replace('area_image_', '', $key);
                         
                         // Delete old image if exists
-                        if (isset($areas[$index]['image']) && $areas[$index]['image'] && Storage::exists($areas[$index]['image'])) {
+                        if (isset($areas[$index]['image']) && !empty($areas[$index]['image']) && Storage::exists($areas[$index]['image'])) {
                             Storage::delete($areas[$index]['image']);
                         }
                         
@@ -262,7 +262,7 @@ class ProgramsBsitController extends Controller
             
             if ($request->hasFile('mula_sayo_image')) {
                 // Delete old image if exists
-                if ($content->mula_sayo_image && Storage::exists($content->mula_sayo_image)) {
+                if (!empty($content->mula_sayo_image) && Storage::exists($content->mula_sayo_image)) {
                     Storage::delete($content->mula_sayo_image);
                 }
                 

@@ -50,9 +50,9 @@ class ExhibitUniversityCodeController extends Controller
             'hero_subtitle' => 'required|string',
             'section_title' => 'required|string|max:255',
             'footer_section_title' => 'required|string|max:255',
-            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'code_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:10240',
-            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'code_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:51200',
+            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
         ]);
 
         $data = $request->only([

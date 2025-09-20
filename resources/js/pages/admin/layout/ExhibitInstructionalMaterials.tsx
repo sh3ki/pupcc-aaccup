@@ -76,7 +76,7 @@ const DocumentManager = ({ title, documents, onAdd, onRemove, onUpdateTitle, onU
                                     onChange={(file) => onUpdateFile(index, file || '')}
                                     accept="image/*,.pdf,.doc,.docx"
                                     allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
-                                    maxSize={10}
+                                    maxSize={50}
                                 />
                             </div>
                         </div>

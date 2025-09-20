@@ -72,14 +72,14 @@ class ExhibitBorController extends Controller
             'program2_title' => 'required|string|max:255',
             'program3_title' => 'required|string|max:255',
             'footer_section_title' => 'required|string|max:255',
-            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program1_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:10240',
-            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program2_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:10240',
-            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program3_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:10240',
-            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program1_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:51200',
+            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program2_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:51200',
+            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program3_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf,doc,docx|max:51200',
+            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
         ]);
 
         $data = $request->only([
@@ -96,7 +96,7 @@ class ExhibitBorController extends Controller
 
         // Handle hero image upload
         if ($request->hasFile('hero_image')) {
-            if ($oldContent->hero_image && Storage::exists($oldContent->hero_image)) {
+            if (!empty($oldContent->hero_image) && Storage::exists($oldContent->hero_image)) {
                 Storage::delete($oldContent->hero_image);
             }
             $data['hero_image'] = $request->file('hero_image')->store('exhibit/bor/hero', 'public');
@@ -104,14 +104,14 @@ class ExhibitBorController extends Controller
 
         // Handle program 1 uploads
         if ($request->hasFile('program1_image')) {
-            if ($oldContent->program1_image && Storage::exists($oldContent->program1_image)) {
+            if (!empty($oldContent->program1_image) && Storage::exists($oldContent->program1_image)) {
                 Storage::delete($oldContent->program1_image);
             }
             $data['program1_image'] = $request->file('program1_image')->store('exhibit/bor/program1', 'public');
         }
 
         if ($request->hasFile('program1_document')) {
-            if ($oldContent->program1_document && Storage::exists($oldContent->program1_document)) {
+            if (!empty($oldContent->program1_document) && Storage::exists($oldContent->program1_document)) {
                 Storage::delete($oldContent->program1_document);
             }
             $data['program1_document'] = $request->file('program1_document')->store('exhibit/bor/program1', 'public');
@@ -119,14 +119,14 @@ class ExhibitBorController extends Controller
 
         // Handle program 2 uploads
         if ($request->hasFile('program2_image')) {
-            if ($oldContent->program2_image && Storage::exists($oldContent->program2_image)) {
+            if (!empty($oldContent->program2_image) && Storage::exists($oldContent->program2_image)) {
                 Storage::delete($oldContent->program2_image);
             }
             $data['program2_image'] = $request->file('program2_image')->store('exhibit/bor/program2', 'public');
         }
 
         if ($request->hasFile('program2_document')) {
-            if ($oldContent->program2_document && Storage::exists($oldContent->program2_document)) {
+            if (!empty($oldContent->program2_document) && Storage::exists($oldContent->program2_document)) {
                 Storage::delete($oldContent->program2_document);
             }
             $data['program2_document'] = $request->file('program2_document')->store('exhibit/bor/program2', 'public');
@@ -134,14 +134,14 @@ class ExhibitBorController extends Controller
 
         // Handle program 3 uploads
         if ($request->hasFile('program3_image')) {
-            if ($oldContent->program3_image && Storage::exists($oldContent->program3_image)) {
+            if (!empty($oldContent->program3_image) && Storage::exists($oldContent->program3_image)) {
                 Storage::delete($oldContent->program3_image);
             }
             $data['program3_image'] = $request->file('program3_image')->store('exhibit/bor/program3', 'public');
         }
 
         if ($request->hasFile('program3_document')) {
-            if ($oldContent->program3_document && Storage::exists($oldContent->program3_document)) {
+            if (!empty($oldContent->program3_document) && Storage::exists($oldContent->program3_document)) {
                 Storage::delete($oldContent->program3_document);
             }
             $data['program3_document'] = $request->file('program3_document')->store('exhibit/bor/program3', 'public');
@@ -149,7 +149,7 @@ class ExhibitBorController extends Controller
 
         // Handle footer image upload
         if ($request->hasFile('footer_image')) {
-            if ($oldContent->footer_image && Storage::exists($oldContent->footer_image)) {
+            if (!empty($oldContent->footer_image) && Storage::exists($oldContent->footer_image)) {
                 Storage::delete($oldContent->footer_image);
             }
             $data['footer_image'] = $request->file('footer_image')->store('exhibit/bor/footer', 'public');

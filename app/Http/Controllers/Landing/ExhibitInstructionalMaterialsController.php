@@ -84,11 +84,11 @@ class ExhibitInstructionalMaterialsController extends Controller
             'program2_title' => 'required|string|max:255',
             'program3_title' => 'required|string|max:255',
             'footer_section_title' => 'required|string|max:255',
-            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
             'program1_documents' => 'nullable|string',
             'program2_documents' => 'nullable|string',
             'program3_documents' => 'nullable|string',
@@ -108,7 +108,7 @@ class ExhibitInstructionalMaterialsController extends Controller
 
         // Handle hero image upload
         if ($request->hasFile('hero_image')) {
-            if ($oldContent->hero_image && Storage::exists($oldContent->hero_image)) {
+            if (!empty($oldContent->hero_image) && Storage::exists($oldContent->hero_image)) {
                 Storage::delete($oldContent->hero_image);
             }
             $data['hero_image'] = $request->file('hero_image')->store('exhibit/instructional-materials/hero', 'public');
@@ -116,7 +116,7 @@ class ExhibitInstructionalMaterialsController extends Controller
 
         // Handle program 1 uploads
         if ($request->hasFile('program1_image')) {
-            if ($oldContent->program1_image && Storage::exists($oldContent->program1_image)) {
+            if (!empty($oldContent->program1_image) && Storage::exists($oldContent->program1_image)) {
                 Storage::delete($oldContent->program1_image);
             }
             $data['program1_image'] = $request->file('program1_image')->store('exhibit/instructional-materials/program1', 'public');
@@ -124,7 +124,7 @@ class ExhibitInstructionalMaterialsController extends Controller
 
         // Handle program 2 uploads
         if ($request->hasFile('program2_image')) {
-            if ($oldContent->program2_image && Storage::exists($oldContent->program2_image)) {
+            if (!empty($oldContent->program2_image) && Storage::exists($oldContent->program2_image)) {
                 Storage::delete($oldContent->program2_image);
             }
             $data['program2_image'] = $request->file('program2_image')->store('exhibit/instructional-materials/program2', 'public');
@@ -132,7 +132,7 @@ class ExhibitInstructionalMaterialsController extends Controller
 
         // Handle program 3 uploads
         if ($request->hasFile('program3_image')) {
-            if ($oldContent->program3_image && Storage::exists($oldContent->program3_image)) {
+            if (!empty($oldContent->program3_image) && Storage::exists($oldContent->program3_image)) {
                 Storage::delete($oldContent->program3_image);
             }
             $data['program3_image'] = $request->file('program3_image')->store('exhibit/instructional-materials/program3', 'public');
@@ -140,7 +140,7 @@ class ExhibitInstructionalMaterialsController extends Controller
 
         // Handle footer image upload
         if ($request->hasFile('footer_image')) {
-            if ($oldContent->footer_image && Storage::exists($oldContent->footer_image)) {
+            if (!empty($oldContent->footer_image) && Storage::exists($oldContent->footer_image)) {
                 Storage::delete($oldContent->footer_image);
             }
             $data['footer_image'] = $request->file('footer_image')->store('exhibit/instructional-materials/footer', 'public');
@@ -168,7 +168,7 @@ class ExhibitInstructionalMaterialsController extends Controller
                     $fileKey = $program . '_document_' . $index;
                     if ($request->hasFile($fileKey)) {
                         // Delete old file if it exists and is not being reused
-                        if (isset($document['oldFile']) && Storage::exists($document['oldFile'])) {
+                        if (isset($document['oldFile']) && !empty($document['oldFile']) && Storage::exists($document['oldFile'])) {
                             Storage::delete($document['oldFile']);
                         }
                         
@@ -187,7 +187,7 @@ class ExhibitInstructionalMaterialsController extends Controller
                 // Delete any old files that are no longer referenced
                 $newFiles = collect($processedDocuments)->pluck('file')->toArray();
                 foreach ($oldFiles as $oldFile) {
-                    if (!in_array($oldFile, $newFiles) && Storage::exists($oldFile)) {
+                    if (!empty($oldFile) && !in_array($oldFile, $newFiles) && Storage::exists($oldFile)) {
                         Storage::delete($oldFile);
                     }
                 }

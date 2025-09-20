@@ -517,7 +517,7 @@ class ProgramsBsentController extends Controller
             
             if ($request->hasFile('hero_image')) {
                 // Delete old image if exists
-                if ($content->hero_image && Storage::exists($content->hero_image)) {
+                if (!empty($content->hero_image) && Storage::exists($content->hero_image)) {
                     Storage::delete($content->hero_image);
                 }
                 
@@ -537,7 +537,7 @@ class ProgramsBsentController extends Controller
             
             if ($request->hasFile('program_image')) {
                 // Delete old image if exists
-                if ($content->program_image && Storage::exists($content->program_image)) {
+                if (!empty($content->program_image) && Storage::exists($content->program_image)) {
                     Storage::delete($content->program_image);
                 }
                 
@@ -573,7 +573,7 @@ class ProgramsBsentController extends Controller
             
             if ($request->hasFile('program_video_file')) {
                 // Delete old video if exists
-                if ($content->program_video && $content->program_video_type === 'upload' && Storage::exists($content->program_video)) {
+                if (!empty($content->program_video) && $content->program_video_type === 'upload' && Storage::exists($content->program_video)) {
                     Storage::delete($content->program_video);
                 }
                 
@@ -661,7 +661,7 @@ class ProgramsBsentController extends Controller
             
             if ($request->hasFile('mula_sayo_image')) {
                 // Delete old image if exists
-                if ($content->mula_sayo_image && Storage::exists($content->mula_sayo_image)) {
+                if (!empty($content->mula_sayo_image) && Storage::exists($content->mula_sayo_image)) {
                     Storage::delete($content->mula_sayo_image);
                 }
                 

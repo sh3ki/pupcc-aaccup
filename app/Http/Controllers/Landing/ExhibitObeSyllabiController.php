@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Landing;
 use App\Http\Controllers\Controller;
 use App\Models\Landing\ExhibitObeSyllabi;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
@@ -84,11 +85,11 @@ class ExhibitObeSyllabiController extends Controller
             'program2_title' => 'required|string|max:255',
             'program3_title' => 'required|string|max:255',
             'footer_section_title' => 'required|string|max:255',
-            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'hero_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program1_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program2_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'program3_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
+            'footer_image' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:51200',
             'program1_documents' => 'nullable|string',
             'program2_documents' => 'nullable|string',
             'program3_documents' => 'nullable|string',
@@ -157,37 +158,54 @@ class ExhibitObeSyllabiController extends Controller
                 
                 // Get old documents to delete files that are no longer needed
                 $oldDocuments = $oldContent->{$documentsKey} ?? [];
-                $oldFiles = collect($oldDocuments)->pluck('file')->toArray();
+                $oldFiles = collect($oldDocuments)->pluck('file')->filter()->toArray(); // Filter out null values
                 
                 foreach ($documents as $index => $document) {
                     $processedDocument = [
-                        'title' => $document['title']
+                        'title' => $document['title'] ?? ''
                     ];
                     
                     // Check if there's a file upload for this document
                     $fileKey = $program . '_document_' . $index;
                     if ($request->hasFile($fileKey)) {
                         // Delete old file if it exists and is not being reused
-                        if (isset($document['oldFile']) && Storage::exists($document['oldFile'])) {
+                        if (isset($document['oldFile']) && !empty($document['oldFile']) && Storage::exists($document['oldFile'])) {
                             Storage::delete($document['oldFile']);
                         }
                         
                         $processedDocument['file'] = $request->file($fileKey)->store('exhibit/obe-syllabi/' . $program, 'public');
-                    } elseif (isset($document['file']) && !str_starts_with($document['file'], 'http')) {
-                        // Keep existing file
-                        $processedDocument['file'] = $document['file'];
-                    } elseif (isset($document['oldFile'])) {
-                        // Keep old file
-                        $processedDocument['file'] = $document['oldFile'];
+                    } elseif (isset($document['file']) && !empty($document['file']) && !str_starts_with($document['file'], 'http')) {
+                        // Clean up the file path to remove multiple /storage/ prefixes
+                        $filePath = $document['file'];
+                        
+                        // Remove /storage/ prefix if it exists (for display URLs)
+                        if (str_starts_with($filePath, '/storage/')) {
+                            $filePath = substr($filePath, 9); // Remove '/storage/'
+                        }
+                        
+                        // Keep existing file with cleaned path
+                        $processedDocument['file'] = $filePath;
+                    } elseif (isset($document['oldFile']) && !empty($document['oldFile'])) {
+                        // Clean up the old file path
+                        $oldFilePath = $document['oldFile'];
+                        
+                        // Remove /storage/ prefix if it exists
+                        if (str_starts_with($oldFilePath, '/storage/')) {
+                            $oldFilePath = substr($oldFilePath, 9);
+                        }
+                        
+                        // Keep old file with cleaned path
+                        $processedDocument['file'] = $oldFilePath;
                     }
                     
                     $processedDocuments[] = $processedDocument;
                 }
                 
                 // Delete any old files that are no longer referenced
-                $newFiles = collect($processedDocuments)->pluck('file')->toArray();
+                $newFiles = collect($processedDocuments)->pluck('file')->filter()->toArray(); // Filter out null values
                 foreach ($oldFiles as $oldFile) {
-                    if (!in_array($oldFile, $newFiles) && Storage::exists($oldFile)) {
+                    // Ensure oldFile is not null or empty before checking existence
+                    if (!empty($oldFile) && !in_array($oldFile, $newFiles) && Storage::exists($oldFile)) {
                         Storage::delete($oldFile);
                     }
                 }
@@ -310,7 +328,7 @@ class ExhibitObeSyllabiController extends Controller
     {
         return response()->json([
             'content' => ExhibitObeSyllabi::getContent(),
-            'table_exists' => \Schema::hasTable('exhibit_obe_syllabi'),
+            'table_exists' => Schema::hasTable('exhibit_obe_syllabi'),
             'all_records' => ExhibitObeSyllabi::all()
         ]);
     }
