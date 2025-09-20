@@ -1,7 +1,8 @@
 import { LuFileCheck2 } from "react-icons/lu";
 import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/layouts/DashboardLayout';
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, Fragment } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
 import React from 'react';
 import { DocumentCardGrid } from '@/components/DocumentCardGrid';
 import DocumentUploadModal from '@/components/DocumentUploadModal';
@@ -102,6 +103,11 @@ export default function AdminDocuments(props: PageProps) {
     const [approvedDocs, setApprovedDocs] = useState<{ id: number, filename: string, url: string, uploaded_at: string, user_name?: string, approved_by?: string | null, approved_at?: string | null, updated_at?: string | null }[]>([]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [loadingDocs, setLoadingDocs] = useState(false);
+
+    // --- Delete Confirmation Modal State ---
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [deleteDocId, setDeleteDocId] = useState<number | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     const [search, setSearch] = useState('');
     const [pageInput, setPageInput] = useState(viewerIndex + 1);
@@ -242,6 +248,64 @@ export default function AdminDocuments(props: PageProps) {
             
             return newZoom;
         });
+    };
+
+    // Delete document handler
+    const handleDeleteDocument = async () => {
+        if (!deleteDocId || !currentDoc) return;
+        try {
+            setDeleteLoading(true);
+            const res = await fetch(`/admin/documents/approved/${deleteDocId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                credentials: 'same-origin',
+            });
+            let data;
+            if (res.status === 404) {
+                // Treat 404 as successful delete (already deleted)
+                data = { success: true };
+            } else {
+                data = await res.json();
+            }
+            if (!data.success) throw new Error(data.message || 'Failed to delete document');
+
+            // Refresh the document grids by removing the deleted doc from approvedDocs
+            setApprovedDocs(prev => prev.filter(d => d.id !== deleteDocId));
+
+            // If the currently viewed doc is the one deleted, adjust viewer selection
+            if (currentDoc && currentDoc.id === deleteDocId) {
+                const newApprovedDocs = approvedDocs.filter(d => d.id !== deleteDocId);
+                if (newApprovedDocs.length === 0) {
+                    setViewingDocIndex(null);
+                } else {
+                    const newFiltered = newApprovedDocs.filter(doc =>
+                        (!selected.parameterId || doc.parameter_id === selected.parameterId) &&
+                        (!selected.category || doc.category === selected.category)
+                    );
+                    if (newFiltered.length === 0) {
+                        setViewingDocIndex(null);
+                    } else {
+                        // Go to the first available document
+                        const firstDoc = newFiltered[0];
+                        const realIdx = newApprovedDocs.findIndex(d => d.id === firstDoc.id);
+                        setViewerIndex(realIdx);
+                        setViewingDocIndex(realIdx);
+                    }
+                }
+            }
+
+            // Close the delete modal
+            setDeleteModalOpen(false);
+            setDeleteDocId(null);
+        } catch (error) {
+            console.error('Delete error:', error);
+            // Could add error state here if needed
+        } finally {
+            setDeleteLoading(false);
+        }
     };
 
     const openGrid = () => setGridOpen(true);
@@ -575,6 +639,23 @@ export default function AdminDocuments(props: PageProps) {
                                 ) : null}
                             </div>
                             <div className="flex gap-2">
+                                {/* Show Delete button only when a document is being viewed */}
+                                {currentDoc && (
+                                    <button
+                                        type="button"
+                                        className="flex items-center bg-[#7F0404] hover:bg-[#a80000] text-white font-medium px-2 py-1.5 text-sm rounded shadow transition group"
+                                        onClick={() => {
+                                            setDeleteDocId(currentDoc.id);
+                                            setDeleteModalOpen(true);
+                                        }}
+                                    >
+                                        {/* Delete Icon */}
+                                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                        </svg>
+                                        Delete
+                                    </button>
+                                )}
                             </div>
                         </div>
                         
@@ -1024,6 +1105,66 @@ export default function AdminDocuments(props: PageProps) {
                 uploadEndpoint="/admin/documents/upload"
                 onUploadSuccess={handleUploadSuccess}
             />
+
+            {/* Delete Confirmation Modal */}
+            <Transition show={deleteModalOpen} as={Fragment}>
+                <Dialog as="div" className="fixed inset-0 z-50 flex items-center justify-center" onClose={() => setDeleteModalOpen(false)}>
+                    <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-200"
+                        enterFrom="opacity-0 scale-95"
+                        enterTo="opacity-100 scale-100"
+                        leave="ease-in duration-150"
+                        leaveFrom="opacity-100 scale-100"
+                        leaveTo="opacity-0 scale-95"
+                    >
+                        <div className="relative w-full max-w-md mx-auto rounded-2xl shadow-2xl overflow-hidden bg-white border-t-8 border-[#7F0404] flex flex-col">
+                            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-[#7F0404]/90 to-[#a80000]/80 flex-shrink-0">
+                                <Dialog.Title className="text-lg font-bold text-white tracking-tight">Delete Document</Dialog.Title>
+                            </div>
+                            <div className="px-6 py-6 flex-1 overflow-y-auto bg-white text-black">
+                                <p>Are you sure you want to <span className="text-[#7F0404] font-bold">delete</span> this document? This action cannot be undone.</p>
+                                <div className="mt-4 p-3 rounded bg-gray-50 border text-xs space-y-1">
+                                    <div>
+                                        <span className="font-semibold">Filename:</span> {currentDoc?.filename || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded by:</span> {currentDoc?.user_name || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Uploaded at:</span> {currentDoc?.uploaded_at || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Approved by:</span> {currentDoc?.approved_by || '—'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold">Approved at:</span> {currentDoc?.approved_at || currentDoc?.updated_at || '—'}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-row justify-end gap-3 pt-4 mt-2 border-t border-gray-100 px-6 pb-5 flex-shrink-0 bg-white">
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                                    onClick={() => setDeleteModalOpen(false)}
+                                    disabled={deleteLoading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-5 py-2 rounded-lg font-semibold text-white transition bg-[#7F0404] hover:bg-[#a80000]"
+                                    onClick={handleDeleteDocument}
+                                    disabled={deleteLoading}
+                                >
+                                    {deleteLoading ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </Transition.Child>
+                </Dialog>
+            </Transition>
 
             <style jsx>{`
                 table { font-size: 1rem; }
