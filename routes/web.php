@@ -94,6 +94,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('admin/documents/pending/{document}', [AdminDocumentsController::class, 'viewPendingDocument'])->name('admin.documents.pending.view');
     Route::patch('admin/documents/pending/{document}/status', [AdminDocumentsController::class, 'updateStatus'])->name('admin.documents.pending.status');
     Route::delete('admin/documents/pending/{document}', [AdminDocumentsController::class, 'destroyPending'])->name('admin.documents.pending.delete');
+    Route::delete('admin/documents/approved/{document}', [AdminDocumentsController::class, 'destroyApproved'])->name('admin.documents.approved.delete');
     Route::get('admin/messages', fn() => Inertia::render('admin/messages'))->name('admin.messages');
     Route::get('admin/settings', fn() => Inertia::render('admin/settings'))->name('admin.settings');
 

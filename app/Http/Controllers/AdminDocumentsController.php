@@ -843,6 +843,36 @@ class AdminDocumentsController extends Controller
     }
 
     /**
+     * Delete an approved document by ID - admin can delete any approved document without restrictions
+     */
+    public function destroyApproved(Request $request, Document $document)
+    {
+        $user = $request->user();
+
+        // Check if document is approved
+        if ($document->status !== 'approved') {
+            return response()->json(['success' => false, 'message' => 'Only approved documents can be deleted.'], 400);
+        }
+
+        // Admin can delete any approved document - no restrictions on ownership
+        
+        // Delete files from storage (document and optional video)
+        if ($document->doc_filename && Storage::disk('public')->exists('documents/' . $document->doc_filename)) {
+            Storage::disk('public')->delete('documents/' . $document->doc_filename);
+        }
+        if ($document->video_filename && Storage::disk('public')->exists('documents/' . $document->video_filename)) {
+            Storage::disk('public')->delete('documents/' . $document->video_filename);
+        }
+
+        $document->delete();
+
+        // Broadcast an update so UIs can refresh
+        event(new \App\Events\DocumentUpdated($document));
+
+        return response()->json(['success' => true, 'message' => 'Approved document deleted successfully.']);
+    }
+
+    /**
      * Get dashboard statistics and recent activities for admin
      */
     public function dashboardData(Request $request)
