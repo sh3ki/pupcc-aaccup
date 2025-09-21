@@ -93,13 +93,14 @@ export default function DocumentUploadModal({
         })) || [];
     }, [sidebar, uploadForm.programId, uploadForm.areaId]);
 
-    // Check if selected area is PPP or Self-Survey
-    const isSpecialArea = useMemo(() => {
-        if (!uploadForm.programId || !uploadForm.areaId) return false;
+    // Check if selected parameter is PPP or Self-Survey
+    const isSpecialParameter = useMemo(() => {
+        if (!uploadForm.programId || !uploadForm.areaId || !uploadForm.parameterId) return false;
         const prog = sidebar.find(p => p.id === Number(uploadForm.programId));
         const area = prog?.areas?.find(a => a.id === Number(uploadForm.areaId));
-        return area?.name === 'PPP' || area?.name === 'Self-Survey';
-    }, [sidebar, uploadForm.programId, uploadForm.areaId]);
+        const parameter = area?.parameters?.find(p => p.id === Number(uploadForm.parameterId));
+        return parameter?.name === 'PPP' || parameter?.name === 'Self-Survey';
+    }, [sidebar, uploadForm.programId, uploadForm.areaId, uploadForm.parameterId]);
 
     // Note: Video upload is now always available (not just for areas 8/9)
 
@@ -188,23 +189,29 @@ export default function DocumentUploadModal({
             }
             // Reset parameterId and category if area changes
             if (name === "areaId") {
-                // Check if the new area is special (PPP or Self-Survey)
-                const prog = sidebar.find(p => p.id === Number(f.programId));
-                const area = prog?.areas?.find(a => a.id === Number(value));
-                const isNewAreaSpecial = area?.name === 'PPP' || area?.name === 'Self-Survey';
-                
                 return { 
                     ...f, 
                     areaId: value, 
-                    parameterId: isNewAreaSpecial ? '' : '', 
-                    category: isNewAreaSpecial ? '' : '', 
+                    parameterId: '', 
+                    category: '', 
                     file: f.file, 
                     video: f.video 
                 };
             }
-            // Reset category if parameter changes
+            // Reset category if parameter changes, but check if it's a special parameter
             if (name === "parameterId") {
-                return { ...f, parameterId: value, category: '', file: f.file, video: f.video };
+                const prog = sidebar.find(p => p.id === Number(f.programId));
+                const area = prog?.areas?.find(a => a.id === Number(f.areaId));
+                const parameter = area?.parameters?.find(p => p.id === Number(value));
+                const isSpecialParam = parameter?.name === 'PPP' || parameter?.name === 'Self-Survey';
+                
+                return { 
+                    ...f, 
+                    parameterId: value, 
+                    category: isSpecialParam ? '' : '', 
+                    file: f.file, 
+                    video: f.video 
+                };
             }
             return { ...f, [name]: value };
         });
@@ -218,10 +225,10 @@ export default function DocumentUploadModal({
         const errors: Record<string, string> = {};
         if (!uploadForm.programId) errors.programId = 'Program is required.';
         if (!uploadForm.areaId) errors.areaId = 'Area is required.';
+        if (!uploadForm.parameterId) errors.parameterId = 'Parameter is required.';
         
-        // Skip parameter and category validation for PPP and Self-Survey areas
-        if (!isSpecialArea) {
-            if (!uploadForm.parameterId) errors.parameterId = 'Parameter is required.';
+        // Category validation only for non-special parameters (not PPP/Self-Survey)
+        if (!isSpecialParameter) {
             if (!uploadForm.category) errors.category = 'Category is required.';
         }
         
@@ -237,13 +244,12 @@ export default function DocumentUploadModal({
         const formData = new FormData();
         formData.append('program_id', uploadForm.programId);
         formData.append('area_id', uploadForm.areaId);
+        formData.append('parameter_id', uploadForm.parameterId);
         
-        // Only append parameter_id and category for non-special areas
-        if (!isSpecialArea) {
-            formData.append('parameter_id', uploadForm.parameterId);
+        // Only append category for non-special parameters
+        if (!isSpecialParameter) {
             formData.append('category', uploadForm.category);
         }
-        // For special areas, we don't send parameter_id and category at all
         
         formData.append('file', uploadForm.file!);
 
@@ -393,21 +399,17 @@ export default function DocumentUploadModal({
                                         {/* Parameter Dropdown */}
                                         <div className="mb-4">
                                             <label className="block text-sm font-semibold mb-2 text-[#7F0404]">
-                                                Parameter {!isSpecialArea && <span className="text-red-600">*</span>}
-                                                {isSpecialArea && <span className="text-xs text-gray-500 ml-1">(not required for PPP/Self-Survey)</span>}
+                                                Parameter <span className="text-red-600">*</span>
                                             </label>
                                             <select
                                                 name="parameterId"
                                                 value={uploadForm.parameterId}
                                                 onChange={handleUploadFormChange}
-                                                className={`w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none shadow-sm transition ${
-                                                    isSpecialArea ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
-                                                }`}
-                                                required={!isSpecialArea}
-                                                disabled={!uploadForm.areaId || isSpecialArea}
+                                                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none shadow-sm transition bg-white"
+                                                disabled={!uploadForm.areaId}
                                             >
-                                                <option value="">{isSpecialArea ? 'Not applicable for this area' : 'Select parameter'}</option>
-                                                {!isSpecialArea && parameterOptions.map(opt => (
+                                                <option value="">Select parameter</option>
+                                                {parameterOptions.map(opt => (
                                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                                                 ))}
                                             </select>
@@ -416,21 +418,21 @@ export default function DocumentUploadModal({
                                         {/* Category Dropdown */}
                                         <div className="mb-4">
                                             <label className="block text-sm font-semibold mb-2 text-[#7F0404]">
-                                                Category {!isSpecialArea && <span className="text-red-600">*</span>}
-                                                {isSpecialArea && <span className="text-xs text-gray-500 ml-1">(not required for PPP/Self-Survey)</span>}
+                                                Category {!isSpecialParameter && <span className="text-red-600">*</span>}
+                                                {isSpecialParameter && <span className="text-xs text-gray-500 ml-1">(not required for PPP/Self-Survey)</span>}
                                             </label>
                                             <select
                                                 name="category"
                                                 value={uploadForm.category}
                                                 onChange={handleUploadFormChange}
                                                 className={`w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#C46B02] outline-none shadow-sm transition ${
-                                                    isSpecialArea ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
+                                                    isSpecialParameter ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
                                                 }`}
-                                                required={!isSpecialArea}
-                                                disabled={isSpecialArea || (!isSpecialArea && !uploadForm.parameterId)}
+                                                required={!isSpecialParameter}
+                                                disabled={isSpecialParameter || (!isSpecialParameter && !uploadForm.parameterId)}
                                             >
-                                                <option value="">{isSpecialArea ? 'Not applicable for this area' : 'Select category'}</option>
-                                                {!isSpecialArea && (
+                                                <option value="">{isSpecialParameter ? 'Not applicable for PPP/Self-Survey' : 'Select category'}</option>
+                                                {!isSpecialParameter && (
                                                     <>
                                                         <option value="system">System</option>
                                                         <option value="implementation">Implementation</option>

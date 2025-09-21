@@ -13,6 +13,7 @@ class SpecialDocument extends Model
         'user_id',
         'program_id',
         'area_id',
+        'parameter_id',
         'category',
         'doc_filename',
         'video_filename',
@@ -40,6 +41,11 @@ class SpecialDocument extends Model
     public function area()
     {
         return $this->belongsTo(Area::class);
+    }
+
+    public function parameter()
+    {
+        return $this->belongsTo(Parameter::class);
     }
 
     public function checkedBy()

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Document;
 use App\Models\SpecialDocument;
 use App\Models\Area;
+use App\Models\Parameter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -16,11 +17,16 @@ class DocumentUploadController extends Controller
      */
     public function upload(Request $request)
     {
-        // Check if this is a special area (PPP or Self-Survey)
-        $area = Area::find($request->area_id);
-        $isSpecialArea = $area && in_array($area->name, ['PPP', 'Self-Survey']);
+        // Check if this is a special parameter (PPP or Self-Survey)
+        $parameter = null;
+        $isSpecialParameter = false;
+        
+        if ($request->has('parameter_id') && $request->parameter_id) {
+            $parameter = Parameter::find($request->parameter_id);
+            $isSpecialParameter = $parameter && in_array($parameter->name, ['PPP', 'Self-Survey']);
+        }
 
-        // Dynamic validation rules based on area type
+        // Dynamic validation rules based on parameter type
         $validationRules = [
             'program_id' => 'required|exists:programs,id',
             'area_id' => 'required|exists:areas,id',
@@ -28,20 +34,21 @@ class DocumentUploadController extends Controller
             'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm',
         ];
 
-        // Add parameter and category validation only for regular areas
-        if (!$isSpecialArea) {
-            $validationRules['parameter_id'] = 'required|exists:parameters,id';
+        // Parameter is always required now
+        $validationRules['parameter_id'] = 'required|exists:parameters,id';
+        
+        // Category validation only for regular parameters (not PPP/Self-Survey)
+        if (!$isSpecialParameter) {
             $validationRules['category'] = 'required|in:system,implementation,outcomes';
         }
 
         $request->validate($validationRules);
 
         $user = $request->user();
-        $records = [];
 
-        if ($isSpecialArea) {
+        if ($isSpecialParameter) {
             // Handle special documents (PPP or Self-Survey)
-            return $this->handleSpecialDocumentUpload($request, $user, $area);
+            return $this->handleSpecialDocumentUpload($request, $user, $parameter);
         } else {
             // Handle regular documents
             return $this->handleRegularDocumentUpload($request, $user);
@@ -49,12 +56,12 @@ class DocumentUploadController extends Controller
     }
 
     /**
-     * Handle upload for special areas (PPP or Self-Survey)
+     * Handle upload for special parameters (PPP or Self-Survey)
      */
-    private function handleSpecialDocumentUpload(Request $request, $user, $area)
+    private function handleSpecialDocumentUpload(Request $request, $user, $parameter)
     {
         $records = [];
-        $category = strtolower($area->name) === 'ppp' ? 'ppp' : 'self-survey';
+        $category = strtolower($parameter->name) === 'ppp' ? 'ppp' : 'self-survey';
         $folderPath = $category === 'ppp' ? 'documents/ppp' : 'documents/self-survey';
 
         // Handle document file (always required)
@@ -66,6 +73,7 @@ class DocumentUploadController extends Controller
             'user_id' => $user->id,
             'program_id' => $request->program_id,
             'area_id' => $request->area_id,
+            'parameter_id' => $request->parameter_id,
             'category' => $category,
             'doc_filename' => $filename,
             'video_filename' => null,

@@ -15,6 +15,17 @@ class Area extends Model
         'name',
     ];
 
+    // Relationships
+    public function parameters()
+    {
+        return $this->hasMany(Parameter::class, 'area_id');
+    }
+
+    public function program()
+    {
+        return $this->belongsTo(Program::class);
+    }
+
     // Optionally, add assignments relationship if needed
     // public function assignments()
     // {
