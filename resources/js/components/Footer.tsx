@@ -56,7 +56,7 @@ export default function Footer() {
                     </div>
                 </div>
                 <div className="border-t border-white border-opacity-20 mt-8 sm:mt-10 lg:mt-12 pt-6 sm:pt-8 text-center text-sm sm:text-base">
-                    <p>&copy; 2025 Polytechnic University of the Philippines - Calauan Campus. All rights reserved.</p>
+                    <p>&copy; 2025 Polytechnic University of the Philippines - Calauan Campus [By: Jedidia Garcia & Lee Torres]. All rights reserved.</p>
                 </div>
             </div>
         </footer>
