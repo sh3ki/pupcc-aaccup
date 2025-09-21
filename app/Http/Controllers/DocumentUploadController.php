@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Document;
+use App\Models\SpecialDocument;
+use App\Models\Area;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -14,16 +16,89 @@ class DocumentUploadController extends Controller
      */
     public function upload(Request $request)
     {
-        $request->validate([
+        // Check if this is a special area (PPP or Self-Survey)
+        $area = Area::find($request->area_id);
+        $isSpecialArea = $area && in_array($area->name, ['PPP', 'Self-Survey']);
+
+        // Dynamic validation rules based on area type
+        $validationRules = [
             'program_id' => 'required|exists:programs,id',
             'area_id' => 'required|exists:areas,id',
-            'parameter_id' => 'required|exists:parameters,id',
-            'category' => 'required|in:system,implementation,outcomes',
             'file' => 'required|file|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png',
             'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/avi,video/mpeg,video/webm',
-        ]);
+        ];
+
+        // Add parameter and category validation only for regular areas
+        if (!$isSpecialArea) {
+            $validationRules['parameter_id'] = 'required|exists:parameters,id';
+            $validationRules['category'] = 'required|in:system,implementation,outcomes';
+        }
+
+        $request->validate($validationRules);
 
         $user = $request->user();
+        $records = [];
+
+        if ($isSpecialArea) {
+            // Handle special documents (PPP or Self-Survey)
+            return $this->handleSpecialDocumentUpload($request, $user, $area);
+        } else {
+            // Handle regular documents
+            return $this->handleRegularDocumentUpload($request, $user);
+        }
+    }
+
+    /**
+     * Handle upload for special areas (PPP or Self-Survey)
+     */
+    private function handleSpecialDocumentUpload(Request $request, $user, $area)
+    {
+        $records = [];
+        $category = strtolower($area->name) === 'ppp' ? 'ppp' : 'self-survey';
+        $folderPath = $category === 'ppp' ? 'documents/ppp' : 'documents/self-survey';
+
+        // Handle document file (always required)
+        $file = $request->file('file');
+        $filename = Str::random(16) . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $file->storeAs($folderPath, $filename, 'public');
+        
+        $document = SpecialDocument::create([
+            'user_id' => $user->id,
+            'program_id' => $request->program_id,
+            'area_id' => $request->area_id,
+            'category' => $category,
+            'doc_filename' => $filename,
+            'video_filename' => null,
+            'status' => 'pending',
+            'checked_by' => null,
+        ]);
+        
+        // Broadcast SpecialDocumentCreated event
+        event(new \App\Events\SpecialDocumentCreated($document));
+        $records[] = $document;
+
+        // Handle optional video file
+        if ($request->hasFile('video')) {
+            $video = $request->file('video');
+            $videoFilename = Str::random(16) . '_' . time() . '.' . $video->getClientOriginalExtension();
+            $video->storeAs($folderPath, $videoFilename, 'public');
+            
+            // Update the same record with video filename
+            $document->update(['video_filename' => $videoFilename]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => ucfirst($category) . ' document uploaded successfully!',
+            'documents' => $records
+        ]);
+    }
+
+    /**
+     * Handle upload for regular areas
+     */
+    private function handleRegularDocumentUpload(Request $request, $user)
+    {
         $records = [];
 
         // Handle document file (always required)
@@ -37,7 +112,6 @@ class DocumentUploadController extends Controller
             'parameter_id' => $request->parameter_id,
             'doc_filename' => $filename,
             'category' => $request->category,
-            'type' => $file->getClientOriginalExtension(),
             'status' => 'pending',
             'checked_by' => null,
         ]);
@@ -58,7 +132,6 @@ class DocumentUploadController extends Controller
                 'parameter_id' => $request->parameter_id,
                 'doc_filename' => $videoFilename,
                 'category' => $request->category,
-                'type' => $video->getClientOriginalExtension(),
                 'status' => 'pending',
                 'checked_by' => null,
             ]);
