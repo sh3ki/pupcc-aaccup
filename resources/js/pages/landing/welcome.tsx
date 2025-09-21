@@ -594,7 +594,7 @@ export default function Welcome({ landingContent }: Props) {
                                         {landingContent?.director_section_title || 'Message from the Director'}
                                     </h2>
                                     <div className="space-y-4 sm:space-y-6 text-base sm:text-lg lg:text-xl text-gray-700 leading-relaxed">
-                                        <p className="transition-all duration-300 hover:text-gray-900 transform hover:scale-102 whitespace-pre-line">
+                                        <p className="transition-all duration-300 hover:text-gray-900 transform hover:scale-102 whitespace-pre-line text-justify">
                                             {landingContent?.director_message || 'Welcome to the Polytechnic University of the Philippines - Calauan Campus. As we continue our journey towards academic excellence, we remain committed to providing quality education that meets international standards.'}
                                         </p>
                                     </div>
