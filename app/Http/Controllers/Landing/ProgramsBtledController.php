@@ -8,6 +8,7 @@ use App\Models\Program;
 use App\Models\Area;
 use App\Models\Parameter;
 use App\Models\Document;
+use App\Models\SpecialDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -584,42 +585,83 @@ class ProgramsBtledController extends Controller
             'category' => 'nullable|in:system,implementation,outcomes',
         ]);
 
-        $query = Document::with(['user:id,name', 'checker:id,name'])
-            ->where('status', 'approved')
-            ->where('program_id', $btledProgram->id)
-            ->where('area_id', $request->area_id);
-
+        // Check if this is a special parameter (PPP or Self-Survey)
+        $isSpecialParameter = false;
+        $parameter = null;
         if ($request->parameter_id) {
-            $query->where('parameter_id', $request->parameter_id);
+            $parameter = Parameter::find($request->parameter_id);
+            $isSpecialParameter = $parameter && in_array($parameter->name, ['PPP', 'Self-Survey']);
         }
 
-        if ($request->category) {
-            $query->where('category', $request->category);
+        if ($isSpecialParameter) {
+            // Fetch from special_documents table
+            $query = SpecialDocument::with(['user:id,name', 'checkedBy:id,name'])
+                ->where('status', 'approved')
+                ->where('program_id', $btledProgram->id)
+                ->where('area_id', $request->area_id)
+                ->where('parameter_id', $request->parameter_id);
+
+            $documents = $query->orderBy('updated_at', 'desc')->get();
+            
+            Log::info('BTLED Special documents found', [
+                'count' => $documents->count(),
+                'parameter_name' => $parameter->name ?? 'Unknown'
+            ]);
+
+            $transformedDocuments = $documents->map(function ($doc) use ($parameter) {
+                $folderPath = strtolower($parameter->name) === 'ppp' ? 'documents/ppp' : 'documents/self-survey';
+                
+                return [
+                    'id' => $doc->id,
+                    'filename' => $doc->doc_filename,
+                    'url' => Storage::url("{$folderPath}/{$doc->doc_filename}"),
+                    'uploaded_at' => $doc->created_at->format('Y-m-d H:i:s'),
+                    'user_name' => $doc->user->name ?? 'Unknown',
+                    'approved_by' => $doc->checkedBy->name ?? null,
+                    'approved_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                    'updated_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                    'parameter_id' => $doc->parameter_id,
+                    'category' => $doc->category, // Will be 'ppp' or 'self-survey'
+                ];
+            });
+        } else {
+            // Regular documents - existing logic
+            $query = Document::with(['user:id,name', 'checker:id,name'])
+                ->where('status', 'approved')
+                ->where('program_id', $btledProgram->id)
+                ->where('area_id', $request->area_id);
+
+            if ($request->parameter_id) {
+                $query->where('parameter_id', $request->parameter_id);
+            }
+
+            if ($request->category) {
+                $query->where('category', $request->category);
+            }
+
+            $documents = $query->orderBy('updated_at', 'desc')->get();
+            
+            Log::info('BTLED Regular documents found', [
+                'count' => $documents->count()
+            ]);
+
+            $transformedDocuments = $documents->map(function ($doc) {
+                return [
+                    'id' => $doc->id,
+                    'filename' => $doc->doc_filename,
+                    'url' => Storage::url("documents/{$doc->doc_filename}"),
+                    'uploaded_at' => $doc->created_at->format('Y-m-d H:i:s'),
+                    'user_name' => $doc->user->name ?? 'Unknown',
+                    'approved_by' => $doc->checker->name ?? null,
+                    'approved_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                    'updated_at' => $doc->updated_at->format('Y-m-d H:i:s'),
+                    'parameter_id' => $doc->parameter_id,
+                    'category' => $doc->category,
+                ];
+            });
         }
 
-        $documents = $query->orderBy('updated_at', 'desc')->get();
-        
-        Log::info('BTLED Documents found', [
-            'count' => $documents->count(),
-            'documents' => $documents->toArray()
-        ]);
-
-        $transformedDocuments = $documents->map(function ($doc) {
-            return [
-                'id' => $doc->id,
-                'filename' => $doc->doc_filename,
-                'url' => Storage::url("documents/{$doc->doc_filename}"),
-                'uploaded_at' => $doc->created_at->format('Y-m-d H:i:s'),
-                'user_name' => $doc->user->name ?? 'Unknown',
-                'approved_by' => $doc->checker->name ?? null,
-                'approved_at' => $doc->updated_at->format('Y-m-d H:i:s'),
-                'updated_at' => $doc->updated_at->format('Y-m-d H:i:s'),
-                'parameter_id' => $doc->parameter_id,
-                'category' => $doc->category,
-            ];
-        });
-
-        Log::info('BTLED Transformed documents', ['transformed' => $transformedDocuments->toArray()]);
+        Log::info('BTLED Transformed documents', ['count' => $transformedDocuments->count()]);
 
         return response()->json([
             'success' => true,

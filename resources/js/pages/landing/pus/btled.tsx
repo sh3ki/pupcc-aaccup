@@ -198,22 +198,45 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
 
+    // Helper function to check if parameter is special (PPP or Self-Survey)
+    const isSpecialParameter = useMemo(() => {
+        if (!selected.parameterId || !selectedArea?.parameters) return false;
+        const parameter = selectedArea.parameters.find(p => p.id === selected.parameterId);
+        return parameter && ['PPP', 'Self-Survey'].includes(parameter.name);
+    }, [selected.parameterId, selectedArea?.parameters]);
+
     // Remove the parameter fetching logic - use sidebar data directly like admin
     // No separate parameter fetching needed
 
-    // Fetch approved documents - EXACTLY like admin panel and BSENT
+    // Fetch approved documents - EXACTLY like admin panel and BSENT, but with special parameter support
     useEffect(() => {
-        // Only fetch when all three are selected: area, parameter, and category
-        if (selected.areaId && selected.parameterId && selected.category) {
+        // Fetch when:
+        // 1. Regular parameters: area, parameter, and category are all selected
+        // 2. Special parameters (PPP/Self-Survey): area and parameter are selected (no category needed)
+        const shouldFetch = selected.areaId && selected.parameterId && 
+            (isSpecialParameter || selected.category);
+
+        if (shouldFetch) {
             console.log('BTLED: Fetching documents with:', { 
                 areaId: selected.areaId, 
                 parameterId: selected.parameterId, 
-                category: selected.category 
+                category: selected.category,
+                isSpecialParameter
             });
             setLoadingDocs(true);
             
-            // Use same URL pattern as BSENT: /programs/btled/documents with query params (no type parameter)
-            fetch(`/programs/btled/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            // For special parameters, don't include category in the URL
+            const queryParams = new URLSearchParams({
+                area_id: selected.areaId!.toString(),
+                parameter_id: selected.parameterId!.toString(),
+            });
+            
+            // Only add category for non-special parameters
+            if (!isSpecialParameter && selected.category) {
+                queryParams.append('category', selected.category);
+            }
+            
+            fetch(`/programs/btled/documents?${queryParams.toString()}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -245,7 +268,7 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
             setApprovedDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.areaId, selected.parameterId, selected.category]);
+    }, [selected.areaId, selected.parameterId, selected.category, isSpecialParameter]);
 
     // Sync btledProgram areas to state when sidebar data loads - like BSENT
     useEffect(() => {
@@ -267,11 +290,25 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
     // Filtered docs for preview
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
+        // For special parameters, just filter by parameter
+        // For regular parameters, filter by current parameter and category if both are selected
+        if (selected.parameterId) {
+            if (isSpecialParameter) {
+                // For special parameters, just filter by parameter_id
+                docs = docs.filter(doc => doc.parameter_id === selected.parameterId);
+            } else if (selected.category) {
+                // For regular parameters, filter by both parameter and category
+                docs = docs.filter(doc =>
+                    doc.parameter_id === selected.parameterId &&
+                    doc.category === selected.category
+                );
+            }
+        }
         if (search) {
             docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
         }
         return docs;
-    }, [approvedDocs, search]);
+    }, [approvedDocs, selected.parameterId, selected.category, isSpecialParameter, search]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
 
@@ -677,8 +714,8 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                         </div>
                                     )}
 
-                                    {/* Category selection - Show when parameter is selected but no category */}
-                                    {selected.areaId && selected.parameterId && !selected.category && (
+                                    {/* Category selection - Show when parameter is selected but no category AND it's not a special parameter */}
+                                    {selected.areaId && selected.parameterId && !selected.category && !isSpecialParameter && (
                                         <div>
                                             <div className="mb-4">
                                                
@@ -736,8 +773,8 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                         </div>
                                     )}
 
-                                    {/* Document viewer */}
-                                    {selected.areaId && selected.parameterId && selected.category && (
+                                    {/* Document viewer - Show when category is selected OR when special parameter is selected */}
+                                    {selected.areaId && selected.parameterId && (selected.category || isSpecialParameter) && (
                                         <div>
                                            
 
@@ -809,7 +846,10 @@ export default function BTLEDProgramPage({ btledContent, accreditationAreas, sid
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                                             {filteredDocs.length === 0 ? (
                                                                 <div className="col-span-full text-gray-400 text-center">
-                                                                    No approved documents for this category.
+                                                                    {isSpecialParameter 
+                                                                        ? "No approved documents for this parameter."
+                                                                        : "No approved documents for this category."
+                                                                    }
                                                                 </div>
                                                             ) : (
                                                                 filteredDocs.map((doc) => {

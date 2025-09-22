@@ -327,17 +327,39 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
 
+    // Helper function to check if parameter is special (PPP or Self-Survey)
+    const isSpecialParameter = useMemo(() => {
+        if (!selected.parameterId || !selectedArea?.parameters) return false;
+        const parameter = selectedArea.parameters.find(p => p.id === selected.parameterId);
+        return parameter && ['PPP', 'Self-Survey'].includes(parameter.name);
+    }, [selected.parameterId, selectedArea?.parameters]);
+
     // Remove the parameter fetching logic - use sidebar data directly like admin
     // No separate parameter fetching needed
 
-    // Fetch approved documents - EXACTLY like admin panel
+    // Fetch approved documents - EXACTLY like admin panel, but with special parameter support
     useEffect(() => {
-        // Only fetch when all three are selected: area, parameter, and category
-        if (selected.areaId && selected.parameterId && selected.category) {
+        // Fetch when:
+        // 1. Regular parameters: area, parameter, and category are all selected
+        // 2. Special parameters (PPP/Self-Survey): area and parameter are selected (no category needed)
+        const shouldFetch = selected.areaId && selected.parameterId && 
+            (isSpecialParameter || selected.category);
+
+        if (shouldFetch) {
             setLoadingDocs(true);
             
-            // Use same URL pattern as admin: /programs/bsit/documents with query params
-            fetch(`/programs/bsit/documents?area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            // For special parameters, don't include category in the URL
+            const queryParams = new URLSearchParams({
+                area_id: selected.areaId!.toString(),
+                parameter_id: selected.parameterId!.toString(),
+            });
+            
+            // Only add category for non-special parameters
+            if (!isSpecialParameter && selected.category) {
+                queryParams.append('category', selected.category);
+            }
+            
+            fetch(`/programs/bsit/documents?${queryParams.toString()}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -362,7 +384,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
             setApprovedDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.areaId, selected.parameterId, selected.category]);
+    }, [selected.areaId, selected.parameterId, selected.category, isSpecialParameter]);
 
     // Sync bsitProgram areas to state when sidebar data loads - like admin
     useEffect(() => {
@@ -382,15 +404,22 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
     }, [bsitProgram?.areas, accreditationAreas]);    // Navigation functions - like admin
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
-        // Filter by current parameter and category if both are selected
-        if (selected.parameterId && selected.category) {
-            docs = docs.filter(doc =>
-                doc.parameter_id === selected.parameterId &&
-                doc.category === selected.category
-            );
+        // For special parameters, just filter by parameter
+        // For regular parameters, filter by current parameter and category if both are selected
+        if (selected.parameterId) {
+            if (isSpecialParameter) {
+                // For special parameters, just filter by parameter_id
+                docs = docs.filter(doc => doc.parameter_id === selected.parameterId);
+            } else if (selected.category) {
+                // For regular parameters, filter by both parameter and category
+                docs = docs.filter(doc =>
+                    doc.parameter_id === selected.parameterId &&
+                    doc.category === selected.category
+                );
+            }
         }
         return docs;
-    }, [approvedDocs, selected.parameterId, selected.category]);
+    }, [approvedDocs, selected.parameterId, selected.category, isSpecialParameter]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
 
@@ -851,8 +880,8 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                         </div>
                                     )}
 
-                                    {/* Category selection - Show when parameter is selected but no category */}
-                                    {selected.areaId && selected.parameterId && !selected.category && (
+                                    {/* Category selection - Show when parameter is selected but no category AND it's not a special parameter */}
+                                    {selected.areaId && selected.parameterId && !selected.category && !isSpecialParameter && (
                                         <div>
                                           
                                             <DocumentCardGrid
@@ -910,8 +939,8 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                         </div>
                                     )}
 
-                                    {/* Document viewer */}
-                                    {selected.areaId && selected.parameterId && selected.category && (
+                                    {/* Document viewer - Show when category is selected OR when special parameter is selected */}
+                                    {selected.areaId && selected.parameterId && (selected.category || isSpecialParameter) && (
                                         <div>
                                            
 
@@ -983,7 +1012,10 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                                             {filteredDocs.length === 0 ? (
                                                                 <div className="col-span-full text-gray-400 text-center">
-                                                                    No approved documents for this category.
+                                                                    {isSpecialParameter 
+                                                                        ? `No approved ${selectedArea?.parameters?.find(p => p.id === selected.parameterId)?.name || 'special'} documents for this area.`
+                                                                        : "No approved documents for this category."
+                                                                    }
                                                                 </div>
                                                             ) : (
                                                                 filteredDocs.map((doc) => {
