@@ -24,6 +24,24 @@ In order to ensure that the Laravel community is welcoming to all, please review
 
 The Laravel + React starter kit is open-sourced software licensed under the MIT license.
 
+## Video Storage Setup
+
+To ensure videos work correctly on the landing page:
+
+1. Run the storage link setup script:
+   ```bash
+   # Linux/Mac
+   chmod +x scripts/setup-video-storage.sh
+   ./scripts/setup-video-storage.sh
+   
+   # Windows PowerShell
+   .\scripts\setup-video-storage.ps1
+   ```
+
+2. Videos are stored in `storage/app/public/landing/videos/` and accessible via `/storage/landing/videos/`
+3. The system supports both YouTube videos (using video IDs) and uploaded video files
+4. Video thumbnails are automatically generated for uploaded videos using the first frame
+
 ## Firebase Messaging Setup
 
 To enable the in-app messaging feature backed by Firebase Realtime Database:
