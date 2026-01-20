@@ -680,17 +680,6 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                 {bsitContent.accreditation_section_title}
                             </h2>
                             
-                            {/* Toggle Button */}
-                            {/* <div className="flex justify-center mb-8">
-                                <button
-                                    onClick={() => setDocumentMode(!documentMode)}
-                                    className="px-6 py-3 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                                    style={{ backgroundColor: documentMode ? COLORS.burntOrange : COLORS.primaryMaroon }}
-                                >
-                                    {documentMode ? 'View Areas Overview' : 'Access Documents'}
-                                </button>
-                            </div> */}
-                            
                             {/* Show regular area cards when not in document mode */}
                             {!documentMode && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
@@ -744,56 +733,28 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                 <div className="w-full">
                                     {/* Title Header with Breadcrumb and Back Button */}
                                     <div className="mb-8 pb-6 border-b border-gray-200">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.primaryMaroon }}>
-                                                    BSIT - Bachelor of Science in Information Technology
-                                                </h1>
-                                                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                                                    {selected.areaId && selectedArea && (
-                                                        <>
-                                                            <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
-                                                                Area {selectedArea.code || selectedArea.id} - {selectedArea.name}
-                                                            </span>
-                                                            {selected.parameterId && selectedParameter && (
-                                                                <>
-                                                                    <span className="text-gray-400">/</span>
-                                                                    <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
-                                                                        {selectedParameter.code ? `${selectedParameter.code} - ` : ''}{selectedParameter.name}
-                                                                    </span>
-                                                                    {selected.category && (
-                                                                        <>
-                                                                            <span className="text-gray-400">/</span>
-                                                                            <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
-                                                                                {categoryList.find(c => c.value === selected.category)?.label || selected.category}
-                                                                            </span>
-                                                                        </>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
+                                        {/* Back button on the left */}
+                                        <div className="mb-4">
                                             <button
                                                 className="flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105 shadow-md"
                                                 style={{ backgroundColor: COLORS.burntOrange, color: 'white' }}
                                                 onClick={() => {
                                                     // Go back one level
                                                     if (selected.category) {
-                                                        // From category view -> back to parameter categories or documents
+                                                        // From category view -> back to parameter categories
                                                         setSelected({ areaId: selected.areaId, parameterId: selected.parameterId });
                                                         setViewingDocIndex(null);
                                                     } else if (selected.parameterId) {
-                                                        // From parameter view -> back to parameters
+                                                        // From parameter view -> back to area parameters
                                                         setSelected({ areaId: selected.areaId });
                                                         setViewingDocIndex(null);
                                                     } else if (selected.areaId) {
-                                                        // From area view -> back to all areas
+                                                        // From area view (parameters list) -> EXIT document mode completely
+                                                        setDocumentMode(false);
                                                         setSelected({});
                                                         setViewingDocIndex(null);
                                                     } else {
-                                                        // From areas view -> exit document mode
+                                                        // From areas selection -> exit document mode
                                                         setDocumentMode(false);
                                                         setSelected({});
                                                         setViewingDocIndex(null);
@@ -805,6 +766,38 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                                 </svg>
                                                 Back
                                             </button>
+                                        </div>
+                                        
+                                        {/* Title and breadcrumb */}
+                                        <div>
+                                            <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.primaryMaroon }}>
+                                                BSIT - Bachelor of Science in Information Technology
+                                            </h1>
+                                            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                                {selected.areaId && selectedArea && (
+                                                    <>
+                                                        <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                            Area {selectedArea.code || selectedArea.id} - {selectedArea.name}
+                                                        </span>
+                                                        {selected.parameterId && selectedParameter && (
+                                                            <>
+                                                                <span className="text-gray-400">/</span>
+                                                                <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                                    {selectedParameter.code ? `${selectedParameter.code} - ` : ''}{selectedParameter.name}
+                                                                </span>
+                                                                {selected.category && (
+                                                                    <>
+                                                                        <span className="text-gray-400">/</span>
+                                                                        <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                                            {categoryList.find(c => c.value === selected.category)?.label || selected.category}
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
