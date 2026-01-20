@@ -197,6 +197,7 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
     }, [bsentProgram?.areas, fetchedAreas, accreditationAreas]);
     
     const selectedArea = availableAreas.find(a => a.id === selected.areaId);
+    const selectedParameter = selectedArea?.parameters?.find(p => p.id === selected.parameterId);
 
     // Check if the selected parameter is a special parameter (PPP or Self-Survey)
     const isSpecialParameter = useMemo(() => {
@@ -608,22 +609,70 @@ export default function BSENTProgramPage({ bsentContent, accreditationAreas, sid
             )}                            {/* Document Management Interface */}
                             {documentMode && (
                                 <div className="w-full">
-                                    {/* Back button */}
-                                    <div className="mb-6">
-                                        <button
-                                            className="flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105"
-                                            style={{ backgroundColor: COLORS.burntOrange, color: 'white' }}
-                                            onClick={() => {
-                                                setDocumentMode(false);
-                                                setSelected({});
-                                                setViewingDocIndex(null);
-                                            }}
-                                        >
-                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                                            </svg>
-                                            Back to Areas
-                                        </button>
+                                    {/* Title Header with Breadcrumb and Back Button */}
+                                    <div className="mb-8 pb-6 border-b border-gray-200">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.primaryMaroon }}>
+                                                    BSENT - Bachelor of Science in Entertainment and Multimedia Computing
+                                                </h1>
+                                                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                                    {selected.areaId && selectedArea && (
+                                                        <>
+                                                            <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                                Area {selectedArea.code || selectedArea.id} - {selectedArea.name}
+                                                            </span>
+                                                            {selected.parameterId && selectedParameter && (
+                                                                <>
+                                                                    <span className="text-gray-400">/</span>
+                                                                    <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                                        {selectedParameter.code ? `${selectedParameter.code} - ` : ''}{selectedParameter.name}
+                                                                    </span>
+                                                                    {selected.category && (
+                                                                        <>
+                                                                            <span className="text-gray-400">/</span>
+                                                                            <span className="font-medium" style={{ color: COLORS.primaryMaroon }}>
+                                                                                {categoryList.find(c => c.value === selected.category)?.label || selected.category}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <button
+                                                className="flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105 shadow-md"
+                                                style={{ backgroundColor: COLORS.burntOrange, color: 'white' }}
+                                                onClick={() => {
+                                                    // Go back one level
+                                                    if (selected.category) {
+                                                        // From category view -> back to parameter categories or documents
+                                                        setSelected({ areaId: selected.areaId, parameterId: selected.parameterId });
+                                                        setViewingDocIndex(null);
+                                                    } else if (selected.parameterId) {
+                                                        // From parameter view -> back to parameters
+                                                        setSelected({ areaId: selected.areaId });
+                                                        setViewingDocIndex(null);
+                                                    } else if (selected.areaId) {
+                                                        // From area view -> back to all areas
+                                                        setSelected({});
+                                                        setViewingDocIndex(null);
+                                                    } else {
+                                                        // From areas view -> exit document mode
+                                                        setDocumentMode(false);
+                                                        setSelected({});
+                                                        setViewingDocIndex(null);
+                                                    }
+                                                }}
+                                            >
+                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                                </svg>
+                                                Back
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Area selection */}
