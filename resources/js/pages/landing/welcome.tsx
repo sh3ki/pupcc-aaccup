@@ -643,54 +643,32 @@ export default function Welcome({ landingContent }: Props) {
                                 {landingContent?.videos_data.map((video, index) => (
                                     <div 
                                         key={index}
-                                        className={`transform transition-all duration-500 ${
+                                        className={`flex flex-col items-center transform transition-all duration-500 ${
                                             videoAnimation.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
                                         }`}
                                         style={{ transitionDelay: `${index * 0.2}s` }}
                                     >
-                                        <div className="w-full bg-white rounded-xl overflow-hidden shadow-lg">
-                                            <h3 className="text-lg sm:text-xl font-bold p-4 text-center" style={{ color: COLORS.primaryMaroon }}>
-                                                {video.title}
-                                            </h3>
-                                            <div className="w-full">
-                                                {video.video_type === 'youtube' ? (
-                                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200">
-                                                        <iframe
-                                                            src={`https://www.youtube.com/embed/${video.video}`}
-                                                            title={video.title}
-                                                            frameBorder={0}
-                                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                            allowFullScreen
-                                                            className="w-full h-full"
-                                                            style={{ minHeight: 300 }}
-                                                        ></iframe>
-                                                    </div>
-                                                ) : (
-                                                    <VideoNavigation
-                                                        currentVideo={{
-                                                            id: index + 1,
-                                                            filename: `campus_video_${index + 1}.${video.video?.split('.').pop() || 'mp4'}`,
-                                                            url: video.video?.startsWith('http') || video.video?.startsWith('/storage/') 
-                                                                ? video.video 
-                                                                : `/storage/${video.video}`,
-                                                            uploaded_at: new Date().toISOString()
-                                                        }}
-                                                        onInfo={() => {
-                                                            console.log('Campus Video Info:', video.title);
-                                                        }}
-                                                        onDownload={() => {
-                                                            const videoUrl = video.video?.startsWith('http') || video.video?.startsWith('/storage/') 
-                                                                ? video.video 
-                                                                : `/storage/${video.video}`;
-                                                            const link = document.createElement('a');
-                                                            link.href = videoUrl;
-                                                            link.download = `campus_video_${index + 1}.${video.video?.split('.').pop() || 'mp4'}`;
-                                                            link.click();
-                                                        }}
-                                                    />
-                                                )}
-                                            </div>
+                                        <div className="w-full bg-gray-200 rounded-xl overflow-hidden shadow-lg mb-2" style={{ height: 280 }}>
+                                            {video.video_type === 'youtube' ? (
+                                                <iframe
+                                                    src={`https://www.youtube.com/embed/${video.video}`}
+                                                    title={video.title}
+                                                    frameBorder={0}
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                    className="w-full h-full"
+                                                ></iframe>
+                                            ) : (
+                                                <video
+                                                    src={typeof video.video === 'string' ? video.video : ''}
+                                                    controls
+                                                    className="w-full h-full object-cover"
+                                                >
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                            )}
                                         </div>
+                                        <span className="font-semibold text-lg text-white">{video.title}</span>
                                     </div>
                                 )) || []}
                             </div>
