@@ -30,6 +30,13 @@ export default function ReviewerDocuments(props: PageProps) {
     const selectedArea = selectedProgram?.areas?.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
+    // Helper function to check if parameter is special (PPP or Self-Survey)
+    const isSpecialParameter = useMemo(() => {
+        if (!selected.parameterId || !selectedArea?.parameters) return false;
+        const parameter = selectedArea.parameters.find(p => p.id === selected.parameterId);
+        return parameter && ['PPP', 'Self-Survey'].includes(parameter.name);
+    }, [selected.parameterId, selectedArea?.parameters]);
+
     const toggleExpand = (programId: number) => {
         setExpanded(prev => ({ ...prev, [programId]: !prev[programId] }));
     };
@@ -111,10 +118,25 @@ export default function ReviewerDocuments(props: PageProps) {
     }, [viewerIndex]);
 
     useEffect(() => {
-        // Only fetch when all three are selected
-        if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+        // Fetch when:
+        // 1. Regular parameters: area, parameter, and category are all selected
+        // 2. Special parameters (PPP/Self-Survey): area and parameter are selected (no category needed)
+        if (selected.programId && selected.areaId && selected.parameterId && 
+            (isSpecialParameter || selected.category)) {
             setLoadingDocs(true);
-            fetch(`/reviewer/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            
+            // Build query parameters
+            const params: string[] = [];
+            params.push(`program_id=${selected.programId}`);
+            params.push(`area_id=${selected.areaId}`);
+            params.push(`parameter_id=${selected.parameterId}`);
+            
+            // Only add category param for non-special parameters
+            if (!isSpecialParameter && selected.category) {
+                params.push(`category=${selected.category}`);
+            }
+            
+            fetch(`/reviewer/documents/approved?${params.join('&')}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -151,7 +173,7 @@ export default function ReviewerDocuments(props: PageProps) {
             setApprovedDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
+    }, [selected.programId, selected.areaId, selected.parameterId, selected.category, isSpecialParameter]);
 
     // Reset to first page when document changes
     useEffect(() => {
@@ -162,7 +184,13 @@ export default function ReviewerDocuments(props: PageProps) {
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
         let docs = approvedDocs;
-        if (selected.parameterId && selected.category) {
+        if (isSpecialParameter) {
+            // For special parameters, only filter by parameter_id
+            if (selected.parameterId) {
+                docs = docs.filter(doc => doc.parameter_id === selected.parameterId);
+            }
+        } else if (selected.parameterId && selected.category) {
+            // For regular parameters, filter by both parameter and category
             docs = docs.filter(doc =>
                 doc.parameter_id === selected.parameterId &&
                 doc.category === selected.category
@@ -172,7 +200,7 @@ export default function ReviewerDocuments(props: PageProps) {
             docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
         }
         return docs;
-    }, [approvedDocs, selected.parameterId, selected.category, search]);
+    }, [approvedDocs, selected.parameterId, selected.category, isSpecialParameter, search]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === approvedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
@@ -824,7 +852,7 @@ export default function ReviewerDocuments(props: PageProps) {
                         {/* --- Document Viewer Section --- */}
                         {selected.programId && selected.areaId && selected.parameterId && (
                             <div className="mt-2 flex flex-col flex-1 min-h-0">
-                                {selected.parameterId && !selected.category && (
+                                {selected.parameterId && !selected.category && !isSpecialParameter && (
                                     // --- Category Cards Grid when parameter is selected but no category is selected ---
                                     <div>
                                         <p className="text-base text-gray-700 mb-6">
@@ -891,7 +919,7 @@ export default function ReviewerDocuments(props: PageProps) {
                                         />
                                     </div>
                                 )}
-                                {selected.category && (
+                                {(selected.category || isSpecialParameter) && (
                                     <>
                                     <div>
                                         <p className="text-base text-gray-700 mb-2">
