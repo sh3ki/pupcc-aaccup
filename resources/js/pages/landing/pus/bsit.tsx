@@ -680,7 +680,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                             </h2>
                             
                             {/* Toggle Button */}
-                            <div className="flex justify-center mb-8">
+                            {/* <div className="flex justify-center mb-8">
                                 <button
                                     onClick={() => setDocumentMode(!documentMode)}
                                     className="px-6 py-3 rounded-lg text-white font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
@@ -688,7 +688,7 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                                 >
                                     {documentMode ? 'View Areas Overview' : 'Access Documents'}
                                 </button>
-                            </div>
+                            </div> */}
                             
                             {/* Show regular area cards when not in document mode */}
                             {!documentMode && (
