@@ -195,8 +195,8 @@ export default function BSITFaculty({ bsitContent }: Props) {
                                                     alt={member.name}
                                                     className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto rounded-full shadow-lg border-4 group-hover/image:shadow-xl transition-all duration-300 group-hover/image:scale-105"
                                                     style={{ borderColor: COLORS.primaryMaroon }}
-                                                    priority={index < 4}
-                                                    placeholder="blur"
+                                                    lazy={index > 3}
+                                                    sizes="(max-width: 640px) 96px, (max-width: 1024px) 144px, 160px"
                                                 />
                                                 <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-300"></div>
                                             </div>
