@@ -7,6 +7,7 @@ use Inertia\Inertia;
 use App\Models\UserAssign;
 use App\Models\Parameter;
 use App\Models\Document;
+use App\Models\SpecialDocument;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,7 +36,12 @@ class FacultyDocumentsController extends Controller
         $areaIds = array_unique($areaIds);
 
         // 2. Get all approved documents for these programs (for sidebar counts)
+        // Include both regular documents and special documents (PPP/Self-Survey)
         $approvedDocs = \App\Models\Document::where('status', 'approved')
+            ->whereIn('program_id', $programIds)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        $specialApprovedDocs = \App\Models\SpecialDocument::where('status', 'approved')
             ->whereIn('program_id', $programIds)
             ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
 
@@ -45,6 +51,7 @@ class FacultyDocumentsController extends Controller
         $parameterApprovedCounts = [];
         $parameterCategoryApprovedCounts = [];
 
+        // Count regular documents
         foreach ($approvedDocs as $doc) {
             // Program count
             if (!isset($programApprovedCounts[$doc->program_id])) $programApprovedCounts[$doc->program_id] = 0;
@@ -64,6 +71,25 @@ class FacultyDocumentsController extends Controller
                 if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id])) $parameterCategoryApprovedCounts[$doc->parameter_id] = [];
                 if (!isset($parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category])) $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category] = 0;
                 $parameterCategoryApprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Count special documents (PPP/Self-Survey)
+        foreach ($specialApprovedDocs as $doc) {
+            // Program count
+            if (!isset($programApprovedCounts[$doc->program_id])) $programApprovedCounts[$doc->program_id] = 0;
+            $programApprovedCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaApprovedCounts[$doc->area_id])) $areaApprovedCounts[$doc->area_id] = 0;
+                $areaApprovedCounts[$doc->area_id]++;
+            }
+
+            // Parameter count (special docs don't have category breakdowns)
+            if ($doc->parameter_id) {
+                if (!isset($parameterApprovedCounts[$doc->parameter_id])) $parameterApprovedCounts[$doc->parameter_id] = 0;
+                $parameterApprovedCounts[$doc->parameter_id]++;
             }
         }
 
@@ -150,38 +176,77 @@ class FacultyDocumentsController extends Controller
             return response()->json(['success' => false, 'message' => 'Access denied'], 403);
         }
 
-        // Fetch ALL approved documents for this program and area (not just by faculty)
-        $query = Document::where('program_id', $request->program_id)
-            ->where('area_id', $request->area_id)
-            ->where('status', 'approved')
-            ->with(['user:id,name', 'checker:id,name']);
-
-        // Filter by parameter_id if provided
+        // Check if this is a special parameter (PPP or Self-Survey)
+        $isSpecialParameter = false;
         if ($request->has('parameter_id')) {
-            $query->where('parameter_id', $request->parameter_id);
-        }
-        // Filter by category if provided
-        if ($request->has('category')) {
-            $query->where('category', $request->category);
+            $parameter = Parameter::find($request->parameter_id);
+            $isSpecialParameter = $parameter && in_array($parameter->name, ['PPP', 'Self-Survey']);
         }
 
-    $documents = $query->orderBy('created_at', 'desc')
-        ->get()
-        ->map(function ($doc) {
-                return [
-                    'id' => $doc->id,
-                    'filename' => $doc->doc_filename,
-            'url' => Storage::url("documents/{$doc->doc_filename}"),
-                    'video_filename' => $doc->video_filename,
-            'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
-                    'uploaded_at' => $doc->created_at->toDateTimeString(),
-                    'user_name' => $doc->user->name ?? '',
-                    'approved_at' => $doc->updated_at ? $doc->updated_at->toDateTimeString() : null,
-                    'approved_by' => $doc->checker->name ?? null,
-                    'parameter_id' => $doc->parameter_id,
-                    'category' => $doc->category,
-                ];
-            });
+        if ($isSpecialParameter) {
+            // Fetch from special_documents table
+            $query = SpecialDocument::where('program_id', $request->program_id)
+                ->where('area_id', $request->area_id)
+                ->where('status', 'approved')
+                ->with(['user:id,name', 'checkedBy:id,name']);
+
+            if ($request->has('parameter_id')) {
+                $query->where('parameter_id', $request->parameter_id);
+            }
+
+            $documents = $query->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($doc) use ($parameter) {
+                    $folderPath = strtolower($parameter->name) === 'ppp' ? 'documents/ppp' : 'documents/self-survey';
+                    
+                    return [
+                        'id' => $doc->id,
+                        'filename' => $doc->doc_filename,
+                        'url' => Storage::url("{$folderPath}/{$doc->doc_filename}"),
+                        'video_filename' => null,
+                        'video_url' => null,
+                        'uploaded_at' => $doc->created_at->toDateTimeString(),
+                        'user_name' => $doc->user->name ?? '',
+                        'approved_at' => $doc->updated_at ? $doc->updated_at->toDateTimeString() : null,
+                        'approved_by' => $doc->checkedBy->name ?? null,
+                        'parameter_id' => $doc->parameter_id,
+                        'category' => $doc->category,
+                    ];
+                });
+        } else {
+            // Fetch regular documents
+            $query = Document::where('program_id', $request->program_id)
+                ->where('area_id', $request->area_id)
+                ->where('status', 'approved')
+                ->with(['user:id,name', 'checker:id,name']);
+
+            // Filter by parameter_id if provided
+            if ($request->has('parameter_id')) {
+                $query->where('parameter_id', $request->parameter_id);
+            }
+            // Filter by category if provided
+            if ($request->has('category')) {
+                $query->where('category', $request->category);
+            }
+
+            $documents = $query->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($doc) {
+                    return [
+                        'id' => $doc->id,
+                        'filename' => $doc->doc_filename,
+                        'url' => Storage::url("documents/{$doc->doc_filename}"),
+                        'video_filename' => $doc->video_filename,
+                        'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                        'uploaded_at' => $doc->created_at->toDateTimeString(),
+                        'user_name' => $doc->user->name ?? '',
+                        'approved_at' => $doc->updated_at ? $doc->updated_at->toDateTimeString() : null,
+                        'approved_by' => $doc->checker->name ?? null,
+                        'parameter_id' => $doc->parameter_id,
+                        'category' => $doc->category,
+                    ];
+                });
+        }
 
         return response()->json([
             'success' => true,
@@ -258,7 +323,13 @@ class FacultyDocumentsController extends Controller
         $areaIds = array_unique($areaIds);
 
         // Get all pending documents for these programs (for sidebar counts)
+        // Include both regular documents and special documents (PPP/Self-Survey)
         $pendingDocs = \App\Models\Document::where('status', 'pending')
+            ->whereIn('program_id', $programIds)
+            ->where('user_id', $user->id)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        $specialPendingDocs = \App\Models\SpecialDocument::where('status', 'pending')
             ->whereIn('program_id', $programIds)
             ->where('user_id', $user->id)
             ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
@@ -269,6 +340,7 @@ class FacultyDocumentsController extends Controller
         $parameterPendingCounts = [];
         $parameterCategoryPendingCounts = [];
 
+        // Count regular documents
         foreach ($pendingDocs as $doc) {
             // Program count
             if (!isset($programPendingCounts[$doc->program_id])) $programPendingCounts[$doc->program_id] = 0;
@@ -288,6 +360,25 @@ class FacultyDocumentsController extends Controller
                 if (!isset($parameterCategoryPendingCounts[$doc->parameter_id])) $parameterCategoryPendingCounts[$doc->parameter_id] = [];
                 if (!isset($parameterCategoryPendingCounts[$doc->parameter_id][$doc->category])) $parameterCategoryPendingCounts[$doc->parameter_id][$doc->category] = 0;
                 $parameterCategoryPendingCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Count special documents (PPP/Self-Survey)
+        foreach ($specialPendingDocs as $doc) {
+            // Program count
+            if (!isset($programPendingCounts[$doc->program_id])) $programPendingCounts[$doc->program_id] = 0;
+            $programPendingCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaPendingCounts[$doc->area_id])) $areaPendingCounts[$doc->area_id] = 0;
+                $areaPendingCounts[$doc->area_id]++;
+            }
+
+            // Parameter count (PPP/Self-Survey don't have categories, so just count the parameter)
+            if ($doc->parameter_id) {
+                if (!isset($parameterPendingCounts[$doc->parameter_id])) $parameterPendingCounts[$doc->parameter_id] = 0;
+                $parameterPendingCounts[$doc->parameter_id]++;
             }
         }
 
@@ -369,31 +460,71 @@ class FacultyDocumentsController extends Controller
                 return response()->json(['success' => false, 'message' => 'Access denied'], 403);
             }
 
-            $documents = \App\Models\Document::where('status', 'pending')
-                ->where('program_id', $program_id)
-                ->where('area_id', $area_id)
-                ->where('user_id', $user->id)
-                ->with(['user:id,name', 'program:id,code', 'area:id,code'])
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($doc) use ($user) {
-                    return [
-                        'id' => $doc->id,
-                        'filename' => $doc->doc_filename,
-                        'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
-                        'video_filename' => $doc->video_filename,
-                        'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
-                        'uploaded_at' => $doc->created_at->toDateTimeString(),
-                        'user_name' => $doc->user->name ?? '',
-                        'parameter_id' => $doc->parameter_id,
-                        'category' => $doc->category,
-                        'program_id' => $doc->program_id,
-                        'area_id' => $doc->area_id,
-                        'program_code' => $doc->program->code ?? '',
-                        'area_code' => $doc->area->code ?? '',
-                        'can_delete' => $doc->user_id === $user->id,
-                    ];
-                });
+            // Check if this is a special parameter (PPP or Self-Survey)
+            $parameter = null;
+            if ($request->has('parameter_id')) {
+                $parameter = Parameter::find($request->parameter_id);
+            }
+
+            $isSpecialParameter = $parameter && in_array($parameter->name, ['PPP', 'Self-Survey']);
+
+            if ($isSpecialParameter) {
+                // Query special_documents table for PPP/Self-Survey
+                $documents = \App\Models\SpecialDocument::where('status', 'pending')
+                    ->where('program_id', $program_id)
+                    ->where('area_id', $area_id)
+                    ->where('parameter_id', $request->parameter_id)
+                    ->where('user_id', $user->id)
+                    ->with(['user:id,name', 'program:id,code', 'area:id,code'])
+                    ->orderBy('created_at', 'desc')
+                    ->get()
+                    ->map(function ($doc) use ($user, $parameter) {
+                        $folder = strtolower($parameter->name); // 'ppp' or 'self-survey'
+                        return [
+                            'id' => $doc->id,
+                            'filename' => $doc->doc_filename,
+                            'url' => $doc->doc_filename ? Storage::url("documents/{$folder}/{$doc->doc_filename}") : null,
+                            'video_filename' => $doc->video_filename,
+                            'video_url' => $doc->video_filename ? Storage::url("documents/{$folder}/{$doc->video_filename}") : null,
+                            'uploaded_at' => $doc->created_at->toDateTimeString(),
+                            'user_name' => $doc->user->name ?? '',
+                            'parameter_id' => $doc->parameter_id,
+                            'category' => $doc->category,
+                            'program_id' => $doc->program_id,
+                            'area_id' => $doc->area_id,
+                            'program_code' => $doc->program->code ?? '',
+                            'area_code' => $doc->area->code ?? '',
+                            'can_delete' => true, // Faculty can always delete their own pending docs
+                        ];
+                    });
+            } else {
+                // Query regular documents table
+                $documents = \App\Models\Document::where('status', 'pending')
+                    ->where('program_id', $program_id)
+                    ->where('area_id', $area_id)
+                    ->where('user_id', $user->id)
+                    ->with(['user:id,name', 'program:id,code', 'area:id,code'])
+                    ->orderBy('created_at', 'desc')
+                    ->get()
+                    ->map(function ($doc) use ($user) {
+                        return [
+                            'id' => $doc->id,
+                            'filename' => $doc->doc_filename,
+                            'url' => $doc->doc_filename ? Storage::url("documents/{$doc->doc_filename}") : null,
+                            'video_filename' => $doc->video_filename,
+                            'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                            'uploaded_at' => $doc->created_at->toDateTimeString(),
+                            'user_name' => $doc->user->name ?? '',
+                            'parameter_id' => $doc->parameter_id,
+                            'category' => $doc->category,
+                            'program_id' => $doc->program_id,
+                            'area_id' => $doc->area_id,
+                            'program_code' => $doc->program->code ?? '',
+                            'area_code' => $doc->area->code ?? '',
+                            'can_delete' => true, // Faculty can always delete their own pending docs
+                        ];
+                    });
+            }
 
             return response()->json([
                 'success' => true,
@@ -670,7 +801,13 @@ class FacultyDocumentsController extends Controller
         $areaIds = array_unique($areaIds);
 
         // Get all disapproved documents for these programs (for sidebar counts) - only for current user
+        // Include both regular documents and special documents (PPP/Self-Survey)
         $disapprovedDocs = Document::where('status', 'disapproved')
+            ->whereIn('program_id', $programIds)
+            ->where('user_id', $user->id)
+            ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
+
+        $specialDisapprovedDocs = SpecialDocument::where('status', 'disapproved')
             ->whereIn('program_id', $programIds)
             ->where('user_id', $user->id)
             ->get(['id', 'program_id', 'area_id', 'parameter_id', 'category']);
@@ -681,6 +818,7 @@ class FacultyDocumentsController extends Controller
         $parameterDisapprovedCounts = [];
         $parameterCategoryDisapprovedCounts = [];
 
+        // Count regular documents
         foreach ($disapprovedDocs as $doc) {
             // Program count
             if (!isset($programDisapprovedCounts[$doc->program_id])) $programDisapprovedCounts[$doc->program_id] = 0;
@@ -700,6 +838,25 @@ class FacultyDocumentsController extends Controller
                 if (!isset($parameterCategoryDisapprovedCounts[$doc->parameter_id])) $parameterCategoryDisapprovedCounts[$doc->parameter_id] = [];
                 if (!isset($parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category])) $parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category] = 0;
                 $parameterCategoryDisapprovedCounts[$doc->parameter_id][$doc->category]++;
+            }
+        }
+
+        // Count special documents (PPP/Self-Survey)
+        foreach ($specialDisapprovedDocs as $doc) {
+            // Program count
+            if (!isset($programDisapprovedCounts[$doc->program_id])) $programDisapprovedCounts[$doc->program_id] = 0;
+            $programDisapprovedCounts[$doc->program_id]++;
+
+            // Area count
+            if ($doc->area_id) {
+                if (!isset($areaDisapprovedCounts[$doc->area_id])) $areaDisapprovedCounts[$doc->area_id] = 0;
+                $areaDisapprovedCounts[$doc->area_id]++;
+            }
+
+            // Parameter count (PPP/Self-Survey don't have categories, so just count the parameter)
+            if ($doc->parameter_id) {
+                if (!isset($parameterDisapprovedCounts[$doc->parameter_id])) $parameterDisapprovedCounts[$doc->parameter_id] = 0;
+                $parameterDisapprovedCounts[$doc->parameter_id]++;
             }
         }
 
@@ -778,37 +935,80 @@ class FacultyDocumentsController extends Controller
             return response()->json(['success' => false, 'message' => 'Access denied'], 403);
         }
 
-        $query = Document::where('program_id', $request->program_id)
-            ->where('area_id', $request->area_id)
-            ->where('status', 'disapproved')
-            ->where('user_id', $user->id)
-            ->with(['user', 'checker']);
-
+        // Check if this is a special parameter (PPP or Self-Survey)
+        $parameter = null;
         if ($request->has('parameter_id')) {
-            $query->where('parameter_id', $request->parameter_id);
-        }
-        if ($request->has('category')) {
-            $query->where('category', $request->category);
+            $parameter = Parameter::find($request->parameter_id);
         }
 
-        $documents = $query->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($doc) {
-                return [
-                    'id' => $doc->id,
-                    'filename' => $doc->doc_filename,
-                    'url' => Storage::url("documents/{$doc->doc_filename}"),
-                    'video_filename' => $doc->video_filename,
-                    'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
-                    'uploaded_at' => optional($doc->created_at)->toDateTimeString(),
-                    'user_name' => optional($doc->user)->name ?? '',
-                    'disapproved_by' => optional($doc->checker)->name,
-                    'disapproved_at' => optional($doc->updated_at)->toDateTimeString(),
-                    'comment' => $doc->comment,
-                    'parameter_id' => $doc->parameter_id,
-                    'category' => $doc->category,
-                ];
-            });
+        $isSpecialParameter = $parameter && in_array($parameter->name, ['PPP', 'Self-Survey']);
+
+        if ($isSpecialParameter) {
+            // Query special_documents table for PPP/Self-Survey
+            $query = SpecialDocument::where('program_id', $request->program_id)
+                ->where('area_id', $request->area_id)
+                ->where('status', 'disapproved')
+                ->where('user_id', $user->id)
+                ->with(['user', 'checker']);
+
+            if ($request->has('parameter_id')) {
+                $query->where('parameter_id', $request->parameter_id);
+            }
+
+            $documents = $query->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($doc) use ($parameter) {
+                    // Determine folder based on parameter name
+                    $folder = strtolower($parameter->name); // 'ppp' or 'self-survey'
+                    return [
+                        'id' => $doc->id,
+                        'filename' => $doc->doc_filename,
+                        'url' => Storage::url("documents/{$folder}/{$doc->doc_filename}"),
+                        'video_filename' => $doc->video_filename,
+                        'video_url' => $doc->video_filename ? Storage::url("documents/{$folder}/{$doc->video_filename}") : null,
+                        'uploaded_at' => optional($doc->created_at)->toDateTimeString(),
+                        'user_name' => optional($doc->user)->name ?? '',
+                        'disapproved_by' => optional($doc->checker)->name,
+                        'disapproved_at' => optional($doc->updated_at)->toDateTimeString(),
+                        'comment' => $doc->comment,
+                        'parameter_id' => $doc->parameter_id,
+                        'category' => $doc->category,
+                    ];
+                });
+        } else {
+            // Query regular documents table
+            $query = Document::where('program_id', $request->program_id)
+                ->where('area_id', $request->area_id)
+                ->where('status', 'disapproved')
+                ->where('user_id', $user->id)
+                ->with(['user', 'checker']);
+
+            if ($request->has('parameter_id')) {
+                $query->where('parameter_id', $request->parameter_id);
+            }
+            if ($request->has('category')) {
+                $query->where('category', $request->category);
+            }
+
+            $documents = $query->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($doc) {
+                    return [
+                        'id' => $doc->id,
+                        'filename' => $doc->doc_filename,
+                        'url' => Storage::url("documents/{$doc->doc_filename}"),
+                        'video_filename' => $doc->video_filename,
+                        'video_url' => $doc->video_filename ? Storage::url("documents/{$doc->video_filename}") : null,
+                        'uploaded_at' => optional($doc->created_at)->toDateTimeString(),
+                        'user_name' => optional($doc->user)->name ?? '',
+                        'disapproved_by' => optional($doc->checker)->name,
+                        'disapproved_at' => optional($doc->updated_at)->toDateTimeString(),
+                        'comment' => $doc->comment,
+                        'parameter_id' => $doc->parameter_id,
+                        'category' => $doc->category,
+                    ];
+                });
+        }
 
         return response()->json([
             'success' => true,
