@@ -31,6 +31,13 @@ export default function AdminDocuments(props: PageProps) {
     const selectedArea = selectedProgram?.areas?.find(a => a.id === selected.areaId);
     const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
+    // Helper function to check if parameter is special (PPP or Self-Survey)
+    const isSpecialParameter = useMemo(() => {
+        if (!selected.parameterId || !selectedArea?.parameters) return false;
+        const parameter = selectedArea.parameters.find(p => p.id === selected.parameterId);
+        return parameter && ['PPP', 'Self-Survey'].includes(parameter.name);
+    }, [selected.parameterId, selectedArea?.parameters]);
+
     const toggleExpand = (programId: number) => {
         setExpanded(prev => ({ ...prev, [programId]: !prev[programId] }));
     };
@@ -69,10 +76,28 @@ export default function AdminDocuments(props: PageProps) {
     }, [viewerIndex]);
 
     useEffect(() => {
-        // Only fetch when all three are selected
-        if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+        // Fetch when:
+        // 1. Regular parameters: area, parameter, and category are all selected
+        // 2. Special parameters (PPP/Self-Survey): area and parameter are selected (no category needed)
+        const shouldFetch = selected.programId && selected.areaId && selected.parameterId && 
+            (isSpecialParameter || selected.category);
+
+        if (shouldFetch) {
             setLoadingDocs(true);
-            fetch(`/admin/documents/disapproved/data?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+            
+            // Build query parameters
+            const queryParams = new URLSearchParams({
+                program_id: selected.programId!.toString(),
+                area_id: selected.areaId!.toString(),
+                parameter_id: selected.parameterId!.toString(),
+            });
+            
+            // Only add category for non-special parameters
+            if (!isSpecialParameter && selected.category) {
+                queryParams.append('category', selected.category);
+            }
+            
+            fetch(`/admin/documents/disapproved/data?${queryParams.toString()}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -109,7 +134,7 @@ export default function AdminDocuments(props: PageProps) {
             setDisapprovedDocs([]);
             setViewerIndex(0);
         }
-    }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
+    }, [selected.programId, selected.areaId, selected.parameterId, selected.category, isSpecialParameter]);
 
     // --- Navigation state ---
     const [fitMode, setFitMode] = useState<'width' | 'height' | null>(null);
@@ -139,17 +164,23 @@ export default function AdminDocuments(props: PageProps) {
     // Filtered docs for preview card grid: filter by parameterId and category if both are selected
     const filteredDocs = useMemo(() => {
         let docs = disapprovedDocs;
-        if (selected.parameterId && selected.category) {
-            docs = docs.filter(doc =>
-                doc.parameter_id === selected.parameterId &&
-                doc.category === selected.category
-            );
+        if (selected.parameterId) {
+            if (isSpecialParameter) {
+                // For special parameters (PPP/Self-Survey), just filter by parameter_id
+                docs = docs.filter(doc => doc.parameter_id === selected.parameterId);
+            } else if (selected.category) {
+                // For regular parameters, filter by both parameter and category
+                docs = docs.filter(doc =>
+                    doc.parameter_id === selected.parameterId &&
+                    doc.category === selected.category
+                );
+            }
         }
         if (search) {
             docs = docs.filter(doc => doc.filename.toLowerCase().includes(search.toLowerCase()));
         }
         return docs;
-    }, [disapprovedDocs, selected.parameterId, selected.category, search]);
+    }, [disapprovedDocs, selected.parameterId, selected.category, isSpecialParameter, search]);
 
     const filteredViewerIndex = filteredDocs.findIndex(doc => doc.id === disapprovedDocs[viewerIndex]?.id);
     const currentDoc = filteredDocs[filteredViewerIndex >= 0 ? filteredViewerIndex : 0];
@@ -754,7 +785,7 @@ export default function AdminDocuments(props: PageProps) {
                         )}
                         {selected.programId && selected.areaId && selected.parameterId && (
                             <div className="mt-2 flex flex-col flex-1 min-h-0">
-                                {selected.parameterId && !selected.category && (
+                                {selected.parameterId && !selected.category && !isSpecialParameter && (
                                     // --- Category Cards Grid when parameter is selected but no category is selected ---
                                     <div>
                                         <p className="text-base text-gray-700 mb-6">
@@ -819,7 +850,7 @@ export default function AdminDocuments(props: PageProps) {
                                         />
                                     </div>
                                 )}
-                                {selected.category && (
+                                {(selected.category || isSpecialParameter) && (
                                     <>
                                     <div>
                                         <p className="text-base text-gray-700 mb-2">
