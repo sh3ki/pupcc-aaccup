@@ -7,6 +7,7 @@ import OptimizedImage from '@/components/OptimizedImage';
 import LoadingScreen from '@/components/LoadingScreen';
 import { useScrollAnimation as useOptimizedScrollAnimation, getAnimationClasses } from '@/hooks/useOptimizedIntersection';
 import { preloadLandingResources, preloadCriticalLandingResources, onPreloadProgress, PreloadProgress } from '@/utils/resourcePreloader';
+import { VideoNavigation } from '@/components/VideoNavigation';
 
 // Color palette - Maroon as primary
 const COLORS = {
@@ -640,19 +641,57 @@ export default function Welcome({ landingContent }: Props) {
                             </h2>
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
                                 {landingContent?.videos_data.map((video, index) => (
-                                    <OptimizedVideoCard
+                                    <div 
                                         key={index}
-                                        video={video}
-                                        index={index}
-                                        isVisible={videoAnimation.isVisible}
-                                        onVideoClick={(video) => {
-                                            if (video.video_type === 'youtube') {
-                                                window.open(`https://www.youtube.com/watch?v=${video.video}`, '_blank');
-                                            } else {
-                                                window.open(video.video, '_blank');
-                                            }
-                                        }}
-                                    />
+                                        className={`transform transition-all duration-500 ${
+                                            videoAnimation.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
+                                        }`}
+                                        style={{ transitionDelay: `${index * 0.2}s` }}
+                                    >
+                                        <div className="w-full bg-white rounded-xl overflow-hidden shadow-lg">
+                                            <h3 className="text-lg sm:text-xl font-bold p-4 text-center" style={{ color: COLORS.primaryMaroon }}>
+                                                {video.title}
+                                            </h3>
+                                            <div className="w-full">
+                                                {video.video_type === 'youtube' ? (
+                                                    <div className="aspect-w-16 aspect-h-9 w-full bg-gray-200">
+                                                        <iframe
+                                                            src={`https://www.youtube.com/embed/${video.video}`}
+                                                            title={video.title}
+                                                            frameBorder={0}
+                                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                            allowFullScreen
+                                                            className="w-full h-full"
+                                                            style={{ minHeight: 300 }}
+                                                        ></iframe>
+                                                    </div>
+                                                ) : (
+                                                    <VideoNavigation
+                                                        currentVideo={{
+                                                            id: index + 1,
+                                                            filename: `campus_video_${index + 1}.${video.video?.split('.').pop() || 'mp4'}`,
+                                                            url: video.video?.startsWith('http') || video.video?.startsWith('/storage/') 
+                                                                ? video.video 
+                                                                : `/storage/${video.video}`,
+                                                            uploaded_at: new Date().toISOString()
+                                                        }}
+                                                        onInfo={() => {
+                                                            console.log('Campus Video Info:', video.title);
+                                                        }}
+                                                        onDownload={() => {
+                                                            const videoUrl = video.video?.startsWith('http') || video.video?.startsWith('/storage/') 
+                                                                ? video.video 
+                                                                : `/storage/${video.video}`;
+                                                            const link = document.createElement('a');
+                                                            link.href = videoUrl;
+                                                            link.download = `campus_video_${index + 1}.${video.video?.split('.').pop() || 'mp4'}`;
+                                                            link.click();
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 )) || []}
                             </div>
                         </div>
