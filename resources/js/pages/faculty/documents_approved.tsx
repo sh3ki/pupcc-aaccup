@@ -29,6 +29,13 @@ export default function FacultyDocuments(props: PageProps) {
         const selectedArea = selectedProgram?.areas?.find(a => a.id === selected.areaId);
         const selectedParameter = selectedArea?.parameters?.find(param => param.id === selected.parameterId);
 
+        // Helper function to check if parameter is special (PPP or Self-Survey)
+        const isSpecialParameter = useMemo(() => {
+            if (!selected.parameterId || !selectedArea?.parameters) return false;
+            const parameter = selectedArea.parameters.find(p => p.id === selected.parameterId);
+            return parameter && ['PPP', 'Self-Survey'].includes(parameter.name);
+        }, [selected.parameterId, selectedArea?.parameters]);
+
         const toggleExpand = (programId: number) => {
             setExpanded(prev => ({ ...prev, [programId]: !prev[programId] }));
         };
@@ -106,10 +113,25 @@ export default function FacultyDocuments(props: PageProps) {
     // page input not shown in this UI clone
 
         useEffect(() => {
-            // Only fetch when all three are selected
-            if (selected.programId && selected.areaId && selected.parameterId && selected.category) {
+            // Fetch when:
+            // 1. Regular parameters: area, parameter, and category are all selected
+            // 2. Special parameters (PPP/Self-Survey): area and parameter are selected (no category needed)
+            if (selected.programId && selected.areaId && selected.parameterId && 
+                (isSpecialParameter || selected.category)) {
                 setLoadingDocs(true);
-                fetch(`/faculty/documents/approved?program_id=${selected.programId}&area_id=${selected.areaId}&parameter_id=${selected.parameterId}&category=${selected.category}`, {
+                
+                // Build query parameters
+                const params: string[] = [];
+                params.push(`program_id=${selected.programId}`);
+                params.push(`area_id=${selected.areaId}`);
+                params.push(`parameter_id=${selected.parameterId}`);
+                
+                // Only add category param for non-special parameters
+                if (!isSpecialParameter && selected.category) {
+                    params.push(`category=${selected.category}`);
+                }
+                
+                fetch(`/faculty/documents/approved?${params.join('&')}`, {
                     headers: { 'Accept': 'application/json' },
                     credentials: 'same-origin',
                 })
@@ -146,7 +168,7 @@ export default function FacultyDocuments(props: PageProps) {
                 setApprovedDocs([]);
                 setViewerIndex(0);
             }
-        }, [selected.programId, selected.areaId, selected.parameterId, selected.category]);
+        }, [selected.programId, selected.areaId, selected.parameterId, selected.category, isSpecialParameter]);
 
         // Reset to first page when document changes
         useEffect(() => {
