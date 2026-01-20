@@ -1129,19 +1129,17 @@ export default function BSITProgramPage({ bsitContent, accreditationAreas, sideb
                     </section>
 
                     {/* Mula Sayo, Para Sa Bayan */}
-                    <section className="relative py-16 sm:py-20 lg:py-24 px-0 transition-all duration-1200">
+                    <section className="relative py-16 sm:py-20 lg:py-24 px-0">
                         <div className="absolute inset-0 w-full h-full">
-                            <OptimizedImage
+                            <img
                                 src={bsitContent.mula_sayo_image || '/api/placeholder/1600/400'}
                                 alt={bsitContent.mula_sayo_title}
                                 className="w-full h-full object-cover object-center opacity-70"
-                                lazy={true}
-                                sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70"></div>
                         </div>
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up transition-all duration-300 hover:scale-102">
+                            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white text-shadow-lg mb-4 animate-fade-in-up">
                                 {bsitContent.mula_sayo_title}
                             </h2>
                         </div>
